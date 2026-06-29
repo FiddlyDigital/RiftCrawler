@@ -1,29 +1,79 @@
 import './style.css';
-import { Game } from './game';
+import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons } from './input';
-import { getHighScore, recordRunEnd } from './storage';
+import { getHighScore, recordRunEnd, loadHistory } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
+import { MERCHANT_STOCK } from './content';
 
-const ui = new UIManager();
-const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+const ui       = new UIManager();
+const canvas   = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 
 let game: Game;
+let tickTimer: ReturnType<typeof setInterval> | null = null;
+
+// ── Tick management ──────────────────────────────────────────────────────────
+
+function getTickMs(): number {
+  return tickMsForLevel(game.dungeonLevel, game.player.tickSlowPercent);
+}
+
+function startTick(): void {
+  stopTick();
+  tickTimer = setInterval(() => {
+    if (!game.paused && game.player.hp > 0) game.autoTick();
+    else if (game.player.hp <= 0) stopTick();
+  }, getTickMs());
+}
+
+function stopTick(): void {
+  if (tickTimer !== null) { clearInterval(tickTimer); tickTimer = null; }
+}
+
+function resetTick(): void { startTick(); }
+
+// ── Game factory ─────────────────────────────────────────────────────────────
 
 function startGame(): void {
+  stopTick();
   game = new Game({
-    log: (text, cls) => ui.log(text, cls),
-    updateUI: (state) => ui.updateStats(state),
+    log:      (text, cls)          => ui.log(text, cls),
+    updateUI: (state)              => ui.updateStats(state),
+    onAction: ()                   => resetTick(),
+    onParticle: (x, y, text, col) => renderer.spawnParticle(x, y, text, col),
+
     onDeath: (title, reason, floor, score) => {
-      const highScore = recordRunEnd(game);
+      stopTick();
+      const { highScore, history } = recordRunEnd(game, reason);
       trackGameOver(score, floor);
-      ui.showDeath(title, reason, floor, score, highScore);
+      ui.showDeath(title, reason, floor, score, highScore, history);
+      ui.updateBestScore(highScore);
     },
-    onParticle: (x, y, text, color) => renderer.spawnParticle(x, y, text, color),
+
+    onLevelUp: (_newLevel) => {
+      stopTick();
+      const perks = game.getRandomPerks(3);
+      ui.showPerkSelection(perks, (perkId) => {
+        game.applyPerk(perkId);
+        startTick();
+      });
+    },
+
+    onOpenShop: (gold) => {
+      stopTick();
+      ui.showShop(
+        gold,
+        MERCHANT_STOCK,
+        (i) => game.buyMerchantItem(i, MERCHANT_STOCK),
+        ()  => { game.closeShop(); startTick(); },
+      );
+    },
   });
+
   renderer.start(game);
+  startTick();
   trackGameStart(1);
 }
 
@@ -31,6 +81,7 @@ startGame();
 bindKeyboard(() => game);
 bindButtons(() => game);
 
+// Restart
 document.getElementById('restart-btn')!.addEventListener('click', () => {
   ui.hideDeath();
   ui.clearLog();
@@ -38,16 +89,30 @@ document.getElementById('restart-btn')!.addEventListener('click', () => {
   ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
 });
 
-// Display persisted high score on load
-(document.getElementById('best-score') as HTMLElement).textContent = String(getHighScore());
+// Initial high score / history display
+ui.updateBestScore(getHighScore());
+const initialHistory = loadHistory();
+if (initialHistory.length > 0) {
+  // Pre-populate in case page is refreshed before first death
+  (document.getElementById('run-history') as HTMLElement).innerHTML =
+    initialHistory.map((r, i) =>
+      `<div class="history-row${i === 0 ? ' history-latest' : ''}">
+        <span>${r.date}</span><span>Fl.${r.floor}</span>
+        <span>${r.score.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
+       </div>`,
+    ).join('');
+}
 
-// ── PWA install prompt ───────────────────────────────────────────────────────
+// ── PWA install prompt ────────────────────────────────────────────────────────
 
-type BeforeInstallPromptEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
+type BeforeInstallPromptEvent = Event & {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+};
 
 let installPrompt: BeforeInstallPromptEvent | null = null;
-const installBanner = document.getElementById('install-banner')!;
-const installBtn = document.getElementById('install-btn')!;
+const installBanner  = document.getElementById('install-banner')!;
+const installBtn     = document.getElementById('install-btn')!;
 const installDismiss = document.getElementById('install-dismiss')!;
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -65,11 +130,5 @@ installBtn.addEventListener('click', async () => {
   installPrompt = null;
 });
 
-installDismiss.addEventListener('click', () => {
-  installBanner.hidden = true;
-});
-
-window.addEventListener('appinstalled', () => {
-  installBanner.hidden = true;
-  installPrompt = null;
-});
+installDismiss.addEventListener('click', () => { installBanner.hidden = true; });
+window.addEventListener('appinstalled', () => { installBanner.hidden = true; installPrompt = null; });
