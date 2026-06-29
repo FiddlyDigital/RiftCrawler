@@ -6,6 +6,8 @@ import { bindKeyboard, bindButtons } from './input';
 import { getHighScore, recordRunEnd, loadHistory } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
 import { MERCHANT_STOCK } from './content';
+import { audio } from './audio';
+import type { AudioEvent } from './types';
 
 const ui       = new UIManager();
 const canvas   = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -34,18 +36,36 @@ function stopTick(): void {
 
 function resetTick(): void { startTick(); }
 
+// ── Audio event router ───────────────────────────────────────────────────────
+
+function handleAudio(event: AudioEvent, data?: number): void {
+  switch (event) {
+    case 'blockLand':    audio.playBlockLand();        break;
+    case 'blockRotate':  audio.playBlockRotate();      break;
+    case 'blockMove':    audio.playBlockMove();        break;
+    case 'hit':          audio.playHit();              break;
+    case 'playerDamage': audio.playPlayerDamage();     break;
+    case 'kill':         audio.playKill();             break;
+    case 'lineClear':    audio.playLineClear(data ?? 1); break;
+    case 'descend':      audio.playDescend();          break;
+    case 'poison':       audio.playPoison();           break;
+  }
+}
+
 // ── Game factory ─────────────────────────────────────────────────────────────
 
-function startGame(): void {
+function startGame(startPaused = false): void {
   stopTick();
   game = new Game({
     log:      (text, cls)          => ui.log(text, cls),
     updateUI: (state)              => ui.updateStats(state),
     onAction: ()                   => resetTick(),
     onParticle: (x, y, text, col) => renderer.spawnParticle(x, y, text, col),
+    onAudio:  (event, data)        => handleAudio(event, data),
 
     onDeath: (title, reason, floor, score) => {
       stopTick();
+      audio.playDeath();
       const { highScore, history } = recordRunEnd(game, reason);
       trackGameOver(score, floor);
       ui.showDeath(title, reason, floor, score, highScore, history);
@@ -54,15 +74,18 @@ function startGame(): void {
 
     onLevelUp: (_newLevel) => {
       stopTick();
+      audio.playLevelUp();
       const perks = game.getRandomPerks(3);
       ui.showPerkSelection(perks, (perkId) => {
         game.applyPerk(perkId);
+        audio.playPerk();
         startTick();
       });
     },
 
     onOpenShop: (gold) => {
       stopTick();
+      audio.playShop();
       ui.showShop(
         gold,
         MERCHANT_STOCK,
@@ -72,14 +95,28 @@ function startGame(): void {
     },
   });
 
+  if (startPaused) game.paused = true;
   renderer.start(game);
-  startTick();
+  if (!startPaused) startTick();
   trackGameStart(1);
 }
 
-startGame();
+// ── Boot sequence ─────────────────────────────────────────────────────────────
+
+startGame(true); // initialise paused — start screen sits on top
 bindKeyboard(() => game);
 bindButtons(() => game);
+
+ui.showStart(getHighScore());
+
+document.getElementById('start-btn')!.addEventListener('click', () => {
+  audio.init(); // unlock AudioContext on first user gesture
+  ui.hideStart();
+  game.paused = false;
+  startTick();
+  audio.playDescend();
+  ui.log('The rift yawns open... descend!', 'log-success');
+});
 
 // Restart
 document.getElementById('restart-btn')!.addEventListener('click', () => {
@@ -89,11 +126,18 @@ document.getElementById('restart-btn')!.addEventListener('click', () => {
   ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
 });
 
+// Mute toggle (M key)
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') {
+    const on = audio.toggle();
+    ui.log(`Sound ${on ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
+  }
+});
+
 // Initial high score / history display
 ui.updateBestScore(getHighScore());
 const initialHistory = loadHistory();
 if (initialHistory.length > 0) {
-  // Pre-populate in case page is refreshed before first death
   (document.getElementById('run-history') as HTMLElement).innerHTML =
     initialHistory.map((r, i) =>
       `<div class="history-row${i === 0 ? ' history-latest' : ''}">

@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, EquipSlot, EquipmentDef } from './types';
+import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef } from './types';
 
 export class Equipment {
   constructor(
@@ -106,6 +106,10 @@ export class Monster {
     public readonly atk: number,
     public readonly xpReward: number,
     isBoss = false,
+    public readonly behaviorType = 'melee',
+    public readonly attackRange = 1,
+    public readonly moveSpeed = 1,
+    public readonly statusInflict?: MonsterDef['statusInflict'],
   ) {
     this.isBoss = isBoss;
   }

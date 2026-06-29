@@ -15,6 +15,10 @@ export const Cell = {
   MERCHANT: 8,
   BOSS: 9,
   ITEM_EQUIPMENT: 10,
+  MONSTER_ARCHER: 11,
+  MONSTER_SLIME: 12,
+  MONSTER_ORC: 13,
+  MONSTER_BAT: 14,
 } as const;
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
@@ -46,6 +50,11 @@ export interface UIState {
   statuses: StatusEffect[];
 }
 
+export type AudioEvent =
+  | 'blockLand' | 'blockRotate' | 'blockMove'
+  | 'hit' | 'playerDamage' | 'kill'
+  | 'lineClear' | 'descend' | 'poison';
+
 export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;
   updateUI: (state: UIState) => void;
@@ -54,6 +63,7 @@ export interface GameCallbacks {
   onLevelUp: (newLevel: number) => void;
   onOpenShop: (gold: number) => void;
   onAction: () => void;
+  onAudio?: (event: AudioEvent, data?: number) => void;
 }
 
 export interface RunRecord {
@@ -77,6 +87,9 @@ export interface MonsterDef {
   spawnMsg: string;
   xpReward: number;
   statusInflict?: { type: StatusType; chance: number; duration: number; power: number };
+  behaviorType?: string;
+  attackRange?: number;
+  moveSpeed?: number;
 }
 
 export interface BossDef {

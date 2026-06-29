@@ -128,6 +128,16 @@ export class UIManager {
     this.els['bestScore']!.textContent = String(score);
   }
 
+  showStart(highScore: number): void {
+    const el = document.getElementById('start-best');
+    if (el) el.textContent = highScore > 0 ? `Best run: ${highScore.toLocaleString()} pts` : '';
+    document.getElementById('start-modal')!.style.display = 'flex';
+  }
+
+  hideStart(): void {
+    document.getElementById('start-modal')!.style.display = 'none';
+  }
+
   showError(message: string): void {
     console.error('[RiftCrawler]', message);
     this.log(`⚠️ ${message}`, 'log-damage');

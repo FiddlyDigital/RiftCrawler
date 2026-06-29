@@ -156,13 +156,17 @@ export class Renderer {
 }
 
 const CELL_EMOJI: Partial<Record<number, string>> = {
-  [Cell.MONSTER_RAT]:  '🐀',
-  [Cell.MONSTER_SKEL]: '💀',
-  [Cell.ITEM_POTION]:  '🧪',
-  [Cell.ITEM_SWORD]:   '🗡️',
-  [Cell.STAIRS]:       '🪜',
-  [Cell.BOMB]:         '💣',
-  [Cell.MERCHANT]:     '🏪',
-  [Cell.BOSS]:         '⚠️',
+  [Cell.MONSTER_RAT]:    '🐀',
+  [Cell.MONSTER_SKEL]:   '💀',
+  [Cell.MONSTER_ARCHER]: '👺',
+  [Cell.MONSTER_SLIME]:  '🫧',
+  [Cell.MONSTER_ORC]:    '👹',
+  [Cell.MONSTER_BAT]:    '🦠',
+  [Cell.ITEM_POTION]:    '🧪',
+  [Cell.ITEM_SWORD]:     '🗡️',
+  [Cell.STAIRS]:         '🪜',
+  [Cell.BOMB]:           '💣',
+  [Cell.MERCHANT]:       '🏪',
+  [Cell.BOSS]:           '⚠️',
   [Cell.ITEM_EQUIPMENT]: '📦',
 };

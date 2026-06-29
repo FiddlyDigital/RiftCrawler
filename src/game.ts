@@ -176,7 +176,15 @@ export class Game {
         }
 
         const rand = Math.random();
-        if (rand < 0.12) return Math.random() < 0.5 ? Cell.MONSTER_RAT : Cell.MONSTER_SKEL;
+        if (rand < 0.12) {
+          const r = Math.random();
+          if (r < 0.25) return Cell.MONSTER_RAT;
+          if (r < 0.50) return Cell.MONSTER_SKEL;
+          if (r < 0.65) return Cell.MONSTER_ARCHER;
+          if (r < 0.78) return Cell.MONSTER_SLIME;
+          if (r < 0.89) return Cell.MONSTER_ORC;
+          return Cell.MONSTER_BAT;
+        }
         if (rand < 0.18) return Math.random() < 0.6 ? Cell.ITEM_POTION : Cell.ITEM_SWORD;
         if (rand < 0.20) return Cell.ITEM_EQUIPMENT;
         return Cell.FLOOR;
@@ -253,7 +261,26 @@ export class Game {
     }
 
     this.checkLineClears();
+    this.cb.onAudio?.('blockLand');
     this.spawnBlock();
+  }
+
+  // ── Monster spawning helper ───────────────────────────────────────────────
+
+  private spawnMonster(key: string, tx: number, ty: number): void {
+    const def = MONSTERS[key];
+    if (!def) return;
+    const hp  = def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel;
+    const atk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
+    this.monsters.push(new Monster(
+      tx, ty, def.char, def.name, hp, hp, atk, def.xpReward,
+      false,
+      def.behaviorType ?? 'melee',
+      def.attackRange  ?? 1,
+      def.moveSpeed    ?? 1,
+      def.statusInflict,
+    ));
+    this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373');
   }
 
   private triggerBomb(cx: number, cy: number): void {
@@ -275,21 +302,14 @@ export class Game {
   }
 
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
-    if (cell === Cell.MONSTER_RAT) {
-      const def = MONSTERS['rat']!;
-      const hp = def.baseHp + (this.dungeonLevel - 1) * def.hpPerLevel;
-      const atk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
-      this.monsters.push(new Monster(tx, ty, def.char, def.name, hp, hp, atk, def.xpReward));
-      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373');
+    if (cell === Cell.MONSTER_RAT)    { this.spawnMonster('rat',            tx, ty); return; }
+    if (cell === Cell.MONSTER_SKEL)   { this.spawnMonster('skeleton',       tx, ty); return; }
+    if (cell === Cell.MONSTER_ARCHER) { this.spawnMonster('goblin_archer',  tx, ty); return; }
+    if (cell === Cell.MONSTER_SLIME)  { this.spawnMonster('cave_slime',     tx, ty); return; }
+    if (cell === Cell.MONSTER_ORC)    { this.spawnMonster('berserker_orc',  tx, ty); return; }
+    if (cell === Cell.MONSTER_BAT)    { this.spawnMonster('plague_bat',     tx, ty); return; }
 
-    } else if (cell === Cell.MONSTER_SKEL) {
-      const def = MONSTERS['skeleton']!;
-      const hp = def.baseHp + (this.dungeonLevel - 1) * def.hpPerLevel;
-      const atk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
-      this.monsters.push(new Monster(tx, ty, def.char, def.name, hp, hp, atk, def.xpReward));
-      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373');
-
-    } else if (cell === Cell.BOSS) {
+    if (cell === Cell.BOSS) {
       const bossDef = BOSSES[(Math.floor(this.dungeonLevel / 5) - 1) % BOSSES.length]!;
       const baseHp = 18 + (this.dungeonLevel - 1) * 3;
       const baseAtk = 5 + (this.dungeonLevel - 1);
@@ -347,6 +367,7 @@ export class Game {
     }
 
     if (rowsCleared > 0) {
+      this.cb.onAudio?.('lineClear', rowsCleared);
       const now = performance.now();
       const isCombo = now - this.lastLineClearMs < 2000;
       this.comboCount = isCombo ? this.comboCount + 1 : 0;
@@ -390,6 +411,7 @@ export class Game {
         if (dmg > 0) {
           this.player.hp = Math.max(0, this.player.hp - dmg);
           this.cb.onParticle(this.player.x, this.player.y, `☠ -${dmg}`, '#9c27b0');
+          this.cb.onAudio?.('poison');
           this.cb.log(`Poison deals ${dmg} damage!`, 'log-damage');
           if (this.player.hp <= 0) { this.triggerDeath('HERO DEFEATED', 'Succumbed to poison.'); return; }
         }
@@ -486,33 +508,121 @@ export class Game {
   private processMonsterTurns(): void {
     if (this.player.hp <= 0) return;
     for (const m of this.monsters) {
-      if (m.isStunned) { m.statuses = m.statuses.map(s => s.type === 'stun' ? { ...s, duration: s.duration - 1 } : s).filter(s => s.duration > 0); continue; }
+      if (this.player.hp <= 0) return;
+      if (m.isStunned) {
+        m.statuses = m.statuses
+          .map(s => s.type === 'stun' ? { ...s, duration: s.duration - 1 } : s)
+          .filter(s => s.duration > 0);
+        continue;
+      }
+      switch (m.behaviorType) {
+        case 'ranged':    this.processRangedMonster(m);    break;
+        case 'healer':    this.processHealerMonster(m);    break;
+        case 'berserker': this.processBerserkerMonster(m); break;
+        case 'swift':     this.processSwiftMonster(m);     break;
+        default:          this.processMeleeMonster(m);     break;
+      }
+    }
+  }
 
-      const dx = Math.abs(m.x - this.player.x);
-      const dy = Math.abs(m.y - this.player.y);
+  private monsterAttackPlayer(m: Monster): void {
+    const actual = this.player.takeDamage(Math.max(1, m.atk));
+    this.cb.log(`${m.name} hits you! -${actual} HP`, 'log-damage');
+    this.cb.onParticle(this.player.x, this.player.y, `-${actual}`, '#ef5350');
+    this.cb.onAudio?.('playerDamage');
+    if (m.statusInflict && Math.random() < m.statusInflict.chance) {
+      if (!this.player.statuses.some(s => s.type === m.statusInflict!.type)) {
+        this.player.statuses.push({ type: m.statusInflict.type, duration: m.statusInflict.duration, power: m.statusInflict.power });
+        this.cb.log(`You are ${m.statusInflict.type}ed!`, 'log-damage');
+      }
+    }
+    if (this.player.hp <= 0) this.triggerDeath('HERO DEFEATED', 'Your health pool dropped to zero.');
+  }
 
-      if (dx + dy === 1) {
-        const rawDmg = Math.max(1, m.atk);
-        const actual = this.player.takeDamage(rawDmg);
-        this.cb.log(`${m.name} hits you! -${actual} HP`, 'log-damage');
-        this.cb.onParticle(this.player.x, this.player.y, `-${actual}`, '#ef5350');
+  private moveMonsterToward(m: Monster): void {
+    const sx = Math.sign(this.player.x - m.x);
+    const sy = Math.sign(this.player.y - m.y);
+    let nx = m.x + sx, ny = m.y;
+    if (!this.isValidMove(nx, ny) || this.getMonsterAt(nx, ny)) { nx = m.x; ny = m.y + sy; }
+    if (this.isValidMove(nx, ny) && !this.getMonsterAt(nx, ny)) { m.x = nx; m.y = ny; }
+  }
 
-        // Status inflict from skeleton
-        const def = Object.values(MONSTERS).find(d => d.name === m.name);
-        if (def?.statusInflict && Math.random() < def.statusInflict.chance) {
-          if (!this.player.statuses.some(s => s.type === def.statusInflict!.type)) {
-            this.player.statuses.push({ type: def.statusInflict.type, duration: def.statusInflict.duration, power: def.statusInflict.power });
-            this.cb.log(`You are ${def.statusInflict.type}ed!`, 'log-damage');
-          }
-        }
+  // Simple Bresenham check for ranged line-of-sight
+  private hasLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
+    const absDx = Math.abs(x2 - x1);
+    const absDy = Math.abs(y2 - y1);
+    const sx = x1 < x2 ? 1 : -1;
+    const sy = y1 < y2 ? 1 : -1;
+    let err = absDx - absDy;
+    let x = x1, y = y1;
+    for (;;) {
+      if (x === x2 && y === y2) break;
+      if (this.map[x]?.[y] === Tile.VOID && !(x === x1 && y === y1)) return false;
+      const e2 = 2 * err;
+      if (e2 > -absDy) { err -= absDy; x += sx; }
+      if (e2 < absDx)  { err += absDx; y += sy; }
+    }
+    return true;
+  }
 
-        if (this.player.hp <= 0) { this.triggerDeath('HERO DEFEATED', 'Your health pool dropped to zero.'); return; }
-      } else if (dx + dy <= 5) {
-        const sx = Math.sign(this.player.x - m.x);
-        const sy = Math.sign(this.player.y - m.y);
-        let nx = m.x + sx, ny = m.y;
-        if (!this.isValidMove(nx, ny) || this.getMonsterAt(nx, ny)) { nx = m.x; ny = m.y + sy; }
-        if (this.isValidMove(nx, ny) && !this.getMonsterAt(nx, ny)) { m.x = nx; m.y = ny; }
+  private processMeleeMonster(m: Monster): void {
+    const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+    if (dist === 1) { this.monsterAttackPlayer(m); }
+    else if (dist <= 5) { this.moveMonsterToward(m); }
+  }
+
+  private processRangedMonster(m: Monster): void {
+    const dx   = this.player.x - m.x;
+    const dy   = this.player.y - m.y;
+    const dist = Math.abs(dx) + Math.abs(dy);
+    if (dist <= m.attackRange && this.hasLineOfSight(m.x, m.y, this.player.x, this.player.y)) {
+      this.monsterAttackPlayer(m);
+    } else if (dist <= 2) {
+      // Too close — back away
+      const nx = m.x - Math.sign(dx), ny = m.y - Math.sign(dy);
+      if (this.isValidMove(nx, ny) && !this.getMonsterAt(nx, ny)) { m.x = nx; m.y = ny; }
+    } else if (dist <= m.attackRange + 3) {
+      this.moveMonsterToward(m);
+    }
+  }
+
+  private processHealerMonster(m: Monster): void {
+    const wounded = this.monsters.find(other =>
+      other !== m && other.hp < other.maxHp &&
+      Math.abs(other.x - m.x) + Math.abs(other.y - m.y) <= 1,
+    );
+    if (wounded) {
+      const healAmt = Math.max(1, Math.floor(wounded.maxHp * 0.25));
+      wounded.hp = Math.min(wounded.maxHp, wounded.hp + healAmt);
+      this.cb.onParticle(wounded.x, wounded.y, `+${healAmt}`, '#4caf50');
+      this.cb.log(`${m.name} heals ${wounded.name}!`, 'log-damage');
+      return;
+    }
+    this.processMeleeMonster(m);
+  }
+
+  private processBerserkerMonster(m: Monster): void {
+    const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+    if (dist === 1) {
+      const enraged = m.hp < m.maxHp * 0.5;
+      this.monsterAttackPlayer(m);
+      if (enraged && this.player.hp > 0) {
+        this.cb.log(`${m.name} rages and strikes again!`, 'log-damage');
+        this.monsterAttackPlayer(m);
+      }
+    } else if (dist <= 5) {
+      this.moveMonsterToward(m);
+    }
+  }
+
+  private processSwiftMonster(m: Monster): void {
+    const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+    if (dist === 1) {
+      this.monsterAttackPlayer(m);
+    } else if (dist <= 7) {
+      this.moveMonsterToward(m);
+      if (this.player.hp > 0 && Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) > 1) {
+        this.moveMonsterToward(m); // Second step
       }
     }
   }
@@ -520,6 +630,7 @@ export class Game {
   // ── Combat helpers ───────────────────────────────────────────────────────
 
   private killMonster(m: Monster): void {
+    this.cb.onAudio?.('kill');
     this.score += m.isBoss ? 500 : 80;
     this.monsters = this.monsters.filter(x => x !== m);
     const levelled = this.player.gainXP(m.xpReward);
@@ -623,6 +734,7 @@ export class Game {
       monster.hp -= dmg;
       this.cb.log(`Hit ${monster.name} for ${dmg}.${monster.isBoss ? ' (BOSS)' : ''}`, 'log-success');
       this.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#69f0ae');
+      this.cb.onAudio?.('hit');
 
       // Apply stun on player attack (10% base chance)
       if (Math.random() < 0.10 && !monster.isStunned) {
@@ -659,6 +771,7 @@ export class Game {
     if (this.map[nx]![ny] === Tile.STAIRS) {
       this.dungeonLevel++;
       if (this.dungeonLevel % 5 === 0) this.pendingBossFloor = true;
+      this.cb.onAudio?.('descend');
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
       this.resetDungeonState();
     } else {
@@ -682,18 +795,18 @@ export class Game {
 
   handleBlockLeft(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.advanceTurn(); }
+    if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   handleBlockRight(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.advanceTurn(); }
+    if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   handleBlockRotate(): void {
     if (this.player.hp <= 0 || this.paused) return;
     const rotated = rotateMatrix(this.blockMatrix);
-    if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.advanceTurn(); }
+    if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); this.advanceTurn(); }
   }
 
   handleBlockSoftDrop(): void {

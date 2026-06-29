@@ -42,6 +42,9 @@ interface RawMonster {
   hpScaleCoefficient: number; atkScaleCoefficient: number;
   xpValue: number; spawnMsg: string;
   statusInflict?: { type: string; chance: number; duration: number; power: number };
+  behaviorType?: string;
+  attackRange?: number;
+  moveSpeed?: number;
 }
 
 interface RawBoss {
@@ -80,6 +83,10 @@ const CELL_MAP: Record<string, CellValue> = {
   ITEM_POTION:    Cell.ITEM_POTION,
   ITEM_SWORD:     Cell.ITEM_SWORD,
   ITEM_EQUIPMENT: Cell.ITEM_EQUIPMENT,
+  MONSTER_ARCHER: Cell.MONSTER_ARCHER,
+  MONSTER_SLIME:  Cell.MONSTER_SLIME,
+  MONSTER_ORC:    Cell.MONSTER_ORC,
+  MONSTER_BAT:    Cell.MONSTER_BAT,
 };
 
 // ── Monsters ──────────────────────────────────────────────────────────────────
@@ -105,6 +112,9 @@ export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(
             power:    raw.statusInflict.power,
           }
         : undefined,
+      behaviorType: raw.behaviorType,
+      attackRange:  raw.attackRange,
+      moveSpeed:    raw.moveSpeed,
     } satisfies MonsterDef,
   ])
 );

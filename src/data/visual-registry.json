@@ -19,5 +19,9 @@
   "sprite_crystal":          "💎",
   "sprite_charm":            "🔮",
   "sprite_antidote":         "💊",
-  "sprite_salve":            "🌿"
+  "sprite_salve":            "🌿",
+  "sprite_goblin_archer":    "👺",
+  "sprite_cave_slime":       "🫧",
+  "sprite_berserker_orc":    "👹",
+  "sprite_plague_bat":       "🦠"
 }
