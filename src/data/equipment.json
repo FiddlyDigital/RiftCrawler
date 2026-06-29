@@ -1,0 +1,8 @@
+[
+  { "id": "rusty_dagger",    "displayName": "Rusty Dagger",   "visualAsset": "sprite_equip_dagger",     "slot": "weapon", "atkBonus": 2, "defBonus": 0, "tier": 1 },
+  { "id": "iron_sword",      "displayName": "Iron Sword",      "visualAsset": "sprite_equip_iron_sword", "slot": "weapon", "atkBonus": 5, "defBonus": 0, "tier": 2 },
+  { "id": "war_axe",         "displayName": "War Axe",         "visualAsset": "sprite_equip_war_axe",    "slot": "weapon", "atkBonus": 9, "defBonus": 0, "tier": 3 },
+  { "id": "leather_buckler", "displayName": "Leather Buckler", "visualAsset": "sprite_equip_buckler",    "slot": "armor",  "atkBonus": 0, "defBonus": 1, "tier": 1 },
+  { "id": "chain_mail",      "displayName": "Chain Mail",      "visualAsset": "sprite_equip_chainmail",  "slot": "armor",  "atkBonus": 0, "defBonus": 2, "tier": 2 },
+  { "id": "plate_helm",      "displayName": "Plate Helm",      "visualAsset": "sprite_equip_helm",       "slot": "armor",  "atkBonus": 0, "defBonus": 3, "tier": 3 }
+]

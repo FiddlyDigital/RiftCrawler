@@ -1,6 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, EquipSlot } from './types';
-import type { EquipmentDef } from './content';
+import type { StatusEffect, EquipSlot, EquipmentDef } from './types';
 
 export class Equipment {
   constructor(

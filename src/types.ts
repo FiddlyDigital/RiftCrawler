@@ -63,3 +63,44 @@ export interface RunRecord {
   playerLevel: number;
   cause: string;
 }
+
+// ── Content interfaces (referenced by dataLoader + entities) ──────────────────
+
+export interface MonsterDef {
+  char: string;
+  name: string;
+  baseHp: number;
+  hpPerLevel: number;
+  baseAtk: number;
+  atkPerLevel: number;
+  cellState: CellValue;
+  spawnMsg: string;
+  xpReward: number;
+  statusInflict?: { type: StatusType; chance: number; duration: number; power: number };
+}
+
+export interface BossDef {
+  char: string;
+  name: string;
+  hpMult: number;
+  atkMult: number;
+  xpReward: number;
+  flavorText: string;
+}
+
+export interface ItemDef {
+  char: string;
+  name: string;
+  type: 'heal' | 'stat';
+  statValue: number;
+  cellState: CellValue;
+}
+
+export interface EquipmentDef {
+  char: string;
+  name: string;
+  slot: EquipSlot;
+  atkBonus: number;
+  defBonus: number;
+  tier: number;
+}

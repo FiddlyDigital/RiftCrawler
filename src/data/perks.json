@@ -1,0 +1,10 @@
+[
+  { "id": "hp_up",      "name": "💪 Toughness",   "desc": "+20 Max HP",             "effectType": "maxHpIncrease",           "effectValue": 20 },
+  { "id": "atk_up",     "name": "⚔️ Sharpness",    "desc": "+5 Attack",              "effectType": "atkIncrease",             "effectValue": 5  },
+  { "id": "vision",     "name": "👁️ Eagle Eye",     "desc": "+2 Vision Radius",       "effectType": "visionIncrease",          "effectValue": 2  },
+  { "id": "regen",      "name": "🌿 Regeneration", "desc": "+2 HP per tick",         "effectType": "regenIncrease",           "effectValue": 2  },
+  { "id": "immune",     "name": "🧪 Iron Stomach", "desc": "Immune to poison",       "effectType": "poisonImmune",            "effectValue": 0  },
+  { "id": "soul_drain", "name": "💫 Soul Drain",   "desc": "+5 HP on every kill",    "effectType": "killHealIncrease",        "effectValue": 5  },
+  { "id": "bulwark",    "name": "🛡️ Bulwark",       "desc": "Reduce all damage by 1", "effectType": "damageReductionIncrease", "effectValue": 1  },
+  { "id": "time_warp",  "name": "⏱️ Time Warp",     "desc": "Slow tick rate by 15%",  "effectType": "tickSlowIncrease",        "effectValue": 15 }
+]

@@ -1,0 +1,27 @@
+{
+  "rat": {
+    "id": "rat",
+    "displayName": "Cave Rat",
+    "visualAsset": "sprite_rat_01",
+    "cellTypeId": "MONSTER_RAT",
+    "baseHp": 10,
+    "baseAtk": 3,
+    "hpScaleCoefficient": 2.0,
+    "atkScaleCoefficient": 1.0,
+    "xpValue": 20,
+    "spawnMsg": "👾 Spawn"
+  },
+  "skeleton": {
+    "id": "skeleton",
+    "displayName": "Skeleton Guard",
+    "visualAsset": "sprite_skel_01",
+    "cellTypeId": "MONSTER_SKEL",
+    "baseHp": 18,
+    "baseAtk": 5,
+    "hpScaleCoefficient": 3.0,
+    "atkScaleCoefficient": 1.0,
+    "xpValue": 35,
+    "spawnMsg": "👾 Spawn",
+    "statusInflict": { "type": "poison", "chance": 0.25, "duration": 3, "power": 3 }
+  }
+}
