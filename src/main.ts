@@ -96,7 +96,7 @@ function startGame(startPaused = false): void {
       ui.showShop(
         gold,
         MERCHANT_STOCK,
-        (i) => game.buyMerchantItem(i, MERCHANT_STOCK),
+        (i) => game.buyMerchantItem(i, MERCHANT_STOCK) ?? null,
         ()  => { game.closeShop(); startTick(); },
       );
     },

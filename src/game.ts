@@ -530,11 +530,11 @@ export class Game {
       for (let x = 0; x < CONFIG.COLS; x++) { this.map[x]![0] = Tile.VOID; this.colors[x]![0] = null; }
       this.shiftEntitiesDown(y);
       this.merchantTiles = this.merchantTiles
-        .map(t => t.y < y ? { x: t.x, y: t.y + 1 } : t)
-        .filter(t => t.y < CONFIG.ROWS);
+        .filter(t => t.y !== y)
+        .map(t => t.y < y ? { x: t.x, y: t.y + 1 } : t);
       this.hazards = this.hazards
-        .map(h => h.y < y ? { ...h, y: h.y + 1 } : h)
-        .filter(h => h.y < CONFIG.ROWS);
+        .filter(h => h.y !== y)
+        .map(h => h.y < y ? { ...h, y: h.y + 1 } : h);
       y++;
     }
 
@@ -936,18 +936,17 @@ export class Game {
     this.cb.onOpenShop(this.score);
   }
 
-  buyMerchantItem(index: number, stock: typeof import('./content').MERCHANT_STOCK): void {
+  buyMerchantItem(index: number, stock: typeof import('./content').MERCHANT_STOCK): number | null {
     const item = stock[index];
     if (!item || this.score < item.cost) {
       this.cb.log('Not enough score to purchase!', 'log-damage');
-      return;
+      return null;
     }
     this.score -= item.cost;
     const result = item.apply(this.player);
     this.cb.log(`Bought ${item.name}: ${result}`, 'log-success');
-    this.paused = false;
     this.pushUI();
-    this.cb.onAction();
+    return this.score;
   }
 
   closeShop(): void {

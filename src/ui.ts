@@ -200,19 +200,31 @@ export class UIManager {
     this.perkModal.style.display = 'flex';
   }
 
-  showShop(gold: number, stock: MerchantItem[], onBuy: (i: number) => void, onClose: () => void): void {
+  showShop(gold: number, stock: MerchantItem[], onBuy: (i: number) => number | null, onClose: () => void): void {
+    const goldEl = document.getElementById('shop-gold')!;
     const container = document.getElementById('shop-items')!;
-    document.getElementById('shop-gold')!.textContent = String(gold);
+    const buttons: HTMLButtonElement[] = [];
+
+    const refreshAffordability = (currentScore: number): void => {
+      goldEl.textContent = currentScore.toLocaleString();
+      for (let j = 0; j < buttons.length; j++) {
+        (buttons[j] as HTMLButtonElement).disabled = currentScore < stock[j]!.cost;
+      }
+    };
+
+    goldEl.textContent = gold.toLocaleString();
     container.innerHTML = '';
     for (let i = 0; i < stock.length; i++) {
       const item = stock[i]!;
       const btn = document.createElement('button');
       btn.className = 'shop-item-btn';
       btn.innerHTML = `<span>${item.char} ${item.name}</span><span class="shop-cost">${item.cost} pts</span>`;
+      btn.disabled = gold < item.cost;
       btn.addEventListener('click', () => {
-        document.getElementById('shop-gold')!.textContent = String(gold - item.cost);
-        onBuy(i);
+        const newScore = onBuy(i);
+        if (newScore !== null) refreshAffordability(newScore);
       });
+      buttons.push(btn);
       container.appendChild(btn);
     }
     document.getElementById('shop-close')!.onclick = () => {
