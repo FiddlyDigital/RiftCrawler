@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef } from './types';
+import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef, RelicDef } from './types';
 
 export class Equipment {
   constructor(
@@ -34,12 +34,23 @@ export class Player {
   damageReduction = 0;
   tickSlowPercent = 0;
 
+  // Relic bonuses
+  dodgeChance = 0;
+  lineClearDamage = 0;
+  statusDurationBonus = 0;
+  auraStunRadius = 0;
+  critEvery = 0;
+  critCount = 0;
+
   // Status effects
   statuses: StatusEffect[] = [];
 
   // Equipment
   weapon: Equipment | null = null;
   armor: Equipment | null = null;
+
+  // Relics (max 2)
+  relics: RelicDef[] = [];
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -125,9 +136,10 @@ export class Item {
     public y: number,
     public readonly char: string,
     public readonly name: string,
-    public readonly type: 'heal' | 'stat' | 'weapon' | 'armor',
+    public readonly type: 'heal' | 'stat' | 'weapon' | 'armor' | 'relic',
     public readonly statValue: number,
     public readonly equipDef?: EquipmentDef,
+    public readonly relicDef?: RelicDef,
   ) {}
 }
 

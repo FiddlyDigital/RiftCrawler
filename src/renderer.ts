@@ -154,6 +154,40 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
+    // ── Hazard overlays ───────────────────────────────────────────────────
+    ctx.font = `${TS * 0.55}px Arial`;
+    for (const h of game.hazards) {
+      if (!game.visibility[h.x]?.[h.y]) continue;
+      const hx = h.x * TS, hy = h.y * TS;
+      if (h.type === 'spike') {
+        ctx.globalAlpha = h.warning ? 0.6 : 0.25;
+        ctx.fillStyle = h.warning ? '#ff1744' : '#ff9100';
+        ctx.fillRect(hx, hy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('⬆️', hx + TS / 2, hy + TS / 2);
+        if (h.warning) {
+          ctx.font = '5px monospace';
+          ctx.fillStyle = '#ff1744';
+          ctx.fillText(String(h.timer), hx + TS - 5, hy + 7);
+          ctx.font = `${TS * 0.55}px Arial`;
+        }
+      } else if (h.type === 'smoke') {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#546e7a';
+        ctx.fillRect(hx, hy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.8;
+        ctx.fillText('💨', hx + TS / 2, hy + TS / 2);
+      } else if (h.type === 'teleport') {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#7c4dff';
+        ctx.fillRect(hx, hy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('🌀', hx + TS / 2, hy + TS / 2);
+      }
+      ctx.globalAlpha = 1.0;
+    }
+    ctx.font = `${TS * 0.7}px Arial`;
+
     // ── Items (only if visible) ───────────────────────────────────────────
     for (const item of game.items) {
       if (!game.visibility[item.x]?.[item.y]) continue;
@@ -239,4 +273,8 @@ const CELL_EMOJI: Partial<Record<number, string>> = {
   [Cell.MERCHANT]:       '🏪',
   [Cell.BOSS]:           '⚠️',
   [Cell.ITEM_EQUIPMENT]: '📦',
+  [Cell.RELIC]:          '🔮',
+  [Cell.TRAP_SPIKE]:     '⬆️',
+  [Cell.TRAP_SMOKE]:     '💨',
+  [Cell.TRAP_TELEPORT]:  '🌀',
 };

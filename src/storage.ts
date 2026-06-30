@@ -1,4 +1,4 @@
-import type { RunRecord } from './types';
+import type { RunRecord, RunStats } from './types';
 import type { Game } from './game';
 
 const KEY     = 'riftcrawler_v2';
@@ -24,7 +24,7 @@ function save(data: StoredData): void {
 
 export function getHighScore(): number { return load().highScore; }
 
-export function recordRunEnd(game: Game, cause: string): { highScore: number; history: RunRecord[] } {
+export function recordRunEnd(game: Game, cause: string, stats?: RunStats): { highScore: number; history: RunRecord[] } {
   const prev = load();
   const updated: StoredData = {
     highScore: Math.max(prev.highScore, game.score),
@@ -39,6 +39,7 @@ export function recordRunEnd(game: Game, cause: string): { highScore: number; hi
     floor: game.dungeonLevel,
     playerLevel: game.player.playerLevel,
     cause,
+    stats,
   };
   const history = loadHistory();
   history.unshift(record);

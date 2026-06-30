@@ -49,6 +49,7 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'lineClear':    audio.playLineClear(data ?? 1); break;
     case 'descend':      audio.playDescend();          break;
     case 'poison':       audio.playPoison();           break;
+    case 'bossWarn':     audio.playBossWarn();         break;
   }
 }
 
@@ -63,12 +64,12 @@ function startGame(startPaused = false): void {
     onParticle: (x, y, text, col) => renderer.spawnParticle(x, y, text, col),
     onAudio:  (event, data)        => handleAudio(event, data),
 
-    onDeath: (title, reason, floor, score) => {
+    onDeath: (title, reason, floor, score, stats) => {
       stopTick();
       audio.playDeath();
-      const { highScore, history } = recordRunEnd(game, reason);
+      const { highScore, history } = recordRunEnd(game, reason, stats);
       trackGameOver(score, floor);
-      ui.showDeath(title, reason, floor, score, highScore, history);
+      ui.showDeath(title, reason, floor, score, highScore, history, stats);
       ui.updateBestScore(highScore);
     },
 
@@ -93,12 +94,32 @@ function startGame(startPaused = false): void {
         ()  => { game.closeShop(); startTick(); },
       );
     },
+
+    onBossWarning: (boss, onDone) => {
+      audio.playBossWarn();
+      ui.showBossWarning(boss, () => {
+        onDone();
+        startTick();
+      });
+    },
   });
 
   if (startPaused) game.paused = true;
   renderer.start(game);
   if (!startPaused) startTick();
   trackGameStart(1);
+}
+
+// ── Modifier picker then launch ───────────────────────────────────────────────
+
+function launchWithModifier(onReady: () => void): void {
+  // Initialise the game first so getRandomModifiers() works (game is used in applyModifier)
+  // Then show the picker — user picks — then unpause and start tick
+  const mods = game.getRandomModifiers(3);
+  ui.showModifierPick(mods, (modId) => {
+    game.applyModifier(modId);
+    onReady();
+  });
 }
 
 // ── Boot sequence ─────────────────────────────────────────────────────────────
@@ -113,18 +134,24 @@ ui.showStart(getHighScore());
 document.getElementById('start-btn')!.addEventListener('click', () => {
   audio.init(); // unlock AudioContext on first user gesture
   ui.hideStart();
-  game.paused = false;
-  startTick();
-  audio.playDescend();
-  ui.log('The rift yawns open... descend!', 'log-success');
+  launchWithModifier(() => {
+    game.paused = false;
+    startTick();
+    audio.playDescend();
+    ui.log('The rift yawns open... descend!', 'log-success');
+  });
 });
 
 // Restart
 document.getElementById('restart-btn')!.addEventListener('click', () => {
   ui.hideDeath();
   ui.clearLog();
-  startGame();
-  ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
+  startGame(true);
+  launchWithModifier(() => {
+    game.paused = false;
+    startTick();
+    ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
+  });
 });
 
 // Mute toggle (M key)

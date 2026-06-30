@@ -1,4 +1,5 @@
 import type { ShapeKey } from './config';
+import type { Player } from './entities';
 
 export const Tile = { VOID: 0, FLOOR: 1, STAIRS: 2 } as const;
 export type TileValue = (typeof Tile)[keyof typeof Tile];
@@ -19,6 +20,10 @@ export const Cell = {
   MONSTER_SLIME: 12,
   MONSTER_ORC: 13,
   MONSTER_BAT: 14,
+  RELIC: 15,
+  TRAP_SPIKE: 16,
+  TRAP_SMOKE: 17,
+  TRAP_TELEPORT: 18,
 } as const;
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
@@ -33,7 +38,42 @@ export interface StatusEffect {
 }
 
 export type EquipSlot = 'weapon' | 'armor';
-export type ItemType = 'heal' | 'stat' | 'weapon' | 'armor';
+export type ItemType = 'heal' | 'stat' | 'weapon' | 'armor' | 'relic';
+
+export interface HazardTile {
+  x: number;
+  y: number;
+  type: 'spike' | 'smoke' | 'teleport';
+  timer: number;
+  warning: boolean;
+}
+
+export interface RelicDef {
+  id: string;
+  char: string;
+  name: string;
+  desc: string;
+  onPickup?: (player: Player) => void;
+  onKill?: (player: Player) => void;
+  onLineClear?: (player: Player, count: number) => void;
+}
+
+export interface ModifierDef {
+  id: string;
+  emoji: string;
+  name: string;
+  desc: string;
+  apply: (game: import('./game').Game) => void;
+}
+
+export interface RunStats {
+  monstersKilled: number;
+  bossesKilled: number;
+  linesCleared: number;
+  biggestCombo: number;
+  damageTaken: number;
+  itemsPickedUp: number;
+}
 
 export interface UIState {
   hp: number;
@@ -48,22 +88,25 @@ export interface UIState {
   weaponName: string | null;
   armorName: string | null;
   statuses: StatusEffect[];
+  activeModifier: { emoji: string; name: string } | null;
+  relics: RelicDef[];
 }
 
 export type AudioEvent =
   | 'blockLand' | 'blockRotate' | 'blockMove'
   | 'hit' | 'playerDamage' | 'kill'
-  | 'lineClear' | 'descend' | 'poison';
+  | 'lineClear' | 'descend' | 'poison' | 'bossWarn';
 
 export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;
   updateUI: (state: UIState) => void;
-  onDeath: (title: string, reason: string, floor: number, score: number) => void;
+  onDeath: (title: string, reason: string, floor: number, score: number, stats: RunStats) => void;
   onParticle: (gridX: number, gridY: number, text: string, color: string) => void;
   onLevelUp: (newLevel: number) => void;
   onOpenShop: (gold: number) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;
+  onBossWarning?: (boss: BossDef, onDone: () => void) => void;
 }
 
 export interface RunRecord {
@@ -72,6 +115,7 @@ export interface RunRecord {
   floor: number;
   playerLevel: number;
   cause: string;
+  stats?: RunStats;
 }
 
 // ── Content interfaces (referenced by dataLoader + entities) ──────────────────

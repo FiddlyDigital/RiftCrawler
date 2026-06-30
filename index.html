@@ -43,7 +43,9 @@
         <div class="card-title">Equipment</div>
         <div id="weapon-slot" style="font-size:9px;margin-bottom:1px;">⚔️ —</div>
         <div id="armor-slot"  style="font-size:9px;">🛡️ —</div>
+        <div id="relic-slots" style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap;min-height:14px;"></div>
         <div id="status-row"  style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px;"></div>
+        <div id="active-modifier-badge" style="display:none;margin-top:3px;font-size:9px;color:var(--accent-color);"></div>
       </div>
 
       <!-- Score -->
@@ -153,12 +155,37 @@
       <p style="margin:3px 0;">🏆 Score: <b id="final-score" style="color:var(--accent-color);">0</b></p>
       <p style="margin:3px 0;">⭐ Best:  <b id="high-score"  style="color:var(--accent-color);">0</b></p>
     </div>
+    <!-- Run stats grid -->
+    <div id="run-stats-grid"></div>
+    <!-- Share string -->
+    <div id="share-container" style="display:none;margin-top:6px;">
+      <textarea id="share-text" readonly rows="2"></textarea>
+      <button id="copy-share-btn" class="share-btn">📋 Copy Summary</button>
+    </div>
     <!-- Run history -->
     <div style="margin-top:10px;">
       <div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:4px;">Past Runs</div>
       <div id="run-history"></div>
     </div>
     <button class="restart-btn" id="restart-btn">Try Again</button>
+  </div>
+</div>
+
+<!-- Run modifier pick modal -->
+<div id="modifier-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modifier-title">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title" id="modifier-title" style="color:#ff9100;font-size:20px;">CHOOSE YOUR CURSE</div>
+    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">One modifier shapes the entire run. Choose wisely.</p>
+    <div id="modifier-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Boss warning cinematic -->
+<div id="boss-warning-modal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div id="boss-warning-card">
+    <div id="boss-warning-emoji" style="font-size:52px;line-height:1;margin-bottom:8px;"></div>
+    <div id="boss-warning-name" class="modal-title" style="color:#ff1744;font-size:22px;"></div>
+    <div id="boss-warning-flavor" style="color:#888;font-size:11px;margin-top:8px;font-style:italic;max-width:280px;line-height:1.4;"></div>
   </div>
 </div>
 

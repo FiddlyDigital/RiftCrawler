@@ -88,6 +88,13 @@ export class AudioEngine {
     this.osc(160, 0.18, 'sawtooth', 0.1,  0.26);
   }
 
+  playBossWarn(): void {
+    this.osc(80, 0.6, 'sawtooth', 0.3);
+    this.osc(160, 0.4, 'sawtooth', 0.2, 0.25);
+    this.noise(0.15, 0.25, 0.6);
+    this.osc(320, 0.2, 'square', 0.15, 0.8);
+  }
+
   playDeath(): void {
     this.noise(0.2, 0.12);
     this.osc(260, 0.3, 'sawtooth', 0.28, 0.05);

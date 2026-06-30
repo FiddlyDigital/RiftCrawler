@@ -6,7 +6,7 @@ import equipmentData      from './data/equipment.json';
 import perksData          from './data/perks.json';
 import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type EquipSlot } from './types';
+import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef } from './types';
 import type { Player } from './entities';
 import type { MonsterDef, BossDef, ItemDef, EquipmentDef } from './types';
 
@@ -205,6 +205,146 @@ export const MERCHANT_STOCK: MerchantItem[] = (merchantData as RawMerchantItem[]
     return resolve ? resolve(player, raw.effectValue, raw.effectLabel) : raw.effectLabel;
   },
 }));
+
+// ── Relics ────────────────────────────────────────────────────────────────────
+
+export const RELICS: RelicDef[] = [
+  {
+    id: 'vampire_ring',
+    char: '💍',
+    name: 'Vampire Ring',
+    desc: '+2 HP on every kill',
+    onPickup: (p: Player) => { p.killHeal += 2; },
+  },
+  {
+    id: 'echo_stone',
+    char: '🌀',
+    name: 'Echo Stone',
+    desc: '20% chance to dodge attacks',
+    onPickup: (p: Player) => { p.dodgeChance += 0.20; },
+  },
+  {
+    id: 'ember_core',
+    char: '🔥',
+    name: 'Ember Core',
+    desc: 'Line clears deal 5 dmg to all visible monsters',
+    onPickup: (p: Player) => { p.lineClearDamage += 5; },
+  },
+  {
+    id: 'soul_lantern',
+    char: '🕯️',
+    name: 'Soul Lantern',
+    desc: 'Vision radius +3',
+    onPickup: (p: Player) => { p.visionRadius += 3; },
+  },
+  {
+    id: 'talisman',
+    char: '🪬',
+    name: 'Talisman',
+    desc: 'Status effects expire 1 turn sooner',
+    onPickup: (p: Player) => { p.statusDurationBonus += 1; },
+  },
+  {
+    id: 'lodestone',
+    char: '🧲',
+    name: 'Lodestone',
+    desc: 'Stun adjacent monsters each tick',
+    onPickup: (p: Player) => { p.auraStunRadius = 1; },
+  },
+  {
+    id: 'mana_beads',
+    char: '📿',
+    name: 'Mana Beads',
+    desc: 'Every 5th attack deals double damage',
+    onPickup: (p: Player) => { p.critEvery = 5; p.critCount = 0; },
+  },
+  {
+    id: 'blood_pact',
+    char: '🩸',
+    name: 'Blood Pact',
+    desc: '+8 ATK, -10 Max HP',
+    onPickup: (p: Player) => {
+      p.atk += 8;
+      p.maxHp = Math.max(10, p.maxHp - 10);
+      p.hp = Math.min(p.hp, p.maxHp);
+    },
+  },
+];
+
+// ── Modifiers ─────────────────────────────────────────────────────────────────
+
+export const MODIFIERS: ModifierDef[] = [
+  {
+    id: 'glass_cannon',
+    emoji: '🩸',
+    name: 'Glass Cannon',
+    desc: '+8 ATK, −15 Max HP',
+    apply: (g) => { g.player.atk += 8; g.player.maxHp = Math.max(10, g.player.maxHp - 15); g.player.hp = g.player.maxHp; },
+  },
+  {
+    id: 'blessed',
+    emoji: '🍀',
+    name: 'Blessed',
+    desc: 'Potions heal double',
+    apply: (g) => { g.potionHealMult = 2; },
+  },
+  {
+    id: 'overclock',
+    emoji: '⚡',
+    name: 'Overclock',
+    desc: 'Gravity 20% faster, score ×1.5',
+    apply: (g) => { g.player.tickSlowPercent -= 20; g.scoreMultiplier = 1.5; },
+  },
+  {
+    id: 'cursed',
+    emoji: '💀',
+    name: 'Cursed',
+    desc: 'Score ×2 — but line clears don\'t heal',
+    apply: (g) => { g.scoreMultiplier = 2.0; g.noLineHeal = true; },
+  },
+  {
+    id: 'blind_run',
+    emoji: '🌑',
+    name: 'Blind Run',
+    desc: 'Vision radius halved',
+    apply: (g) => { g.player.visionRadius = Math.max(1, Math.floor(g.player.visionRadius / 2)); },
+  },
+  {
+    id: 'ironclad',
+    emoji: '🛡️',
+    name: 'Ironclad',
+    desc: '+3 Damage Reduction, −3 ATK',
+    apply: (g) => { g.player.damageReduction += 3; g.player.atk = Math.max(1, g.player.atk - 3); },
+  },
+  {
+    id: 'haunted',
+    emoji: '👁️',
+    name: 'Haunted',
+    desc: 'Double monster spawn rate',
+    apply: (g) => { g.haunted = true; },
+  },
+  {
+    id: 'frozen_rift',
+    emoji: '🧊',
+    name: 'Frozen Rift',
+    desc: 'All monsters spawn stunned for 1 turn',
+    apply: (g) => { g.frozenRift = true; },
+  },
+  {
+    id: 'lucky',
+    emoji: '✨',
+    name: 'Lucky',
+    desc: 'Every 5th block contains a guaranteed item',
+    apply: (g) => { g.luckyEvery = 0; },
+  },
+  {
+    id: 'berserker',
+    emoji: '🔥',
+    name: 'Berserker',
+    desc: 'ATK doubled, Max HP halved',
+    apply: (g) => { g.player.atk = g.player.atk * 2; g.player.maxHp = Math.max(10, Math.floor(g.player.maxHp / 2)); g.player.hp = g.player.maxHp; },
+  },
+];
 
 // ── Shapes ────────────────────────────────────────────────────────────────────
 

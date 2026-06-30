@@ -1,5 +1,5 @@
 import { NEXT_PREVIEWS } from './config';
-import type { LogClass, UIState } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef } from './types';
 import type { PerkDef, MerchantItem } from './content';
 import type { RunRecord } from './types';
 
@@ -8,34 +8,43 @@ export class UIManager {
   private readonly modal: HTMLElement;
   private readonly perkModal: HTMLElement;
   private readonly shopModal: HTMLElement;
+  private readonly modifierModal: HTMLElement;
+  private readonly bossWarningModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
   private lastScore = -1;
 
   constructor() {
-    this.logPanel   = document.getElementById('log-panel')!;
-    this.modal      = document.getElementById('game-over-modal')!;
-    this.perkModal  = document.getElementById('perk-modal')!;
-    this.shopModal  = document.getElementById('shop-modal')!;
+    this.logPanel          = document.getElementById('log-panel')!;
+    this.modal             = document.getElementById('game-over-modal')!;
+    this.perkModal         = document.getElementById('perk-modal')!;
+    this.shopModal         = document.getElementById('shop-modal')!;
+    this.modifierModal     = document.getElementById('modifier-modal')!;
+    this.bossWarningModal  = document.getElementById('boss-warning-modal')!;
     this.els = {
-      floor:       document.getElementById('stat-floor')!,
-      score:       document.getElementById('stat-score')!,
-      hp:          document.getElementById('stat-hp')!,
-      rate:        document.getElementById('stat-rate')!,
-      hpBar:       document.getElementById('hp-bar')!,
-      nextPreview: document.getElementById('next-preview-box')!,
-      deathTitle:  document.getElementById('death-title')!,
-      deathReason: document.getElementById('death-reason')!,
-      finalFloor:  document.getElementById('final-floor')!,
-      finalScore:  document.getElementById('final-score')!,
-      highScore:   document.getElementById('high-score')!,
-      bestScore:   document.getElementById('best-score')!,
-      xpBar:       document.getElementById('xp-bar')!,
-      xpLabel:     document.getElementById('xp-label')!,
-      playerLevel: document.getElementById('player-level')!,
-      weaponSlot:  document.getElementById('weapon-slot')!,
-      armorSlot:   document.getElementById('armor-slot')!,
-      statusRow:   document.getElementById('status-row')!,
-      runHistory:  document.getElementById('run-history')!,
+      floor:            document.getElementById('stat-floor')!,
+      score:            document.getElementById('stat-score')!,
+      hp:               document.getElementById('stat-hp')!,
+      rate:             document.getElementById('stat-rate')!,
+      hpBar:            document.getElementById('hp-bar')!,
+      nextPreview:      document.getElementById('next-preview-box')!,
+      deathTitle:       document.getElementById('death-title')!,
+      deathReason:      document.getElementById('death-reason')!,
+      finalFloor:       document.getElementById('final-floor')!,
+      finalScore:       document.getElementById('final-score')!,
+      highScore:        document.getElementById('high-score')!,
+      bestScore:        document.getElementById('best-score')!,
+      xpBar:            document.getElementById('xp-bar')!,
+      xpLabel:          document.getElementById('xp-label')!,
+      playerLevel:      document.getElementById('player-level')!,
+      weaponSlot:       document.getElementById('weapon-slot')!,
+      armorSlot:        document.getElementById('armor-slot')!,
+      statusRow:        document.getElementById('status-row')!,
+      runHistory:       document.getElementById('run-history')!,
+      relicSlots:       document.getElementById('relic-slots')!,
+      activeModifier:   document.getElementById('active-modifier-badge')!,
+      runStatsGrid:     document.getElementById('run-stats-grid')!,
+      shareContainer:   document.getElementById('share-container')!,
+      shareText:        document.getElementById('share-text')!,
     };
   }
 
@@ -78,14 +87,57 @@ export class UIManager {
     this.els['statusRow']!.innerHTML = state.statuses
       .map(s => `<span class="status-tag status-${s.type}">${s.type === 'poison' ? '☠️' : '💫'} ${s.type} ${s.duration}</span>`)
       .join('');
+
+    // Relic slots
+    this.els['relicSlots']!.innerHTML = state.relics
+      .map(r => `<span class="relic-badge" title="${r.name}: ${r.desc}">${r.char}</span>`)
+      .join('');
+
+    // Active modifier badge
+    if (state.activeModifier) {
+      this.els['activeModifier']!.style.display = '';
+      this.els['activeModifier']!.textContent = `${state.activeModifier.emoji} ${state.activeModifier.name}`;
+    } else {
+      this.els['activeModifier']!.style.display = 'none';
+    }
   }
 
-  showDeath(title: string, reason: string, floor: number, score: number, highScore: number, history: RunRecord[]): void {
+  showDeath(title: string, reason: string, floor: number, score: number, highScore: number, history: RunRecord[], stats?: RunStats): void {
     this.els['deathTitle']!.textContent  = title;
     this.els['deathReason']!.textContent = reason;
     this.els['finalFloor']!.textContent  = String(floor);
     this.els['finalScore']!.textContent  = String(score);
     this.els['highScore']!.textContent   = String(highScore);
+
+    // Run stats grid
+    if (stats) {
+      this.els['runStatsGrid']!.innerHTML = `
+        <div class="run-stats-grid">
+          <div class="stat-cell">☠️ <b>${stats.monstersKilled}</b><br><span>Monsters</span></div>
+          <div class="stat-cell">👑 <b>${stats.bossesKilled}</b><br><span>Bosses</span></div>
+          <div class="stat-cell">🧱 <b>${stats.linesCleared}</b><br><span>Lines</span></div>
+          <div class="stat-cell">💥 <b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
+          <div class="stat-cell">💔 <b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
+          <div class="stat-cell">🎒 <b>${stats.itemsPickedUp}</b><br><span>Items</span></div>
+        </div>`;
+      const shareStr = `🗡️ Fl.${floor} · ☠️ ${stats.monstersKilled} kills · 🧱 ${stats.linesCleared} lines · 💥 Best combo ×${stats.biggestCombo + 1} · 🏆 ${score.toLocaleString()} pts`;
+      (this.els['shareText'] as HTMLTextAreaElement).value = shareStr;
+      this.els['shareContainer']!.style.display = '';
+      const copyBtn = document.getElementById('copy-share-btn');
+      if (copyBtn) {
+        copyBtn.onclick = () => {
+          navigator.clipboard?.writeText(shareStr).catch(() => {
+            (this.els['shareText'] as HTMLTextAreaElement).select();
+            document.execCommand('copy');
+          });
+          copyBtn.textContent = '✅ Copied!';
+          setTimeout(() => { copyBtn.textContent = '📋 Copy Summary'; }, 1800);
+        };
+      }
+    } else {
+      this.els['runStatsGrid']!.innerHTML = '';
+      this.els['shareContainer']!.style.display = 'none';
+    }
 
     // Run history table
     const lines = history.map((r, i) =>
@@ -100,6 +152,33 @@ export class UIManager {
   }
 
   hideDeath(): void { this.modal.style.display = 'none'; }
+
+  showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
+    const container = document.getElementById('modifier-choices')!;
+    container.innerHTML = '';
+    for (const mod of mods) {
+      const btn = document.createElement('button');
+      btn.className = 'modifier-btn';
+      btn.innerHTML = `<span class="modifier-emoji">${mod.emoji}</span><div class="modifier-info"><strong>${mod.name}</strong><span>${mod.desc}</span></div>`;
+      btn.addEventListener('click', () => {
+        this.modifierModal.style.display = 'none';
+        onSelect(mod.id);
+      });
+      container.appendChild(btn);
+    }
+    this.modifierModal.style.display = 'flex';
+  }
+
+  showBossWarning(boss: BossDef, onDone: () => void): void {
+    (document.getElementById('boss-warning-emoji') as HTMLElement).textContent = boss.char;
+    (document.getElementById('boss-warning-name')  as HTMLElement).textContent = boss.name.toUpperCase();
+    (document.getElementById('boss-warning-flavor') as HTMLElement).textContent = boss.flavorText;
+    this.bossWarningModal.style.display = 'flex';
+    setTimeout(() => {
+      this.bossWarningModal.style.display = 'none';
+      onDone();
+    }, 1800);
+  }
 
   showPerkSelection(perks: PerkDef[], onSelect: (id: string) => void): void {
     const container = document.getElementById('perk-choices')!;
