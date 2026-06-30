@@ -181,12 +181,16 @@ export class Renderer {
         ctx.globalAlpha = alpha;
 
         if (type === Tile.FLOOR || type === Tile.STAIRS || isMerchant) {
-          if (!this.drawSprite('FLOOR', x * TS, y * TS, TS, TS)) {
-            ctx.fillStyle = isMerchant ? '#0d2d0d' : (game.colors[x]![y] ?? '#444');
-            ctx.fillRect(x * TS, y * TS, TS - 1, TS - 1);
-            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-            ctx.strokeRect(x * TS, y * TS, TS, TS);
-          }
+          // Draw block color base first — preserves tetris color identity
+          ctx.fillStyle = isMerchant ? '#0d2d0d' : (game.colors[x]![y] ?? '#444');
+          ctx.fillRect(x * TS, y * TS, TS - 1, TS - 1);
+          ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+          ctx.strokeRect(x * TS, y * TS, TS, TS);
+
+          // Overlay floor texture at ~45% to add pixel-art depth without hiding color
+          ctx.globalAlpha = alpha * 0.45;
+          this.drawSprite('FLOOR', x * TS, y * TS, TS, TS);
+          ctx.globalAlpha = alpha;
 
           if (type === Tile.STAIRS) {
             if (visible) this.drawPulseGlow(x, y, '186,104,200');
