@@ -2,6 +2,41 @@ import { CONFIG } from './config';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
 import type { Game } from './game';
+import type { SpriteCoord } from './types';
+import spriteMapData from './data/sprite-map.json';
+
+const SPRITE_MAP = spriteMapData as Record<string, unknown>;
+
+const SPRITE_SHEETS: Record<string, string> = {
+  bat: '/sprites/bat.png',
+  brute: '/sprites/brute.png',
+  demon: '/sprites/demon.png',
+  gnoll: '/sprites/gnoll.png',
+  items: '/sprites/items.png',
+  king: '/sprites/king.png',
+  mage: '/sprites/mage.png',
+  rat: '/sprites/rat.png',
+  shopkeeper: '/sprites/shopkeeper.png',
+  skeleton: '/sprites/skeleton.png',
+  slime: '/sprites/slime.png',
+  spinner: '/sprites/spinner.png',
+  tiles: '/sprites/tiles_caves.png',
+  warlock: '/sprites/warlock.png',
+  wraith: '/sprites/wraith.png',
+};
+
+const spriteImages: Map<string, HTMLImageElement> = new Map();
+
+function loadAllSprites(): void {
+  for (const [name, url] of Object.entries(SPRITE_SHEETS)) {
+    const img = new Image();
+    img.onload = () => spriteImages.set(name, img);
+    img.onerror = () => console.warn(`[Sprites] Failed: ${url}`);
+    img.src = url;
+  }
+}
+
+loadAllSprites();
 
 const FADE_FRAMES = 10;
 
@@ -52,6 +87,17 @@ export class Renderer {
     };
   }
 
+  private drawSprite(key: string, dx: number, dy: number, dw: number, dh: number): boolean {
+    const entry = SPRITE_MAP[key];
+    if (!entry || typeof entry !== 'object') return false;
+    const coord = entry as SpriteCoord;
+    if (!coord.sheet) return false;
+    const img = spriteImages.get(coord.sheet);
+    if (!img) return false;
+    this.ctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, dx, dy, dw, dh);
+    return true;
+  }
+
   private drawPulseGlow(gx: number, gy: number, rgb: string): void {
     const TS = CONFIG.TILE_SIZE;
     const alpha = 0.18 + 0.18 * Math.sin(performance.now() / 400);
@@ -76,6 +122,7 @@ export class Renderer {
   private draw(game: Game): void {
     const { ctx } = this;
     const TS = CONFIG.TILE_SIZE;
+    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
     if (game.dungeonLevel !== this.lastDungeonLevel) {
@@ -122,7 +169,6 @@ export class Renderer {
         const isMerchant = game.items.length >= 0 && this.isMerchantTile(game, x, y);
 
         if (!seen && !visible) {
-          // Never explored — deep void
           ctx.fillStyle = '#020204';
           ctx.fillRect(x * TS, y * TS, TS, TS);
           continue;
@@ -135,21 +181,27 @@ export class Renderer {
         ctx.globalAlpha = alpha;
 
         if (type === Tile.FLOOR || type === Tile.STAIRS || isMerchant) {
-          ctx.fillStyle = isMerchant ? '#0d2d0d' : (game.colors[x]![y] ?? '#444');
-          ctx.fillRect(x * TS, y * TS, TS - 1, TS - 1);
-          ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-          ctx.strokeRect(x * TS, y * TS, TS, TS);
+          if (!this.drawSprite('FLOOR', x * TS, y * TS, TS, TS)) {
+            ctx.fillStyle = isMerchant ? '#0d2d0d' : (game.colors[x]![y] ?? '#444');
+            ctx.fillRect(x * TS, y * TS, TS - 1, TS - 1);
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.strokeRect(x * TS, y * TS, TS, TS);
+          }
 
           if (type === Tile.STAIRS) {
             if (visible) this.drawPulseGlow(x, y, '186,104,200');
-            ctx.font = `${TS * 0.7}px Arial`;
-            ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-            ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
+            if (!this.drawSprite('STAIRS', x * TS, y * TS, TS, TS)) {
+              ctx.font = `${TS * 0.7}px Arial`;
+              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+              ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
+            }
           } else if (isMerchant) {
             if (visible) this.drawPulseGlow(x, y, '102,187,106');
-            ctx.font = `${TS * 0.7}px Arial`;
-            ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-            ctx.fillText('🏪', x * TS + TS / 2, y * TS + TS / 2);
+            if (!this.drawSprite('🏪', x * TS, y * TS, TS, TS)) {
+              ctx.font = `${TS * 0.7}px Arial`;
+              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+              ctx.fillText('🏪', x * TS + TS / 2, y * TS + TS / 2);
+            }
           }
         } else {
           ctx.fillStyle = '#06060a';
@@ -186,7 +238,12 @@ export class Renderer {
         ctx.lineWidth = 1;
 
         const emoji = CELL_EMOJI[cell];
-        if (emoji) ctx.fillText(emoji, tx * TS + TS / 2, ty * TS + TS / 2);
+        if (emoji) {
+          const inset = 2;
+          if (!this.drawSprite(emoji, tx * TS + inset, ty * TS + inset, TS - 2 * inset, TS - 2 * inset)) {
+            ctx.fillText(emoji, tx * TS + TS / 2, ty * TS + TS / 2);
+          }
+        }
       }
     }
 
@@ -247,22 +304,24 @@ export class Renderer {
     for (const item of game.items) {
       if (!game.visibility[item.x]?.[item.y]) continue;
       if (item.type === 'relic') this.drawPulseGlow(item.x, item.y, '156,39,176');
-      ctx.fillText(item.char, item.x * TS + TS / 2, item.y * TS + TS / 2);
+      if (!this.drawSprite(item.char, item.x * TS, item.y * TS, TS, TS)) {
+        ctx.fillText(item.char, item.x * TS + TS / 2, item.y * TS + TS / 2);
+      }
     }
 
     // ── Monsters (only if visible) ────────────────────────────────────────
     for (const m of game.monsters) {
       if (!game.visibility[m.x]?.[m.y]) continue;
-      ctx.fillText(m.char, m.x * TS + TS / 2, m.y * TS + TS / 2);
+      if (!this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS)) {
+        ctx.fillText(m.char, m.x * TS + TS / 2, m.y * TS + TS / 2);
+      }
 
-      // Status indicator above monster
       if (m.statuses.length > 0) {
         ctx.font = '7px Arial';
         ctx.fillText('☠', m.x * TS + TS - 4, m.y * TS + 5);
         ctx.font = `${TS * 0.7}px Arial`;
       }
 
-      // Mini HP bar for bosses
       if (m.isBoss) {
         const barW = TS - 2;
         const pct = m.hp / m.maxHp;
@@ -277,7 +336,6 @@ export class Renderer {
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
 
-      // Player radial glow
       const px = game.player.x * TS + TS / 2;
       const py = game.player.y * TS + TS / 2;
       const glow = ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
@@ -286,9 +344,10 @@ export class Renderer {
       ctx.fillStyle = glow;
       ctx.fillRect(game.player.x * TS - TS, game.player.y * TS - TS, TS * 3, TS * 3);
 
-      ctx.fillText(game.player.char, game.player.x * TS + TS / 2, game.player.y * TS + TS / 2);
+      if (!this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS, TS, TS)) {
+        ctx.fillText(game.player.char, game.player.x * TS + TS / 2, game.player.y * TS + TS / 2);
+      }
 
-      // Status indicators on player
       if (game.player.statuses.length > 0) {
         const icons = game.player.statuses.map(s => s.type === 'poison' ? '☠' : '💫').join('');
         ctx.font = '7px Arial';
@@ -311,7 +370,7 @@ export class Renderer {
       ctx.fillRect(0, 0, w, h);
     }
 
-    ctx.restore(); // end screen shake transform
+    ctx.restore();
   }
 
   private updateMotes(): void {

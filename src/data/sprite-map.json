@@ -1,0 +1,43 @@
+{
+  "_comment": "Maps emoji char (or special tile key) -> sprite sheet coordinates. sheet = filename without .png in public/sprites/",
+
+  "🧙‍♂️": { "sheet": "mage",       "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+
+  "🐀":   { "sheet": "rat",        "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "💀":   { "sheet": "skeleton",   "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "👺":   { "sheet": "gnoll",      "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "🫧":   { "sheet": "slime",      "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "👹":   { "sheet": "brute",      "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "🦠":   { "sheet": "bat",        "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+
+  "🐉":   { "sheet": "demon",      "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "👑":   { "sheet": "king",       "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "👻":   { "sheet": "wraith",     "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "🦇":   { "sheet": "warlock",    "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+  "🕷️":   { "sheet": "spinner",    "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+
+  "🏪":   { "sheet": "shopkeeper", "sx": 0,   "sy": 0,   "sw": 16, "sh": 16 },
+
+  "🧪":   { "sheet": "items", "sx": 64,  "sy": 16,  "sw": 16, "sh": 16 },
+  "🗡️":   { "sheet": "items", "sx": 32,  "sy": 112, "sw": 16, "sh": 16 },
+
+  "🔪":   { "sheet": "items", "sx": 16,  "sy": 144, "sw": 16, "sh": 16 },
+  "⚔️":   { "sheet": "items", "sx": 64,  "sy": 112, "sw": 16, "sh": 16 },
+  "🪓":   { "sheet": "items", "sx": 48,  "sy": 128, "sw": 16, "sh": 16 },
+  "🛡️":   { "sheet": "items", "sx": 48,  "sy": 112, "sw": 16, "sh": 16 },
+  "🦺":   { "sheet": "items", "sx": 32,  "sy": 176, "sw": 16, "sh": 16 },
+  "🪖":   { "sheet": "items", "sx": 80,  "sy": 128, "sw": 16, "sh": 16 },
+
+  "💍":   { "sheet": "items", "sx": 192, "sy": 48,  "sw": 16, "sh": 16 },
+  "🔮":   { "sheet": "items", "sx": 48,  "sy": 16,  "sw": 16, "sh": 16 },
+  "🔥":   { "sheet": "items", "sx": 32,  "sy": 48,  "sw": 16, "sh": 16 },
+  "🕯️":   { "sheet": "items", "sx": 48,  "sy": 48,  "sw": 16, "sh": 16 },
+  "🪬":   { "sheet": "items", "sx": 0,   "sy": 48,  "sw": 16, "sh": 16 },
+  "🧲":   { "sheet": "items", "sx": 128, "sy": 16,  "sw": 16, "sh": 16 },
+  "📿":   { "sheet": "items", "sx": 32,  "sy": 16,  "sw": 16, "sh": 16 },
+  "🩸":   { "sheet": "items", "sx": 224, "sy": 48,  "sw": 16, "sh": 16 },
+
+  "FLOOR":         { "sheet": "tiles", "sx": 80, "sy": 0,  "sw": 16, "sh": 16 },
+  "STAIRS":        { "sheet": "tiles", "sx": 0,  "sy": 16, "sw": 16, "sh": 16 },
+  "MERCHANT_TILE": { "sheet": "tiles", "sx": 0,  "sy": 48, "sw": 16, "sh": 16 }
+}

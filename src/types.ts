@@ -4,6 +4,8 @@ import type { Player } from './entities';
 export const Tile = { VOID: 0, FLOOR: 1, STAIRS: 2 } as const;
 export type TileValue = (typeof Tile)[keyof typeof Tile];
 
+export interface SpriteCoord { sheet: string; sx: number; sy: number; sw: number; sh: number }
+
 export const Cell = {
   EMPTY: 0,
   FLOOR: 1,
