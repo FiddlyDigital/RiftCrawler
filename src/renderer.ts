@@ -7,6 +7,7 @@ export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly particles: ParticlePool;
   private rafId = 0;
+  private damageFlashFrames = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
@@ -33,6 +34,13 @@ export class Renderer {
     const { ctx } = this;
     const TS = CONFIG.TILE_SIZE;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    // ── Damage flash overlay ──────────────────────────────────────────────
+    if (this.damageFlashFrames > 0) {
+      ctx.fillStyle = 'rgba(220,20,20,0.22)';
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      this.damageFlashFrames--;
+    }
 
     // ── Map tiles with fog of war ─────────────────────────────────────────
     for (let x = 0; x < CONFIG.COLS; x++) {
@@ -134,6 +142,16 @@ export class Renderer {
     // ── Player ────────────────────────────────────────────────────────────
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
+
+      // Player radial glow
+      const px = game.player.x * TS + TS / 2;
+      const py = game.player.y * TS + TS / 2;
+      const glow = ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
+      glow.addColorStop(0, 'rgba(102,187,106,0.38)');
+      glow.addColorStop(1, 'rgba(102,187,106,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(game.player.x * TS - TS, game.player.y * TS - TS, TS * 3, TS * 3);
+
       ctx.fillText(game.player.char, game.player.x * TS + TS / 2, game.player.y * TS + TS / 2);
 
       // Status indicators on player
@@ -148,6 +166,8 @@ export class Renderer {
     // ── Particles ─────────────────────────────────────────────────────────
     this.particles.tick(ctx);
   }
+
+  public triggerDamageFlash(): void { this.damageFlashFrames = 8; }
 
   private isMerchantTile(game: Game, x: number, y: number): boolean {
     return (game as unknown as { merchantTiles: Array<{ x: number; y: number }> })

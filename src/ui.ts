@@ -9,6 +9,7 @@ export class UIManager {
   private readonly perkModal: HTMLElement;
   private readonly shopModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
+  private lastScore = -1;
 
   constructor() {
     this.logPanel   = document.getElementById('log-panel')!;
@@ -51,7 +52,21 @@ export class UIManager {
     this.els['score']!.textContent       = String(state.score);
     this.els['hp']!.textContent          = `${state.hp}/${state.maxHp}`;
     this.els['rate']!.textContent        = `${state.gravityRate}ms`;
-    this.els['hpBar']!.style.width       = `${Math.max(0, (state.hp / state.maxHp) * 100)}%`;
+    const hpBar = this.els['hpBar']!;
+    hpBar.style.width = `${Math.max(0, (state.hp / state.maxHp) * 100)}%`;
+    const hpPct = state.maxHp > 0 ? state.hp / state.maxHp : 1;
+    hpBar.classList.remove('hp-full', 'hp-warning', 'hp-critical');
+    hpBar.classList.add(hpPct > 0.6 ? 'hp-full' : hpPct >= 0.3 ? 'hp-warning' : 'hp-critical');
+
+    if (state.score !== this.lastScore) {
+      const scoreEl = this.els['score']!;
+      scoreEl.classList.remove('score-pop');
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add('score-pop');
+      setTimeout(() => scoreEl.classList.remove('score-pop'), 320);
+      this.lastScore = state.score;
+    }
+
     this.els['nextPreview']!.innerHTML   = NEXT_PREVIEWS[state.nextType] ?? '';
     this.els['playerLevel']!.textContent = `Lv.${state.playerLevel}`;
     this.els['xpBar']!.style.width       = `${Math.min(100, (state.xp / state.xpToNext) * 100)}%`;

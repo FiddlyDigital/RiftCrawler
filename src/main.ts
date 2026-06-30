@@ -44,7 +44,7 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'blockRotate':  audio.playBlockRotate();      break;
     case 'blockMove':    audio.playBlockMove();        break;
     case 'hit':          audio.playHit();              break;
-    case 'playerDamage': audio.playPlayerDamage();     break;
+    case 'playerDamage': audio.playPlayerDamage(); renderer.triggerDamageFlash(); break;
     case 'kill':         audio.playKill();             break;
     case 'lineClear':    audio.playLineClear(data ?? 1); break;
     case 'descend':      audio.playDescend();          break;
