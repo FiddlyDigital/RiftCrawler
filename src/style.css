@@ -53,7 +53,7 @@ body {
 
 #viewport-split {
   display: flex; flex-direction: row; width: 100%;
-  gap: 6px; align-items: stretch; flex-grow: 1; min-height: 0; padding-top: 2px;
+  gap: 6px; align-items: flex-start; flex-grow: 1; min-height: 0; padding-top: 2px;
 }
 
 #canvas-container {
@@ -76,6 +76,15 @@ canvas {
   justify-content: space-between; background-color: var(--panel-color);
   border: 1px solid var(--border-color); border-radius: 6px;
   padding: 5px; box-sizing: border-box; font-size: 11px; gap: 4px;
+  overflow: hidden;
+}
+
+#sidebar-game-title {
+  font-family: var(--font-pixel);
+  font-size: 15px; letter-spacing: 2px; color: var(--accent-color);
+  text-align: center; padding: 3px 0 5px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+  text-shadow: 0 0 10px rgba(255, 213, 79, 0.4);
 }
 
 .sidebar-card {
