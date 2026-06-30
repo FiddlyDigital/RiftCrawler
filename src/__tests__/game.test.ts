@@ -73,10 +73,10 @@ describe('Game', () => {
     game = new Game(cb);
   });
 
-  it('initialises player at (4, 13) with 35 HP', () => {
+  it('initialises player at (4, 23) with 45 HP', () => {
     expect(game.player.x).toBe(4);
-    expect(game.player.y).toBe(13);
-    expect(game.player.hp).toBe(35);
+    expect(game.player.y).toBe(23);
+    expect(game.player.hp).toBe(45);
   });
 
   it('starts on dungeon level 1 with score 0', () => {
@@ -94,21 +94,21 @@ describe('Game', () => {
   });
 
   it('isValidMove returns true for starting platform tiles', () => {
-    expect(game.isValidMove(4, 13)).toBe(true);
+    expect(game.isValidMove(4, 23)).toBe(true);
   });
 
   it('isValidMove returns false for out-of-bounds', () => {
     expect(game.isValidMove(-1, 0)).toBe(false);
     expect(game.isValidMove(0, -1)).toBe(false);
     expect(game.isValidMove(10, 0)).toBe(false);
-    expect(game.isValidMove(0, 15)).toBe(false);
+    expect(game.isValidMove(0, 25)).toBe(false);
   });
 
   it('player heals correctly and clamps to maxHp', () => {
-    game.player.hp = 30;
-    const gained = game.player.heal(10);
-    expect(game.player.hp).toBe(35);
-    expect(gained).toBe(5);
+    game.player.hp = 35;
+    const gained = game.player.heal(20);
+    expect(game.player.hp).toBe(45);
+    expect(gained).toBe(10);
   });
 
   it('player takeDamage is reduced by armor defence', () => {
@@ -126,9 +126,9 @@ describe('Game', () => {
   });
 
   it('hero cannot move into void', () => {
-    game.player.x = 4; game.player.y = 13;
+    game.player.x = 4; game.player.y = 23;
     game.handleHeroMove(0, -1);
-    expect(game.player.y).toBe(13);
+    expect(game.player.y).toBe(23);
     expect(cb.logs.some(l => l.includes('abyss'))).toBe(true);
   });
 
@@ -141,7 +141,7 @@ describe('Game', () => {
   it('checkBlockCollision detects out-of-bounds', () => {
     const matrix = [[Cell.FLOOR]] as import('../types').CellValue[][];
     expect(game.checkBlockCollision(-1, 0, matrix)).toBe(true);
-    expect(game.checkBlockCollision(0, 15, matrix)).toBe(true);
+    expect(game.checkBlockCollision(0, 25, matrix)).toBe(true);
   });
 
   it('player gains XP and levels up at threshold', () => {

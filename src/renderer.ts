@@ -8,6 +8,8 @@ export class Renderer {
   private readonly particles: ParticlePool;
   private rafId = 0;
   private damageFlashFrames = 0;
+  private shakeFrames = 0;
+  private shakeIntensity = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
@@ -35,12 +37,35 @@ export class Renderer {
     const TS = CONFIG.TILE_SIZE;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+    // ── Screen shake ─────────────────────────────────────────────────────
+    ctx.save();
+    if (this.shakeFrames > 0) {
+      ctx.translate(
+        (Math.random() - 0.5) * this.shakeIntensity * 2,
+        (Math.random() - 0.5) * this.shakeIntensity * 2,
+      );
+      this.shakeFrames--;
+    }
+
     // ── Damage flash overlay ──────────────────────────────────────────────
     if (this.damageFlashFrames > 0) {
       ctx.fillStyle = 'rgba(220,20,20,0.22)';
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       this.damageFlashFrames--;
     }
+
+    // ── Subtle grid lines ─────────────────────────────────────────────────
+    ctx.globalAlpha = 0.06;
+    ctx.strokeStyle = '#aaaacc';
+    ctx.lineWidth = 0.5;
+    for (let gx = 0; gx <= CONFIG.COLS; gx++) {
+      ctx.beginPath(); ctx.moveTo(gx * TS, 0); ctx.lineTo(gx * TS, CONFIG.ROWS * TS); ctx.stroke();
+    }
+    for (let gy = 0; gy <= CONFIG.ROWS; gy++) {
+      ctx.beginPath(); ctx.moveTo(0, gy * TS); ctx.lineTo(CONFIG.COLS * TS, gy * TS); ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
+    ctx.lineWidth = 1;
 
     // ── Map tiles with fog of war ─────────────────────────────────────────
     for (let x = 0; x < CONFIG.COLS; x++) {
@@ -110,6 +135,25 @@ export class Renderer {
       }
     }
 
+    // ── Ghost / shadow piece ──────────────────────────────────────────────
+    const ghostY = game.computeGhostBlockY();
+    if (ghostY > game.blockY) {
+      ctx.globalAlpha = 0.28;
+      for (let r = 0; r < game.blockMatrix.length; r++) {
+        for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
+          if (game.blockMatrix[r]![c] === Cell.EMPTY) continue;
+          const tx = game.blockX + c, ty = ghostY + r;
+          if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
+          ctx.fillStyle = game.blockColor;
+          ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(tx * TS, ty * TS, TS, TS);
+        }
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
     // ── Items (only if visible) ───────────────────────────────────────────
     for (const item of game.items) {
       if (!game.visibility[item.x]?.[item.y]) continue;
@@ -165,9 +209,15 @@ export class Renderer {
 
     // ── Particles ─────────────────────────────────────────────────────────
     this.particles.tick(ctx);
+
+    ctx.restore(); // end screen shake transform
   }
 
   public triggerDamageFlash(): void { this.damageFlashFrames = 8; }
+  public triggerShake(intensity: number, duration: number): void {
+    this.shakeIntensity = intensity;
+    this.shakeFrames = duration;
+  }
 
   private isMerchantTile(game: Game, x: number, y: number): boolean {
     return (game as unknown as { merchantTiles: Array<{ x: number; y: number }> })

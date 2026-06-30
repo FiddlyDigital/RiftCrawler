@@ -22,6 +22,35 @@ export function bindKeyboard(getGame: GameGetter): void {
   });
 }
 
+export function bindTouch(canvas: HTMLCanvasElement, getGame: GameGetter): void {
+  let startX = 0, startY = 0, startTime = 0;
+
+  canvas.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0]!;
+    startX = t.clientX; startY = t.clientY; startTime = Date.now();
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    const game = getGame();
+    if (game.paused || game.player.hp <= 0) return;
+    const t = e.changedTouches[0]!;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const dt = Date.now() - startTime;
+    const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+    if (absDx < 12 && absDy < 12) {
+      game.handleBlockRotate(); // tap → rotate
+    } else if (absDx > absDy) {
+      dx < 0 ? game.handleBlockLeft() : game.handleBlockRight(); // horizontal swipe
+    } else if (dy > 0) {
+      dt < 220 ? game.handleBlockDrop() : game.handleBlockSoftDrop(); // fast flick = hard drop
+    }
+    e.preventDefault();
+  }, { passive: false });
+}
+
 export function bindButtons(getGame: GameGetter): void {
   document.addEventListener('click', (e) => {
     const btn = (e.target as Element).closest<HTMLElement>('[data-action]');

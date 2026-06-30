@@ -70,7 +70,7 @@ export class Game {
     this.colors = this.emptyColors();
     this.visibility = this.emptyBoolGrid(false);
     this.explored = this.emptyBoolGrid(false);
-    this.player = new Player(4, 13);
+    this.player = new Player(4, 23);
     this.monsters = [];
     this.items = [];
     this.generateStartPlatform();
@@ -97,8 +97,8 @@ export class Game {
 
   private generateStartPlatform(): void {
     for (let x = 2; x < 8; x++) {
-      this.map[x]![13] = Tile.FLOOR; this.colors[x]![13] = '#333344';
-      this.map[x]![14] = Tile.FLOOR; this.colors[x]![14] = '#333344';
+      this.map[x]![23] = Tile.FLOOR; this.colors[x]![23] = '#333344';
+      this.map[x]![24] = Tile.FLOOR; this.colors[x]![24] = '#333344';
     }
   }
 
@@ -159,7 +159,7 @@ export class Game {
         }
 
         // Stairs
-        if (!stairsInjected && (this.blocksPlacedSinceStairs >= 8 || Math.random() < 0.10)) {
+        if (!stairsInjected && (this.blocksPlacedSinceStairs >= 12 || Math.random() < 0.10)) {
           stairsInjected = true;
           this.blocksPlacedSinceStairs = 0;
           return Cell.STAIRS;
@@ -176,7 +176,7 @@ export class Game {
         }
 
         const rand = Math.random();
-        if (rand < 0.12) {
+        if (rand < 0.09) {
           const r = Math.random();
           if (r < 0.25) return Cell.MONSTER_RAT;
           if (r < 0.50) return Cell.MONSTER_SKEL;
@@ -212,6 +212,12 @@ export class Game {
       }
     }
     return false;
+  }
+
+  computeGhostBlockY(): number {
+    let ghostY = this.blockY;
+    while (!this.checkBlockCollision(this.blockX, ghostY + 1, this.blockMatrix)) ghostY++;
+    return ghostY;
   }
 
   isValidMove(x: number, y: number): boolean {
@@ -462,7 +468,7 @@ export class Game {
     this.items = [];
     this.merchantTiles = [];
     this.player.x = 4;
-    this.player.y = 13;
+    this.player.y = 23;
     this.generateStartPlatform();
     this.spawnBlock();
     this.updateVisibility();

@@ -2,7 +2,7 @@ import './style.css';
 import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
-import { bindKeyboard, bindButtons } from './input';
+import { bindKeyboard, bindButtons, bindTouch } from './input';
 import { getHighScore, recordRunEnd, loadHistory } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
 import { MERCHANT_STOCK } from './content';
@@ -40,11 +40,11 @@ function resetTick(): void { startTick(); }
 
 function handleAudio(event: AudioEvent, data?: number): void {
   switch (event) {
-    case 'blockLand':    audio.playBlockLand();        break;
+    case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); break;
     case 'blockRotate':  audio.playBlockRotate();      break;
     case 'blockMove':    audio.playBlockMove();        break;
     case 'hit':          audio.playHit();              break;
-    case 'playerDamage': audio.playPlayerDamage(); renderer.triggerDamageFlash(); break;
+    case 'playerDamage': audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); break;
     case 'kill':         audio.playKill();             break;
     case 'lineClear':    audio.playLineClear(data ?? 1); break;
     case 'descend':      audio.playDescend();          break;
@@ -106,6 +106,7 @@ function startGame(startPaused = false): void {
 startGame(true); // initialise paused — start screen sits on top
 bindKeyboard(() => game);
 bindButtons(() => game);
+bindTouch(canvas, () => game);
 
 ui.showStart(getHighScore());
 

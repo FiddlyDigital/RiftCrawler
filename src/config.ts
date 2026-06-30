@@ -1,6 +1,6 @@
 export const CONFIG = {
   COLS: 10,
-  ROWS: 15,
+  ROWS: 25,
   TILE_SIZE: 17,
 } as const;
 

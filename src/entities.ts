@@ -44,8 +44,8 @@ export class Player {
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
-    this.hp = 35;
-    this.maxHp = 35;
+    this.hp = 45;
+    this.maxHp = 45;
     this.atk = 6;
   }
 
