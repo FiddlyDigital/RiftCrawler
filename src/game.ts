@@ -2,6 +2,10 @@ import { CONFIG, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo } from './types';
 import { Player, Monster, Item, Equipment } from './entities';
 import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, type PerkDef } from './content';
+import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
+import { processHazards, checkHazardTrigger } from './systems/hazards';
+import { killMonster, triggerDeath } from './systems/combat';
+import { processMonsterTurns } from './systems/monsterAI';
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
 
@@ -83,7 +87,7 @@ export class Game {
   private merchantTiles: Array<{ x: number; y: number }> = [];
   private luckyBlockCount = 0;
 
-  private readonly cb: GameCallbacks;
+  readonly cb: GameCallbacks;
 
   constructor(callbacks: GameCallbacks) {
     this.cb = callbacks;
@@ -246,7 +250,7 @@ export class Game {
     this.blockY = 0;
 
     if (this.checkBlockCollision(this.blockX, this.blockY, this.blockMatrix)) {
-      this.triggerDeath('DUNGEON OVERFLOW', 'Masonry blocks stacked to the ceiling!');
+      triggerDeath(this, 'DUNGEON OVERFLOW', 'Masonry blocks stacked to the ceiling!');
     }
   }
 
@@ -423,73 +427,6 @@ export class Game {
     }
   }
 
-  // ── Hazard processing ─────────────────────────────────────────────────────
-
-  private processHazards(): void {
-    const spikeFirePositions: HazardTile[] = [];
-
-    for (const h of this.hazards) {
-      if (h.type !== 'spike') continue;
-      h.timer--;
-      h.warning = h.timer <= 2;
-      if (h.timer <= 0) {
-        h.timer = 5 + Math.floor(Math.random() * 4);
-        h.warning = false;
-        spikeFirePositions.push(h);
-      }
-    }
-
-    for (const h of spikeFirePositions) {
-      const damage = Math.max(1, this.dungeonLevel * 3);
-      if (this.player.x === h.x && this.player.y === h.y) {
-        const actual = this.player.takeDamage(damage);
-        this.damageTaken += actual;
-        this.cb.log(`⬆️ Spikes fire! -${actual} HP`, 'log-damage');
-        this.cb.onParticle(h.x, h.y, `⬆️ -${actual}`, '#ff5722');
-        this.cb.onAudio?.('playerDamage');
-        if (this.player.hp <= 0) { this.triggerDeath('SPIKED', 'Impaled by floor spikes.'); return; }
-      }
-      for (const m of this.monsters) {
-        if (m.x === h.x && m.y === h.y) {
-          m.hp -= damage;
-          this.cb.onParticle(m.x, m.y, `⬆️ -${damage}`, '#ff5722');
-        }
-      }
-      this.monsters = this.monsters.filter(m => m.hp > 0);
-    }
-  }
-
-  private checkHazardTrigger(entity: { x: number; y: number }, isPlayer: boolean): void {
-    const h = this.hazards.find(hz => hz.x === entity.x && hz.y === entity.y);
-    if (!h) return;
-    if (h.type === 'teleport') {
-      this.hazards = this.hazards.filter(hz => hz !== h);
-      const oldX = entity.x, oldY = entity.y;
-      this.teleportEntity(entity);
-      this.cb.onParticle(oldX, oldY, '🌀', '#673ab7');
-      if (isPlayer) {
-        this.cb.log('🌀 Teleport trap! You vanish in a swirl!', 'log-damage');
-        this.cb.onParticle(entity.x, entity.y, '⚡', '#673ab7');
-      }
-    }
-  }
-
-  private teleportEntity(entity: { x: number; y: number }): void {
-    const floorTiles: Array<{ x: number; y: number }> = [];
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
-        if (this.map[x]![y] !== Tile.FLOOR) continue;
-        if (this.getMonsterAt(x, y)) continue;
-        if (this.player.x === x && this.player.y === y && entity !== this.player) continue;
-        floorTiles.push({ x, y });
-      }
-    }
-    if (floorTiles.length === 0) return;
-    const dest = floorTiles[Math.floor(Math.random() * floorTiles.length)]!;
-    entity.x = dest.x;
-    entity.y = dest.y;
-  }
-
   // ── Relic helpers ─────────────────────────────────────────────────────────
 
   private pickupRelic(def: RelicDef): void {
@@ -594,62 +531,6 @@ export class Game {
     }
   }
 
-  // ── Status effects ───────────────────────────────────────────────────────
-
-  private applyStatusEffects(): void {
-    // Player statuses
-    const next: typeof this.player.statuses = [];
-    for (const s of this.player.statuses) {
-      if (s.type === 'poison' && !this.player.poisonImmune) {
-        const dmg = Math.max(0, s.power - this.player.totalDef);
-        if (dmg > 0) {
-          this.player.hp = Math.max(0, this.player.hp - dmg);
-          this.damageTaken += dmg;
-          this.cb.onParticle(this.player.x, this.player.y, `☠ -${dmg}`, '#9c27b0');
-          this.cb.onAudio?.('poison');
-          this.cb.log(`Poison deals ${dmg} damage!`, 'log-damage');
-          if (this.player.hp <= 0) { this.triggerDeath('HERO DEFEATED', 'Succumbed to poison.'); return; }
-        }
-      }
-      const remaining = s.duration - 1 - this.player.statusDurationBonus;
-      if (remaining > 0) next.push({ ...s, duration: remaining + this.player.statusDurationBonus });
-      else this.cb.log(`${s.type.charAt(0).toUpperCase() + s.type.slice(1)} wore off.`, 'log-neutral');
-    }
-    this.player.statuses = next;
-
-    // Monster statuses
-    for (const m of this.monsters) {
-      const nextM: typeof m.statuses = [];
-      for (const s of m.statuses) {
-        if (s.type === 'poison') {
-          m.hp -= s.power;
-          this.cb.onParticle(m.x, m.y, `☠ -${s.power}`, '#9c27b0');
-          if (m.hp <= 0) break;
-        }
-        if (s.duration > 1) nextM.push({ ...s, duration: s.duration - 1 });
-      }
-      m.statuses = nextM;
-    }
-    this.monsters = this.monsters.filter(m => m.hp > 0);
-  }
-
-  private applyRegen(): void {
-    if (this.player.regenPerTick > 0) {
-      const gained = this.player.heal(this.player.regenPerTick);
-      if (gained > 0) this.cb.onParticle(this.player.x, this.player.y, `+${gained}`, '#2e7d32');
-    }
-  }
-
-  private applyAuraStun(): void {
-    if (this.player.auraStunRadius <= 0) return;
-    for (const m of this.monsters) {
-      const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-      if (dist <= this.player.auraStunRadius && !m.isStunned) {
-        m.statuses.push({ type: 'stun', duration: 1, power: 0 });
-      }
-    }
-  }
-
   // ── Floor transitions ────────────────────────────────────────────────────
 
   private transitionToNextFloor(): void {
@@ -689,12 +570,12 @@ export class Game {
 
   autoTick(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    this.applyStatusEffects();
-    this.applyRegen();
-    this.applyAuraStun();
-    this.processHazards();
+    applyStatusEffects(this);
+    applyRegen(this);
+    applyAuraStun(this);
+    processHazards(this);
     this.moveGravity();
-    this.processMonsterTurns();
+    processMonsterTurns(this);
     this.updateVisibility();
     this.pushUI();
   }
@@ -703,186 +584,15 @@ export class Game {
 
   private advanceTurn(): void {
     if (this.player.hp <= 0) return;
-    this.applyStatusEffects();
-    this.applyRegen();
-    this.applyAuraStun();
-    this.processHazards();
+    applyStatusEffects(this);
+    applyRegen(this);
+    applyAuraStun(this);
+    processHazards(this);
     this.moveGravity();
-    this.processMonsterTurns();
+    processMonsterTurns(this);
     this.updateVisibility();
     this.pushUI();
     this.cb.onAction();
-  }
-
-  // ── Monster AI ───────────────────────────────────────────────────────────
-
-  private processMonsterTurns(): void {
-    if (this.player.hp <= 0) return;
-    for (const m of this.monsters) {
-      if (this.player.hp <= 0) return;
-      if (m.isStunned) {
-        m.statuses = m.statuses
-          .map(s => s.type === 'stun' ? { ...s, duration: s.duration - 1 } : s)
-          .filter(s => s.duration > 0);
-        continue;
-      }
-      switch (m.behaviorType) {
-        case 'ranged':    this.processRangedMonster(m);    break;
-        case 'healer':    this.processHealerMonster(m);    break;
-        case 'berserker': this.processBerserkerMonster(m); break;
-        case 'swift':     this.processSwiftMonster(m);     break;
-        default:          this.processMeleeMonster(m);     break;
-      }
-    }
-  }
-
-  private monsterAttackPlayer(m: Monster): void {
-    // Dodge chance from Echo Stone relic
-    if (this.player.dodgeChance > 0 && Math.random() < this.player.dodgeChance) {
-      this.cb.log(`${m.name} attacks — you dodge!`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, 'DODGE!', '#29b6f6');
-      return;
-    }
-    const actual = this.player.takeDamage(Math.max(1, m.atk));
-    this.damageTaken += actual;
-    this.cb.log(`${m.name} hits you! -${actual} HP`, 'log-damage');
-    this.cb.onParticle(this.player.x, this.player.y, `-${actual}`, '#ef5350');
-    this.cb.onAudio?.('playerDamage');
-    if (m.statusInflict && Math.random() < m.statusInflict.chance) {
-      if (!this.player.statuses.some(s => s.type === m.statusInflict!.type)) {
-        this.player.statuses.push({ type: m.statusInflict.type, duration: m.statusInflict.duration, power: m.statusInflict.power });
-        this.cb.log(`You are ${m.statusInflict.type}ed!`, 'log-damage');
-      }
-    }
-    if (this.player.hp <= 0) this.triggerDeath('HERO DEFEATED', 'Your health pool dropped to zero.');
-  }
-
-  private moveMonsterToward(m: Monster): void {
-    const sx = Math.sign(this.player.x - m.x);
-    const sy = Math.sign(this.player.y - m.y);
-    let nx = m.x + sx, ny = m.y;
-    if (!this.isValidMove(nx, ny) || this.getMonsterAt(nx, ny)) { nx = m.x; ny = m.y + sy; }
-    if (this.isValidMove(nx, ny) && !this.getMonsterAt(nx, ny)) {
-      m.x = nx; m.y = ny;
-      this.checkHazardTrigger(m, false);
-    }
-  }
-
-  // Simple Bresenham check for ranged line-of-sight
-  private hasLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
-    const absDx = Math.abs(x2 - x1);
-    const absDy = Math.abs(y2 - y1);
-    const sx = x1 < x2 ? 1 : -1;
-    const sy = y1 < y2 ? 1 : -1;
-    let err = absDx - absDy;
-    let x = x1, y = y1;
-    for (;;) {
-      if (x === x2 && y === y2) break;
-      if (this.map[x]?.[y] === Tile.VOID && !(x === x1 && y === y1)) return false;
-      const e2 = 2 * err;
-      if (e2 > -absDy) { err -= absDy; x += sx; }
-      if (e2 < absDx)  { err += absDx; y += sy; }
-    }
-    return true;
-  }
-
-  private processMeleeMonster(m: Monster): void {
-    const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-    if (dist === 1) { this.monsterAttackPlayer(m); }
-    else if (dist <= 5) { this.moveMonsterToward(m); }
-  }
-
-  private processRangedMonster(m: Monster): void {
-    const dx   = this.player.x - m.x;
-    const dy   = this.player.y - m.y;
-    const dist = Math.abs(dx) + Math.abs(dy);
-    if (dist <= m.attackRange && this.hasLineOfSight(m.x, m.y, this.player.x, this.player.y)) {
-      this.monsterAttackPlayer(m);
-    } else if (dist <= 2) {
-      const nx = m.x - Math.sign(dx), ny = m.y - Math.sign(dy);
-      if (this.isValidMove(nx, ny) && !this.getMonsterAt(nx, ny)) { m.x = nx; m.y = ny; }
-    } else if (dist <= m.attackRange + 3) {
-      this.moveMonsterToward(m);
-    }
-  }
-
-  private processHealerMonster(m: Monster): void {
-    const wounded = this.monsters.find(other =>
-      other !== m && other.hp < other.maxHp &&
-      Math.abs(other.x - m.x) + Math.abs(other.y - m.y) <= 1,
-    );
-    if (wounded) {
-      const healAmt = Math.max(1, Math.floor(wounded.maxHp * 0.25));
-      wounded.hp = Math.min(wounded.maxHp, wounded.hp + healAmt);
-      this.cb.onParticle(wounded.x, wounded.y, `+${healAmt}`, '#4caf50');
-      this.cb.log(`${m.name} heals ${wounded.name}!`, 'log-damage');
-      return;
-    }
-    this.processMeleeMonster(m);
-  }
-
-  private processBerserkerMonster(m: Monster): void {
-    const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-    if (dist === 1) {
-      const enraged = m.hp < m.maxHp * 0.5;
-      this.monsterAttackPlayer(m);
-      if (enraged && this.player.hp > 0) {
-        this.cb.log(`${m.name} rages and strikes again!`, 'log-damage');
-        this.monsterAttackPlayer(m);
-      }
-    } else if (dist <= 5) {
-      this.moveMonsterToward(m);
-    }
-  }
-
-  private processSwiftMonster(m: Monster): void {
-    const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-    if (dist === 1) {
-      this.monsterAttackPlayer(m);
-    } else if (dist <= 7) {
-      this.moveMonsterToward(m);
-      if (this.player.hp > 0 && Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) > 1) {
-        this.moveMonsterToward(m); // Second step
-      }
-    }
-  }
-
-  // ── Combat helpers ───────────────────────────────────────────────────────
-
-  private killMonster(m: Monster): void {
-    this.cb.onAudio?.('kill');
-    this.monstersKilled++;
-    if (m.isBoss) this.bossesKilled++;
-    this.score += Math.floor((m.isBoss ? 500 : 80) * this.scoreMultiplier);
-    this.monsters = this.monsters.filter(x => x !== m);
-    const levelled = this.player.gainXP(m.xpReward);
-    if (levelled) {
-      this.cb.log(`✨ LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk');
-      this.paused = true;
-      this.cb.onLevelUp(this.player.playerLevel);
-    }
-    const killHeal = this.player.heal(this.player.killHeal);
-    if (killHeal > 0) this.cb.onParticle(this.player.x, this.player.y, `+${killHeal} HP`, '#69f0ae');
-    // Relic onKill hooks
-    for (const relic of this.player.relics) {
-      relic.onKill?.(this.player);
-    }
-    if (m.isBoss) {
-      this.cb.log(`⚔️ BOSS SLAIN: ${m.name}!`, 'log-boss');
-      this.cb.onParticle(m.x, m.y, '🏆 BOSS!', '#ffd54f');
-    } else {
-      const healBonus = this.player.heal(3);
-      if (healBonus > 0) {
-        this.cb.onParticle(this.player.x, this.player.y, `+${healBonus} HP`, '#69f0ae');
-        this.cb.log(`Siphoned essence of ${m.name}! +${healBonus} HP`, 'log-success');
-      } else {
-        this.cb.log(`Defeated ${m.name}!`, 'log-success');
-      }
-    }
-  }
-
-  private triggerDeath(title: string, reason: string): void {
-    this.cb.onDeath(title, reason, this.dungeonLevel, this.score, this.getRunStats());
   }
 
   getRunStats(): RunStats {
@@ -1001,7 +711,7 @@ export class Game {
         this.cb.log(`${monster.name} is stunned!`, 'log-success');
       }
 
-      if (monster.hp <= 0) this.killMonster(monster);
+      if (monster.hp <= 0) killMonster(monster, this);
       this.advanceTurn(); return;
     }
 
@@ -1032,7 +742,7 @@ export class Game {
     this.player.x = nx; this.player.y = ny;
 
     // Check hazard triggers on new tile
-    this.checkHazardTrigger(this.player, true);
+    checkHazardTrigger(this.player, this, true);
 
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS) {
       this.dungeonLevel++;
