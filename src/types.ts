@@ -66,6 +66,12 @@ export interface ModifierDef {
   apply: (game: import('./game').Game) => void;
 }
 
+export interface InspectInfo {
+  icon: string;
+  title: string;
+  lines: string[];
+}
+
 export interface RunStats {
   monstersKilled: number;
   bossesKilled: number;
@@ -107,6 +113,7 @@ export interface GameCallbacks {
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;
   onBossWarning?: (boss: BossDef, onDone: () => void) => void;
+  onBlockLand?: (cells: Array<{ x: number; y: number }>) => void;
 }
 
 export interface RunRecord {

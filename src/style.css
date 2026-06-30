@@ -80,6 +80,11 @@ canvas {
 
 .sidebar-card {
   background-color: #141420; border: 1px solid #252538; border-radius: 4px; padding: 5px;
+  animation: cardBreathe 5s ease-in-out infinite;
+}
+@keyframes cardBreathe {
+  0%, 100% { box-shadow: 0 0 0 rgba(124,77,255,0); border-color: #252538; }
+  50%       { box-shadow: 0 0 6px rgba(124,77,255,.18); border-color: #322f55; }
 }
 .card-title {
   text-transform: uppercase; letter-spacing: .5px;
@@ -102,11 +107,18 @@ canvas {
 .hp-bar-fill.hp-warning { background-color: var(--accent-color); }
 .hp-bar-fill.hp-critical {
   background-color: var(--hp-color);
-  animation: hpPulse 1s ease-in-out infinite;
+  animation: hpPulse 0.7s ease-in-out infinite;
 }
 @keyframes hpPulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.45; }
+  50%       { opacity: 0.4; }
+}
+.hp-bar-container.hp-critical-glow {
+  animation: hpContainerGlow 0.7s ease-in-out infinite;
+}
+@keyframes hpContainerGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(239,83,80,0); }
+  50%       { box-shadow: 0 0 8px 1px rgba(239,83,80,.85); }
 }
 
 /* XP bar */
@@ -117,9 +129,9 @@ canvas {
 
 /* C · Score pulse animation */
 @keyframes scorePop {
-  0%   { transform: scale(1);    color: inherit; }
-  40%  { transform: scale(1.45); color: #fff; }
-  100% { transform: scale(1);    color: inherit; }
+  0%   { transform: scale(1);    color: inherit; text-shadow: none; }
+  40%  { transform: scale(1.45); color: #fff; text-shadow: 0 0 12px rgba(255,213,79,.9), 0 0 4px rgba(255,255,255,.8); }
+  100% { transform: scale(1);    color: inherit; text-shadow: none; }
 }
 .score-pop { animation: scorePop 0.32s ease; }
 
@@ -181,10 +193,21 @@ canvas {
 
 /* G · D-pad tactile press */
 .dpad-btn {
+  position: relative; overflow: hidden;
   background-color: #141420; border: 1px solid #252538; color: #fff;
   font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;
   display: flex; justify-content: center; align-items: center;
   transition: transform .07s ease, box-shadow .07s ease, background-color .07s ease;
+}
+.dpad-btn::after {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 0; height: 0;
+  background: rgba(255,255,255,0.55); border-radius: 50%;
+  transform: translate(-50%, -50%); opacity: 0; pointer-events: none;
+}
+.dpad-btn:active::after { animation: dpadRipple .4s ease-out; }
+@keyframes dpadRipple {
+  0%   { width: 0;    height: 0;    opacity: .45; }
+  100% { width: 160%; height: 160%; opacity: 0; }
 }
 .dpad-btn:active {
   transform: scale(0.86);
@@ -218,7 +241,8 @@ canvas {
 /* Modals (shared base) */
 .modal-overlay {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background-color: rgba(5,5,8,.95); z-index: 100;
+  background-color: rgba(5,5,8,.85); z-index: 100;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   flex-direction: column; justify-content: center; align-items: center;
   box-sizing: border-box; padding: 24px;
 }
@@ -376,3 +400,26 @@ canvas {
   transition: background-color .12s ease;
 }
 .share-btn:hover, .share-btn:active { background-color: #0d2333; }
+
+/* ── Tap-to-inspect tooltip ────────────────────────────────────────────── */
+.inspect-tooltip {
+  position: fixed; z-index: 150; pointer-events: none;
+  background-color: var(--panel-color);
+  border: 1px solid var(--accent-color);
+  border-radius: 6px; padding: 8px 10px; max-width: 200px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.6);
+  opacity: 0; transform: scale(0.92);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.inspect-tooltip.inspect-show { opacity: 1; transform: scale(1); }
+.inspect-header {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.inspect-icon { font-size: 16px; line-height: 1; }
+.inspect-title {
+  font-family: var(--font-pixel); font-size: 12px; letter-spacing: .5px;
+  color: var(--accent-color);
+}
+.inspect-lines {
+  font-size: 10px; color: #ccc; line-height: 1.5;
+}

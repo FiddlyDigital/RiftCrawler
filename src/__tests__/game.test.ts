@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
-import { Cell } from '../types';
+import { Cell, Tile } from '../types';
 import type { GameCallbacks } from '../types';
+import { Monster, Item } from '../entities';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -183,5 +184,56 @@ describe('Game', () => {
     game.player.x = 4; game.player.y = 13;
     game.handleHeroMove(0, 1);
     expect(game.player.y).toBe(13);
+  });
+});
+
+describe('Game.getInspectInfo', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('returns null for an out-of-bounds tile', () => {
+    expect(game.getInspectInfo(-1, 0)).toBeNull();
+  });
+
+  it('returns null for an empty unexplored/void tile', () => {
+    expect(game.getInspectInfo(0, 0)).toBeNull();
+  });
+
+  it('describes the player when inspecting their own tile', () => {
+    const info = game.getInspectInfo(game.player.x, game.player.y);
+    expect(info).not.toBeNull();
+    expect(info!.title).toBe('You');
+    expect(info!.lines.some(l => l.includes('HP'))).toBe(true);
+  });
+
+  it('describes a monster on a tile', () => {
+    const monster = new Monster(4, 22, '👹', 'Goblin', 10, 10, 3, 5);
+    game.monsters.push(monster);
+    const info = game.getInspectInfo(4, 22);
+    expect(info).not.toBeNull();
+    expect(info!.title).toBe('Goblin');
+    expect(info!.lines.some(l => l.startsWith('HP'))).toBe(true);
+    expect(info!.lines.some(l => l.includes('ATK'))).toBe(true);
+  });
+
+  it('describes a heal item on a tile', () => {
+    const item = new Item(4, 22, '🧪', 'Potion', 'heal', 15);
+    game.items.push(item);
+    const info = game.getInspectInfo(4, 22);
+    expect(info).not.toBeNull();
+    expect(info!.title).toBe('Potion');
+    expect(info!.lines[0]).toContain('15 HP');
+  });
+
+  it('describes the stairs tile', () => {
+    game.map[4]![22] = Tile.STAIRS;
+    const info = game.getInspectInfo(4, 22);
+    expect(info).not.toBeNull();
+    expect(info!.title).toBe('Stairs');
   });
 });

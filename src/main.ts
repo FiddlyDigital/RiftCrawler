@@ -2,7 +2,7 @@ import './style.css';
 import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
-import { bindKeyboard, bindButtons, bindTouch } from './input';
+import { bindKeyboard, bindButtons, bindCanvasInspect } from './input';
 import { getHighScore, recordRunEnd, loadHistory } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
 import { MERCHANT_STOCK } from './content';
@@ -63,6 +63,7 @@ function startGame(startPaused = false): void {
     onAction: ()                   => resetTick(),
     onParticle: (x, y, text, col) => renderer.spawnParticle(x, y, text, col),
     onAudio:  (event, data)        => handleAudio(event, data),
+    onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
 
     onDeath: (title, reason, floor, score, stats) => {
       stopTick();
@@ -127,7 +128,23 @@ function launchWithModifier(onReady: () => void): void {
 startGame(true); // initialise paused — start screen sits on top
 bindKeyboard(() => game);
 bindButtons(() => game);
-bindTouch(canvas, () => game);
+
+let lastInspectTile: { x: number; y: number } | null = null;
+bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
+  if (lastInspectTile && lastInspectTile.x === gx && lastInspectTile.y === gy && ui.isInspectTooltipVisible()) {
+    ui.hideInspectTooltip();
+    lastInspectTile = null;
+    return;
+  }
+  const info = game.getInspectInfo(gx, gy);
+  if (info) {
+    ui.showInspectTooltip(info, clientX, clientY);
+    lastInspectTile = { x: gx, y: gy };
+  } else {
+    ui.hideInspectTooltip();
+    lastInspectTile = null;
+  }
+});
 
 ui.showStart(getHighScore());
 

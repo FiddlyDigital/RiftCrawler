@@ -1,5 +1,5 @@
 import { NEXT_PREVIEWS } from './config';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo } from './types';
 import type { PerkDef, MerchantItem } from './content';
 import type { RunRecord } from './types';
 
@@ -10,8 +10,10 @@ export class UIManager {
   private readonly shopModal: HTMLElement;
   private readonly modifierModal: HTMLElement;
   private readonly bossWarningModal: HTMLElement;
+  private readonly inspectTooltip: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
   private lastScore = -1;
+  private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.logPanel          = document.getElementById('log-panel')!;
@@ -20,6 +22,7 @@ export class UIManager {
     this.shopModal         = document.getElementById('shop-modal')!;
     this.modifierModal     = document.getElementById('modifier-modal')!;
     this.bossWarningModal  = document.getElementById('boss-warning-modal')!;
+    this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
       score:            document.getElementById('stat-score')!,
@@ -66,6 +69,7 @@ export class UIManager {
     const hpPct = state.maxHp > 0 ? state.hp / state.maxHp : 1;
     hpBar.classList.remove('hp-full', 'hp-warning', 'hp-critical');
     hpBar.classList.add(hpPct > 0.6 ? 'hp-full' : hpPct >= 0.3 ? 'hp-warning' : 'hp-critical');
+    hpBar.parentElement?.classList.toggle('hp-critical-glow', hpPct < 0.3);
 
     if (state.score !== this.lastScore) {
       const scoreEl = this.els['score']!;
@@ -230,6 +234,42 @@ export class UIManager {
 
   hideStart(): void {
     document.getElementById('start-modal')!.style.display = 'none';
+  }
+
+  showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
+    const el = this.inspectTooltip;
+    el.innerHTML = `
+      <div class="inspect-header"><span class="inspect-icon">${info.icon}</span><span class="inspect-title">${info.title}</span></div>
+      <div class="inspect-lines">${info.lines.map(l => `<div>${l}</div>`).join('')}</div>
+    `;
+    el.hidden = false;
+    el.classList.remove('inspect-show');
+    void el.offsetWidth;
+    el.classList.add('inspect-show');
+
+    const margin = 8;
+    const rect = el.getBoundingClientRect();
+    let left = clientX + 12;
+    let top = clientY + 12;
+    if (left + rect.width + margin > window.innerWidth) left = clientX - rect.width - 12;
+    if (top + rect.height + margin > window.innerHeight) top = clientY - rect.height - 12;
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    top = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+
+    if (this.inspectDismissTimer) clearTimeout(this.inspectDismissTimer);
+    this.inspectDismissTimer = setTimeout(() => this.hideInspectTooltip(), 3000);
+  }
+
+  hideInspectTooltip(): void {
+    this.inspectTooltip.hidden = true;
+    this.inspectTooltip.classList.remove('inspect-show');
+    if (this.inspectDismissTimer) { clearTimeout(this.inspectDismissTimer); this.inspectDismissTimer = null; }
+  }
+
+  isInspectTooltipVisible(): boolean {
+    return !this.inspectTooltip.hidden;
   }
 
   showError(message: string): void {

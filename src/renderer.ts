@@ -3,6 +3,10 @@ import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
 import type { Game } from './game';
 
+const FADE_FRAMES = 10;
+
+interface Mote { x: number; y: number; vy: number; alpha: number; size: number }
+
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly particles: ParticlePool;
@@ -10,16 +14,53 @@ export class Renderer {
   private damageFlashFrames = 0;
   private shakeFrames = 0;
   private shakeIntensity = 0;
+  private readonly motes: Mote[];
+  private readonly revealFrames: Uint8Array;
+  private lastDungeonLevel = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
     canvas.height = CONFIG.ROWS * CONFIG.TILE_SIZE;
     this.ctx = canvas.getContext('2d')!;
     this.particles = new ParticlePool(60);
+    this.motes = Array.from({ length: 14 }, () => this.spawnMote(true));
+    this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
   }
 
   spawnParticle(gridX: number, gridY: number, text: string, color: string): void {
     this.particles.spawn(gridX, gridY, text, color);
+  }
+
+  spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
+    for (const c of cells) {
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < n; i++) {
+        const ox = (Math.random() - 0.5) * 0.7;
+        this.particles.spawn(c.x + ox, c.y + 0.3, Math.random() < 0.5 ? '·' : '▪', 'rgba(210,210,220,0.75)');
+      }
+    }
+  }
+
+  private spawnMote(randomY = false): Mote {
+    const w = CONFIG.COLS * CONFIG.TILE_SIZE, h = CONFIG.ROWS * CONFIG.TILE_SIZE;
+    return {
+      x: Math.random() * w,
+      y: randomY ? Math.random() * h : h + 4,
+      vy: 0.08 + Math.random() * 0.14,
+      alpha: 0.05 + Math.random() * 0.12,
+      size: 0.6 + Math.random() * 1.3,
+    };
+  }
+
+  private drawPulseGlow(gx: number, gy: number, rgb: string): void {
+    const TS = CONFIG.TILE_SIZE;
+    const alpha = 0.18 + 0.18 * Math.sin(performance.now() / 400);
+    const px = gx * TS + TS / 2, py = gy * TS + TS / 2;
+    const glow = this.ctx.createRadialGradient(px, py, 0, px, py, TS * 1.1);
+    glow.addColorStop(0, `rgba(${rgb},${alpha})`);
+    glow.addColorStop(1, `rgba(${rgb},0)`);
+    this.ctx.fillStyle = glow;
+    this.ctx.fillRect(px - TS * 1.1, py - TS * 1.1, TS * 2.2, TS * 2.2);
   }
 
   start(game: Game): void {
@@ -36,6 +77,11 @@ export class Renderer {
     const { ctx } = this;
     const TS = CONFIG.TILE_SIZE;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    if (game.dungeonLevel !== this.lastDungeonLevel) {
+      this.revealFrames.fill(0);
+      this.lastDungeonLevel = game.dungeonLevel;
+    }
 
     // ── Screen shake ─────────────────────────────────────────────────────
     ctx.save();
@@ -82,7 +128,10 @@ export class Renderer {
           continue;
         }
 
-        const alpha = visible ? 1.0 : 0.35;
+        const idx = x * CONFIG.ROWS + y;
+        if (visible && this.revealFrames[idx]! < FADE_FRAMES) this.revealFrames[idx]!++;
+        const fadeFactor = visible ? Math.min(1, this.revealFrames[idx]! / FADE_FRAMES) : 1;
+        const alpha = (visible ? 1.0 : 0.35) * fadeFactor;
         ctx.globalAlpha = alpha;
 
         if (type === Tile.FLOOR || type === Tile.STAIRS || isMerchant) {
@@ -92,10 +141,12 @@ export class Renderer {
           ctx.strokeRect(x * TS, y * TS, TS, TS);
 
           if (type === Tile.STAIRS) {
+            if (visible) this.drawPulseGlow(x, y, '186,104,200');
             ctx.font = `${TS * 0.7}px Arial`;
             ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
             ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
           } else if (isMerchant) {
+            if (visible) this.drawPulseGlow(x, y, '102,187,106');
             ctx.font = `${TS * 0.7}px Arial`;
             ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
             ctx.fillText('🏪', x * TS + TS / 2, y * TS + TS / 2);
@@ -113,6 +164,10 @@ export class Renderer {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     ctx.globalAlpha = 1.0;
+
+    // ── Ambient dust motes ──────────────────────────────────────────────────
+    this.updateMotes();
+    this.drawMotes();
 
     // ── Falling block (always visible) ────────────────────────────────────
     ctx.font = `${TS * 0.7}px Arial`;
@@ -191,6 +246,7 @@ export class Renderer {
     // ── Items (only if visible) ───────────────────────────────────────────
     for (const item of game.items) {
       if (!game.visibility[item.x]?.[item.y]) continue;
+      if (item.type === 'relic') this.drawPulseGlow(item.x, item.y, '156,39,176');
       ctx.fillText(item.char, item.x * TS + TS / 2, item.y * TS + TS / 2);
     }
 
@@ -244,7 +300,38 @@ export class Renderer {
     // ── Particles ─────────────────────────────────────────────────────────
     this.particles.tick(ctx);
 
+    // ── Low-HP vignette ──────────────────────────────────────────────────
+    if (game.player.hp > 0 && game.player.hp / game.player.maxHp <= 0.25) {
+      const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 300);
+      const w = ctx.canvas.width, h = ctx.canvas.height;
+      const vignette = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+      vignette.addColorStop(0, 'rgba(180,0,0,0)');
+      vignette.addColorStop(1, `rgba(180,0,0,${pulse})`);
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, w, h);
+    }
+
     ctx.restore(); // end screen shake transform
+  }
+
+  private updateMotes(): void {
+    for (const m of this.motes) {
+      m.y -= m.vy;
+      if (m.y < -4) Object.assign(m, this.spawnMote(false));
+    }
+  }
+
+  private drawMotes(): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.fillStyle = '#aeeaff';
+    for (const m of this.motes) {
+      ctx.globalAlpha = m.alpha;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   public triggerDamageFlash(): void { this.damageFlashFrames = 8; }

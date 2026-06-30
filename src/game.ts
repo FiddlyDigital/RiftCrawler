@@ -1,5 +1,5 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type RunStats, type ModifierDef, type RelicDef } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo } from './types';
 import { Player, Monster, Item, Equipment } from './entities';
 import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, type PerkDef } from './content';
 
@@ -288,6 +288,7 @@ export class Game {
 
   private lockBlock(): void {
     const bombPositions: Array<{ x: number; y: number }> = [];
+    const landedCells: Array<{ x: number; y: number }> = [];
 
     for (let r = 0; r < this.blockMatrix.length; r++) {
       for (let c = 0; c < this.blockMatrix[r]!.length; c++) {
@@ -295,6 +296,7 @@ export class Game {
         if (cell === Cell.EMPTY) continue;
         const tx = this.blockX + c, ty = this.blockY + r;
         if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
+        landedCells.push({ x: tx, y: ty });
 
         if (cell === Cell.STAIRS) {
           this.map[tx]![ty] = Tile.STAIRS;
@@ -327,6 +329,8 @@ export class Game {
         this.instantiateRider(cell, tx, ty);
       }
     }
+
+    this.cb.onBlockLand?.(landedCells);
 
     // Trigger bombs after all cells written
     for (const pos of bombPositions) {
@@ -1093,6 +1097,78 @@ export class Game {
 
   getItemAt(x: number, y: number): Item | undefined {
     return this.items.find(i => i.x === x && i.y === y);
+  }
+
+  // ── Tap-to-inspect ───────────────────────────────────────────────────────
+
+  getInspectInfo(x: number, y: number): InspectInfo | null {
+    if (x < 0 || x >= CONFIG.COLS || y < 0 || y >= CONFIG.ROWS) return null;
+
+    if (this.player.x === x && this.player.y === y) {
+      const lines = [
+        `HP ${this.player.hp}/${this.player.maxHp}`,
+        `ATK ${this.player.totalAtk}  DEF ${this.player.totalDef}`,
+        `Lv.${this.player.playerLevel}`,
+      ];
+      if (this.player.weapon) lines.push(`⚔️ ${this.player.weapon.name}`);
+      if (this.player.armor) lines.push(`🛡️ ${this.player.armor.name}`);
+      if (this.player.relics.length > 0) lines.push(`Relics: ${this.player.relics.map(r => r.name).join(', ')}`);
+      return { icon: this.player.char, title: 'You', lines };
+    }
+
+    const monster = this.getMonsterAt(x, y);
+    if (monster) {
+      const lines = [
+        `HP ${Math.max(0, monster.hp)}/${monster.maxHp}`,
+        `ATK ${monster.atk}`,
+        `Type: ${monster.behaviorType}`,
+      ];
+      if (monster.statuses.length > 0) lines.push(`Status: ${monster.statuses.map(s => s.type).join(', ')}`);
+      return { icon: monster.char, title: monster.isBoss ? `👑 ${monster.name}` : monster.name, lines };
+    }
+
+    const item = this.getItemAt(x, y);
+    if (item) {
+      if (item.type === 'heal') {
+        return { icon: item.char, title: item.name, lines: [`Restores ${item.statValue} HP`] };
+      }
+      if (item.type === 'stat') {
+        return { icon: item.char, title: item.name, lines: [`+${item.statValue} ATK`] };
+      }
+      if ((item.type === 'weapon' || item.type === 'armor') && item.equipDef) {
+        const lines = [`Tier ${item.equipDef.tier}`];
+        if (item.equipDef.atkBonus) lines.push(`+${item.equipDef.atkBonus} ATK`);
+        if (item.equipDef.defBonus) lines.push(`+${item.equipDef.defBonus} DEF`);
+        return { icon: item.char, title: item.name, lines };
+      }
+      if (item.type === 'relic' && item.relicDef) {
+        return { icon: item.char, title: item.relicDef.name, lines: [item.relicDef.desc] };
+      }
+    }
+
+    const hazard = this.getHazardAt(x, y);
+    if (hazard) {
+      if (hazard.type === 'spike') {
+        const line = hazard.warning ? `⚠️ Firing in ${hazard.timer}!` : `Arms in ${hazard.timer} turns`;
+        return { icon: '⬆️', title: 'Spike Trap', lines: [line] };
+      }
+      if (hazard.type === 'smoke') {
+        return { icon: '💨', title: 'Smoke Cloud', lines: ['Limits vision while standing inside'] };
+      }
+      if (hazard.type === 'teleport') {
+        return { icon: '🌀', title: 'Teleport Rune', lines: ['Warps whoever steps on it to a random floor tile'] };
+      }
+    }
+
+    if (this.map[x]![y] === Tile.STAIRS) {
+      return { icon: '🪜', title: 'Stairs', lines: ['Descend to the next floor'] };
+    }
+
+    if (this.isMerchantTile(x, y)) {
+      return { icon: '🏪', title: 'Merchant', lines: ['Spend score on potions & gear'] };
+    }
+
+    return null;
   }
 
   // ── UI push ──────────────────────────────────────────────────────────────

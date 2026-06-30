@@ -1,6 +1,8 @@
 import type { Game } from './game';
+import { CONFIG } from './config';
 
 type GameGetter = () => Game;
+type InspectCallback = (gx: number, gy: number, clientX: number, clientY: number) => void;
 
 export function bindKeyboard(getGame: GameGetter): void {
   window.addEventListener('keydown', (e) => {
@@ -22,33 +24,44 @@ export function bindKeyboard(getGame: GameGetter): void {
   });
 }
 
-export function bindTouch(canvas: HTMLCanvasElement, getGame: GameGetter): void {
-  let startX = 0, startY = 0, startTime = 0;
+export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter, onInspect: InspectCallback): void {
+  let startX = 0, startY = 0;
+
+  function toGrid(clientX: number, clientY: number): { gx: number; gy: number } {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const gx = Math.floor((clientX - rect.left) * scaleX / CONFIG.TILE_SIZE);
+    const gy = Math.floor((clientY - rect.top) * scaleY / CONFIG.TILE_SIZE);
+    return { gx, gy };
+  }
 
   canvas.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[0]!;
-    startX = t.clientX; startY = t.clientY; startTime = Date.now();
+    startX = t.clientX; startY = t.clientY;
     e.preventDefault();
   }, { passive: false });
 
   canvas.addEventListener('touchend', (e) => {
     const game = getGame();
-    if (game.paused || game.player.hp <= 0) return;
+    if (game.player.hp <= 0) return;
     const t = e.changedTouches[0]!;
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    const dt = Date.now() - startTime;
-    const absDx = Math.abs(dx), absDy = Math.abs(dy);
+    const absDx = Math.abs(t.clientX - startX);
+    const absDy = Math.abs(t.clientY - startY);
 
     if (absDx < 12 && absDy < 12) {
-      game.handleBlockRotate(); // tap → rotate
-    } else if (absDx > absDy) {
-      dx < 0 ? game.handleBlockLeft() : game.handleBlockRight(); // horizontal swipe
-    } else if (dy > 0) {
-      dt < 220 ? game.handleBlockDrop() : game.handleBlockSoftDrop(); // fast flick = hard drop
+      const { gx, gy } = toGrid(t.clientX, t.clientY);
+      onInspect(gx, gy, t.clientX, t.clientY);
     }
     e.preventDefault();
   }, { passive: false });
+
+  canvas.addEventListener('click', (e) => {
+    const game = getGame();
+    if (game.player.hp <= 0) return;
+    const { gx, gy } = toGrid(e.clientX, e.clientY);
+    onInspect(gx, gy, e.clientX, e.clientY);
+  });
 }
 
 export function bindButtons(getGame: GameGetter): void {
