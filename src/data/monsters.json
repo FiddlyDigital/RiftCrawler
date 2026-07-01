@@ -1,0 +1,82 @@
+{
+  "rat": {
+    "id": "rat",
+    "displayName": "Cave Rat",
+    "visualAsset": "sprite_rat_01",
+    "cellTypeId": "MONSTER_RAT",
+    "baseHp": 10,
+    "baseAtk": 3,
+    "hpScaleCoefficient": 2.0,
+    "atkScaleCoefficient": 1.0,
+    "xpValue": 20,
+    "spawnMsg": "👾 Spawn"
+  },
+  "skeleton": {
+    "id": "skeleton",
+    "displayName": "Skeleton Guard",
+    "visualAsset": "sprite_skel_01",
+    "cellTypeId": "MONSTER_SKEL",
+    "baseHp": 18,
+    "baseAtk": 5,
+    "hpScaleCoefficient": 3.0,
+    "atkScaleCoefficient": 1.0,
+    "xpValue": 35,
+    "spawnMsg": "👾 Spawn",
+    "statusInflict": { "type": "poison", "chance": 0.25, "duration": 3, "power": 3 }
+  },
+  "goblin_archer": {
+    "id": "goblin_archer",
+    "displayName": "Goblin Archer",
+    "visualAsset": "sprite_goblin_archer",
+    "cellTypeId": "MONSTER_ARCHER",
+    "baseHp": 12,
+    "baseAtk": 4,
+    "hpScaleCoefficient": 2.5,
+    "atkScaleCoefficient": 1.2,
+    "xpValue": 30,
+    "spawnMsg": "🏹 Spawn",
+    "behaviorType": "ranged",
+    "attackRange": 3
+  },
+  "cave_slime": {
+    "id": "cave_slime",
+    "displayName": "Cave Slime",
+    "visualAsset": "sprite_cave_slime",
+    "cellTypeId": "MONSTER_SLIME",
+    "baseHp": 22,
+    "baseAtk": 2,
+    "hpScaleCoefficient": 3.5,
+    "atkScaleCoefficient": 0.5,
+    "xpValue": 25,
+    "spawnMsg": "🫧 Spawn",
+    "behaviorType": "healer"
+  },
+  "berserker_orc": {
+    "id": "berserker_orc",
+    "displayName": "Berserker Orc",
+    "visualAsset": "sprite_berserker_orc",
+    "cellTypeId": "MONSTER_ORC",
+    "baseHp": 30,
+    "baseAtk": 7,
+    "hpScaleCoefficient": 4.0,
+    "atkScaleCoefficient": 1.5,
+    "xpValue": 50,
+    "spawnMsg": "👹 Spawn",
+    "behaviorType": "berserker"
+  },
+  "plague_bat": {
+    "id": "plague_bat",
+    "displayName": "Plague Bat",
+    "visualAsset": "sprite_plague_bat",
+    "cellTypeId": "MONSTER_BAT",
+    "baseHp": 8,
+    "baseAtk": 3,
+    "hpScaleCoefficient": 2.0,
+    "atkScaleCoefficient": 1.0,
+    "xpValue": 35,
+    "spawnMsg": "🦠 Spawn",
+    "behaviorType": "swift",
+    "moveSpeed": 2,
+    "statusInflict": { "type": "poison", "chance": 0.5, "duration": 3, "power": 2 }
+  }
+}

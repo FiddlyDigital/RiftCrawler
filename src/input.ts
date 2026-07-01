@@ -1,6 +1,8 @@
 import type { Game } from './game';
+import { CONFIG } from './config';
 
 type GameGetter = () => Game;
+type InspectCallback = (gx: number, gy: number, clientX: number, clientY: number) => void;
 
 export function bindKeyboard(getGame: GameGetter): void {
   window.addEventListener('keydown', (e) => {
@@ -19,6 +21,46 @@ export function bindKeyboard(getGame: GameGetter): void {
       case 'k':                    game.handleBlockDrop();       break;
       case 'x':                    game.handleBlockSoftDrop();   break;
     }
+  });
+}
+
+export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter, onInspect: InspectCallback): void {
+  let startX = 0, startY = 0;
+
+  function toGrid(clientX: number, clientY: number): { gx: number; gy: number } {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const gx = Math.floor((clientX - rect.left) * scaleX / CONFIG.TILE_SIZE);
+    const gy = Math.floor((clientY - rect.top) * scaleY / CONFIG.TILE_SIZE);
+    return { gx, gy };
+  }
+
+  canvas.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0]!;
+    startX = t.clientX; startY = t.clientY;
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    const game = getGame();
+    if (game.player.hp <= 0) return;
+    const t = e.changedTouches[0]!;
+    const absDx = Math.abs(t.clientX - startX);
+    const absDy = Math.abs(t.clientY - startY);
+
+    if (absDx < 12 && absDy < 12) {
+      const { gx, gy } = toGrid(t.clientX, t.clientY);
+      onInspect(gx, gy, t.clientX, t.clientY);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('click', (e) => {
+    const game = getGame();
+    if (game.player.hp <= 0) return;
+    const { gx, gy } = toGrid(e.clientX, e.clientY);
+    onInspect(gx, gy, e.clientX, e.clientY);
   });
 }
 

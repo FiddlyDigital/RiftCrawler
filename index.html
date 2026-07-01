@@ -2,64 +2,89 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="description" content="Rift Crawler — a mobile-first tetris-roguelike hybrid dungeon crawler. Build floors with falling blocks and survive the dungeon." />
+  <meta name="description" content="Rift Crawler — a mobile-first tetris-roguelike hybrid dungeon crawler." />
   <title>Rift Crawler</title>
   <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
-
-  <!-- Plausible Analytics (optional): uncomment and replace your-domain.com -->
   <!-- <script defer data-domain="your-domain.com" src="https://plausible.io/js/script.js"></script> -->
 </head>
 <body>
 
 <div id="game-wrapper">
+  <div id="inspect-tooltip" class="inspect-tooltip" hidden></div>
   <div id="viewport-split">
     <div id="canvas-container">
       <canvas id="gameCanvas"></canvas>
     </div>
 
     <div id="sidebar-panel">
+      <div id="sidebar-game-title">RIFT CRAWLER</div>
+
+      <!-- Hero status -->
       <div class="sidebar-card">
         <div class="card-title">Hero Status</div>
-        <div style="font-weight: bold;">❤️ HP: <span id="stat-hp">35/35</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-weight:bold;">❤️ <span id="stat-hp">35/35</span></span>
+          <span id="player-level" style="font-size:9px;color:var(--accent-color);">Lv.1</span>
+        </div>
         <div class="hp-bar-container">
           <div id="hp-bar" class="hp-bar-fill"></div>
         </div>
-        <div style="margin-top: 3px;">🪜 Floor: <span id="stat-floor">1</span></div>
-        <div style="margin-top: 2px; font-size: 9px; color:#aaa;">Tick Rate: <span id="stat-rate">3</span> Act</div>
+        <div class="xp-bar-container" style="margin-top:2px;">
+          <div id="xp-bar" class="xp-bar-fill"></div>
+        </div>
+        <div id="xp-label" style="font-size:8px;color:#666;margin-top:1px;">0/50 XP</div>
+        <div style="margin-top:3px;">🪜 Floor: <span id="stat-floor">1</span></div>
+        <div style="margin-top:2px;font-size:9px;color:#aaa;">Tick: <span id="stat-rate">1500ms</span></div>
       </div>
 
+      <!-- Equipment -->
+      <div class="sidebar-card">
+        <div class="card-title">Equipment</div>
+        <div id="weapon-slot" style="font-size:9px;margin-bottom:1px;">⚔️ —</div>
+        <div id="armor-slot"  style="font-size:9px;">🛡️ —</div>
+        <div id="relic-slots" style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap;min-height:14px;"></div>
+        <div id="status-row"  style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px;"></div>
+        <div id="active-modifier-badge" style="display:none;margin-top:3px;font-size:9px;color:var(--accent-color);"></div>
+        <div id="active-class-badge"    style="display:none;margin-top:2px;font-size:9px;color:#7c4dff;"></div>
+        <div id="biome-badge"           style="display:none;margin-top:2px;font-size:9px;color:#26a69a;"></div>
+      </div>
+
+      <!-- Score -->
       <div class="sidebar-card">
         <div class="card-title">Score</div>
-        <div style="font-size: 12px; font-weight: bold; color: var(--accent-color);" id="stat-score">0</div>
-        <div style="font-size: 9px; color: #888; margin-top: 2px;">Best: <span id="best-score">0</span></div>
+        <div style="font-size:12px;font-weight:bold;color:var(--accent-color);" id="stat-score">0</div>
+        <div style="font-size:9px;color:#888;margin-top:1px;">Best: <span id="best-score">0</span></div>
       </div>
 
+      <!-- Next piece -->
       <div class="sidebar-card">
         <div class="card-title">Next Piece</div>
         <div id="next-preview-box">Loading...</div>
       </div>
 
-      <div class="sidebar-card" style="flex-grow: 1; display: flex; flex-direction: column;">
+      <!-- Dungeon feed -->
+      <div class="sidebar-card" style="flex-grow:1;display:flex;flex-direction:column;">
         <div class="card-title">Dungeon Feed</div>
         <div id="log-panel"></div>
       </div>
     </div>
   </div>
 
-  <!-- Twin D-PAD controllers — actions wired in input.ts via data attributes -->
+  <!-- Twin D-PAD controllers -->
   <div id="controls-layout">
     <div class="dpad-container">
-      <div class="dpad-title" style="color: var(--block-accent)">Block (Tetris)</div>
+      <div class="dpad-title" style="color:var(--block-accent)">Block (Tetris)</div>
       <div class="dpad-grid">
         <div class="dpad-empty"></div>
-        <button class="dpad-btn block-btn" data-action="block-rotate" aria-label="Rotate block">🔄</button>
+        <button class="dpad-btn block-btn" data-action="block-rotate"   aria-label="Rotate block">🔄</button>
         <div class="dpad-empty"></div>
-
-        <button class="dpad-btn block-btn" data-action="block-left" aria-label="Move block left">◀</button>
-        <button class="dpad-btn block-btn" data-action="block-drop" aria-label="Hard drop block" style="background-color: #0d47a1; color:#fff;">⏬</button>
-        <button class="dpad-btn block-btn" data-action="block-right" aria-label="Move block right">▶</button>
-
+        <button class="dpad-btn block-btn" data-action="block-left"     aria-label="Move block left">◀</button>
+        <button class="dpad-btn block-btn" data-action="block-drop"     aria-label="Hard drop block" style="background-color:#0d47a1;color:#fff;">⏬</button>
+        <button class="dpad-btn block-btn" data-action="block-right"    aria-label="Move block right">▶</button>
         <div class="dpad-empty"></div>
         <button class="dpad-btn block-btn" data-action="block-softdrop" aria-label="Soft drop block">▼</button>
         <div class="dpad-empty"></div>
@@ -67,21 +92,62 @@
     </div>
 
     <div class="dpad-container">
-      <div class="dpad-title" style="color: var(--hero-accent)">Hero (Rogue)</div>
+      <div class="dpad-title" style="color:var(--hero-accent)">Hero (Rogue)</div>
       <div class="dpad-grid">
         <div class="dpad-empty"></div>
-        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="0" data-dy="-1" aria-label="Move hero up">▲</button>
+        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="0"  data-dy="-1" aria-label="Move hero up">▲</button>
         <div class="dpad-empty"></div>
-
-        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="-1" data-dy="0" aria-label="Move hero left">◀</button>
-        <button class="dpad-btn hero-btn hero-wait-btn" data-action="hero-wait" aria-label="Wait / heal">⏺</button>
-        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="1" data-dy="0" aria-label="Move hero right">▶</button>
-
+        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="-1" data-dy="0"  aria-label="Move hero left">◀</button>
+        <button class="dpad-btn hero-btn hero-wait-btn" data-action="hero-wait"              aria-label="Wait / heal">⏺</button>
+        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="1"  data-dy="0"  aria-label="Move hero right">▶</button>
         <div class="dpad-empty"></div>
-        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="0" data-dy="1" aria-label="Move hero down">▼</button>
+        <button class="dpad-btn hero-btn" data-action="hero-move" data-dx="0"  data-dy="1"  aria-label="Move hero down">▼</button>
         <div class="dpad-empty"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Start / how-to-play screen -->
+<div id="start-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="start-title" style="display:flex;">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title" id="start-title" style="color:var(--accent-color);font-size:26px;letter-spacing:3px;">RIFT CRAWLER</div>
+    <p style="color:#666;font-size:10px;letter-spacing:1px;margin:2px 0 14px 0;">TETRIS MEETS DUNGEON — BUILD THE FLOOR, SURVIVE IT</p>
+
+    <!-- How to play -->
+    <div style="text-align:left;background:#0c0c12;border-radius:4px;padding:10px 12px;margin-bottom:10px;font-size:11px;line-height:1.8;">
+      <div style="color:#555;font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">How to Play</div>
+      <div>🧱 <span style="color:#ccc;">Steer falling blocks</span> <span style="color:#666;">to build dungeon tiles beneath your hero.</span></div>
+      <div>🧙 <span style="color:#ccc;">Move & fight</span> <span style="color:#666;">across those tiles — loot items, slay monsters, reach the stairs.</span></div>
+      <div>✨ <span style="color:#ccc;">Clear full rows</span> <span style="color:#666;">to heal. Every block action advances the monster turns.</span></div>
+    </div>
+
+    <!-- Controls reference -->
+    <div style="background:#0c0c12;border-radius:4px;padding:10px 12px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;">
+        <div>
+          <div style="color:var(--block-accent);font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Block (Tetris)</div>
+          <div style="color:#aaa;line-height:2;">
+            <span style="color:#555;">I</span> Rotate &nbsp;
+            <span style="color:#555;">J / L</span> Move<br>
+            <span style="color:#555;">K</span> Hard Drop &nbsp;
+            <span style="color:#555;">X</span> Soft Drop
+          </div>
+        </div>
+        <div>
+          <div style="color:var(--hero-accent);font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Hero (Rogue)</div>
+          <div style="color:#aaa;line-height:2;">
+            <span style="color:#555;">WASD</span> / Arrows Move<br>
+            <span style="color:#555;">Space</span> Wait &amp; Heal
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="start-best" style="color:#555;font-size:9px;margin-bottom:10px;min-height:14px;"></div>
+    <button class="restart-btn" id="start-btn" style="font-size:15px;letter-spacing:2px;">▶ BEGIN DESCENT</button>
+    <p style="color:#333;font-size:8px;margin-top:8px;">Press <b style="color:#444;">M</b> during play to toggle sound</p>
+    <p style="color:#2a2a2a;font-size:7px;margin-top:4px;">Sprites © <a href="https://github.com/00-Evan/shattered-pixel-dungeon" style="color:#2a2a2a;" target="_blank" rel="noopener">Shattered Pixel Dungeon</a> (GPL-3.0)</p>
   </div>
 </div>
 
@@ -89,13 +155,81 @@
 <div id="game-over-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="death-title">
   <div class="modal-card">
     <div class="modal-title" id="death-title">DUNGEON COLLAPSE</div>
-    <p style="color: #888; margin: 5px 0 15px 0;" id="death-reason">Dungeon ceiling collapsed.</p>
-    <div style="text-align: left; padding: 10px; background-color: #0c0c12; border-radius: 4px; font-size: 13px;">
-      <p style="margin: 4px 0;">🪜 Depth Floor: <b id="final-floor" style="color: var(--accent-color);">1</b></p>
-      <p style="margin: 4px 0;">🏆 Final Score: <b id="final-score" style="color: var(--accent-color);">0</b></p>
-      <p style="margin: 4px 0;">⭐ High Score: <b id="high-score" style="color: var(--accent-color);">0</b></p>
+    <p style="color:#888;margin:5px 0 10px 0;" id="death-reason">Dungeon ceiling collapsed.</p>
+    <div style="text-align:left;padding:10px;background-color:#0c0c12;border-radius:4px;font-size:12px;">
+      <p style="margin:3px 0;">🪜 Floor: <b id="final-floor" style="color:var(--accent-color);">1</b></p>
+      <p style="margin:3px 0;">🏆 Score: <b id="final-score" style="color:var(--accent-color);">0</b></p>
+      <p style="margin:3px 0;">⭐ Best:  <b id="high-score"  style="color:var(--accent-color);">0</b></p>
+    </div>
+    <!-- Run stats grid -->
+    <div id="run-stats-grid"></div>
+    <!-- Share string -->
+    <div id="share-container" style="display:none;margin-top:6px;">
+      <textarea id="share-text" readonly rows="2"></textarea>
+      <button id="copy-share-btn" class="share-btn">📋 Copy Summary</button>
+    </div>
+    <!-- Run history -->
+    <div style="margin-top:10px;">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:4px;">Past Runs</div>
+      <div id="run-history"></div>
     </div>
     <button class="restart-btn" id="restart-btn">Try Again</button>
+  </div>
+</div>
+
+<!-- Run modifier pick modal -->
+<div id="modifier-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modifier-title">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title" id="modifier-title" style="color:#ff9100;font-size:20px;">CHOOSE YOUR CURSE</div>
+    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">One modifier shapes the entire run. Choose wisely.</p>
+    <div id="modifier-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Boss warning cinematic -->
+<div id="boss-warning-modal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div id="boss-warning-card">
+    <div id="boss-warning-emoji" style="font-size:52px;line-height:1;margin-bottom:8px;"></div>
+    <div id="boss-warning-name" class="modal-title" style="color:#ff1744;font-size:22px;"></div>
+    <div id="boss-warning-flavor" style="color:#888;font-size:11px;margin-top:8px;font-style:italic;max-width:280px;line-height:1.4;"></div>
+  </div>
+</div>
+
+<!-- Level-up perk selection modal -->
+<div id="perk-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="perk-title">
+  <div class="modal-card">
+    <div class="modal-title" id="perk-title" style="font-size:18px;">✨ LEVEL UP!</div>
+    <p style="color:#888;margin:4px 0 12px 0;font-size:12px;">Choose a perk:</p>
+    <div id="perk-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Merchant shop modal -->
+<div id="shop-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-title">
+  <div class="modal-card">
+    <div class="modal-title" id="shop-title" style="font-size:18px;color:var(--hero-accent);">🏪 Merchant</div>
+    <p style="color:#888;margin:4px 0 10px 0;font-size:12px;">Score: <b id="shop-gold" style="color:var(--accent-color);">0</b> pts</p>
+    <div id="shop-items" style="display:flex;flex-direction:column;gap:6px;"></div>
+    <button class="restart-btn" id="shop-close" style="background-color:#333;color:#ccc;margin-top:12px;">Leave Shop</button>
+  </div>
+</div>
+
+<!-- Class selection modal -->
+<div id="class-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="class-title">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title" id="class-title" style="color:#7c4dff;font-size:20px;">CHOOSE YOUR CLASS</div>
+    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Your class shapes the entire run. There is no going back.</p>
+    <div id="class-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Floor event modal -->
+<div id="floor-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="floor-event-title">
+  <div class="modal-card" style="max-width:340px;">
+    <div id="floor-event-emoji" style="font-size:36px;margin-bottom:6px;line-height:1;"></div>
+    <div class="modal-title" id="floor-event-title" style="color:#ffab00;font-size:18px;"></div>
+    <p id="floor-event-flavor" style="color:#666;margin:6px 0 14px 0;font-size:11px;font-style:italic;"></p>
+    <div id="floor-event-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 

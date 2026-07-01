@@ -1,0 +1,8 @@
+[
+  { "id": "health_elixir", "displayName": "Health Elixir",  "visualAsset": "sprite_elixir",   "cost": 150, "effectType": "heal",       "effectValue": 30, "effectLabel": "Restored {value} HP" },
+  { "id": "attack_tonic",  "displayName": "Attack Tonic",   "visualAsset": "sprite_tonic",    "cost": 200, "effectType": "atkBoost",   "effectValue": 3,  "effectLabel": "+3 Attack"           },
+  { "id": "maxhp_crystal", "displayName": "Max HP Crystal", "visualAsset": "sprite_crystal",  "cost": 300, "effectType": "maxHpBoost", "effectValue": 10, "effectLabel": "+10 Max HP"          },
+  { "id": "vision_charm",  "displayName": "Vision Charm",   "visualAsset": "sprite_charm",    "cost": 250, "effectType": "visionBoost","effectValue": 1,  "effectLabel": "+1 Vision"           },
+  { "id": "antidote",      "displayName": "Antidote",       "visualAsset": "sprite_antidote", "cost": 100, "effectType": "curePoison", "effectValue": 0,  "effectLabel": "Cured poison!"       },
+  { "id": "regen_salve",   "displayName": "Regen Salve",    "visualAsset": "sprite_salve",    "cost": 350, "effectType": "regenBoost", "effectValue": 1,  "effectLabel": "+1 HP/tick"          }
+]
