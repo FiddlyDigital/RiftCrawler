@@ -35,7 +35,7 @@ function moveMonsterToward(m: Monster, game: Game): void {
   }
 }
 
-function hasLineOfSight(x1: number, y1: number, x2: number, y2: number, game: Game): boolean {
+export function hasLineOfSight(x1: number, y1: number, x2: number, y2: number, game: Game): boolean {
   const absDx = Math.abs(x2 - x1);
   const absDy = Math.abs(y2 - y1);
   const sx = x1 < x2 ? 1 : -1;

@@ -51,6 +51,7 @@ export class UIManager {
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
+      rangedAbility:    document.getElementById('ranged-ability-badge')!,
       runStatsGrid:     document.getElementById('run-stats-grid')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
@@ -125,6 +126,27 @@ export class UIManager {
       this.els['biomeName']!.textContent = `🌐 ${state.biomeName}`;
     } else {
       this.els['biomeName']!.style.display = 'none';
+    }
+
+    // Ranged ability badge + button state
+    const rangedBtn = document.getElementById('ranged-btn') as HTMLButtonElement | null;
+    if (state.rangedAbility) {
+      const ra = state.rangedAbility;
+      const ready = ra.cooldown === 0 && ra.ammo !== 0;
+      const ammoText  = ra.ammo !== null ? ` ×${ra.ammo}` : '';
+      const cdText    = ra.cooldown > 0 ? ` [${ra.cooldown}t]` : ' [Ready]';
+      this.els['rangedAbility']!.style.display = '';
+      this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
+      this.els['rangedAbility']!.style.fontSize = '9px';
+      this.els['rangedAbility']!.textContent = `${ra.emoji} ${ra.name}${ammoText}${cdText}  (Q)`;
+      if (rangedBtn) {
+        rangedBtn.textContent = `${ra.emoji} ${ra.name}${ammoText}${cdText}`;
+        rangedBtn.disabled = !ready;
+        rangedBtn.style.opacity = ready ? '1' : '0.4';
+      }
+    } else {
+      this.els['rangedAbility']!.style.display = 'none';
+      if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Q — No ability'; }
     }
   }
 

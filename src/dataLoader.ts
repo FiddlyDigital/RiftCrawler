@@ -6,7 +6,7 @@ import equipmentData      from './data/equipment.json';
 import perksData          from './data/perks.json';
 import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef } from './types';
+import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility } from './types';
 import { Equipment } from './entities';
 import type { Player } from './entities';
 import type { MonsterDef, BossDef, ItemDef, EquipmentDef } from './types';
@@ -434,13 +434,15 @@ export const CLASSES: ClassDef[] = [
     emoji: '🗡️',
     name: 'Rogue',
     tagline: 'Strike fast, stay elusive. High risk, high reward.',
-    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th  D6 dice',
+    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th  D6 dice  5 darts',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
       p.atk += 3;
       p.dodgeChance += 0.20;
       p.critEvery = 5;
       p.baseCombatLevel = 2;
+      p.rangedAbility = { name: 'Dart', emoji: '🎯', range: 4, damageMult: 0.75, cooldownMax: 0 } satisfies RangedAbility;
+      p.rangedAmmo = 5;
     },
   },
   {
@@ -448,12 +450,13 @@ export const CLASSES: ClassDef[] = [
     emoji: '🔮',
     name: 'Mage',
     tagline: 'Harness rift energy. Line clears deal extra damage.',
-    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg  D6 dice',
+    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg  D6 dice  Magic Bolt',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
       p.visionRadius += 2;
       p.lineClearDamage += 5;
       p.baseCombatLevel = 2;
+      p.rangedAbility = { name: 'Magic Bolt', emoji: '⚡', range: 6, damageMult: 1.0, cooldownMax: 3 } satisfies RangedAbility;
     },
   },
   {
@@ -461,13 +464,14 @@ export const CLASSES: ClassDef[] = [
     emoji: '✨',
     name: 'Priest',
     tagline: 'Survive through healing. Regenerate and siphon life.',
-    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill  D8 dice',
+    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill  D8 dice  Smite',
     apply: (p: Player) => {
       p.maxHp += 10; p.hp += 10;
       p.atk = Math.max(1, p.atk - 1);
       p.regenPerTick += 1;
       p.killHeal += 4;
       p.baseCombatLevel = 3;
+      p.rangedAbility = { name: 'Smite', emoji: '🌟', range: 5, damageMult: 1.25, cooldownMax: 4, statusEffect: 'stun' } satisfies RangedAbility;
     },
   },
 ];

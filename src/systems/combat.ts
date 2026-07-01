@@ -44,7 +44,7 @@ function resolveCombatRoll(
 
 // ── Player attacks monster ────────────────────────────────────────────────────
 
-export function playerAttackMonster(monster: Monster, game: Game, forceCrit = false): number {
+export function playerAttackMonster(monster: Monster, game: Game, forceCrit = false, damageMult = 1.0): number {
   const { outcome, aRoll, dRoll } = resolveCombatRoll(
     game.player.combatLevel,
     monster.combatLevel,
@@ -58,7 +58,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     return 0;
   }
 
-  const dmg = Math.max(1, Math.round(game.player.totalAtk * OUTCOME_MULT[outcome]));
+  const dmg = Math.max(1, Math.round(game.player.totalAtk * OUTCOME_MULT[outcome] * damageMult));
   monster.hp -= dmg;
 
   const rollNote = outcome === 'critical' ? `nat ${aRoll}` : `${aRoll} vs ${dRoll}`;

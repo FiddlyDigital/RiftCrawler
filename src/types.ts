@@ -116,6 +116,15 @@ export interface RunStats {
   itemsPickedUp: number;
 }
 
+export interface RangedAbility {
+  name: string;
+  emoji: string;
+  range: number;
+  damageMult: number;
+  cooldownMax: number;
+  statusEffect?: 'stun';
+}
+
 export interface UIState {
   hp: number;
   maxHp: number;
@@ -133,6 +142,7 @@ export interface UIState {
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
   relics: RelicDef[];
+  rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null } | null;
 }
 
 export type AudioEvent =

@@ -5,7 +5,7 @@ import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, CLASSES, 
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, triggerDeath, playerAttackMonster } from './systems/combat';
-import { processMonsterTurns } from './systems/monsterAI';
+import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
 
@@ -692,6 +692,10 @@ export class Game {
     this.bossHalfHpTriggered = false;
     this.player.x = 4;
     this.player.y = 23;
+    // Replenish finite ammo on descent (Rogue darts: +3, cap 5)
+    if (this.player.rangedAmmo >= 0) {
+      this.player.rangedAmmo = Math.min(5, this.player.rangedAmmo + 3);
+    }
     this.generateStartPlatform();
     this.maybeSpawnDungeonRoom();
     this.spawnBlock();
@@ -718,6 +722,7 @@ export class Game {
     processHazards(this);
     this.moveGravity();
     processMonsterTurns(this);
+    this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
   }
@@ -732,9 +737,14 @@ export class Game {
     processHazards(this);
     this.moveGravity();
     processMonsterTurns(this);
+    this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
     this.cb.onAction();
+  }
+
+  private tickRangedCooldown(): void {
+    if (this.player.rangedCooldown > 0) this.player.rangedCooldown--;
   }
 
   getRunStats(): RunStats {
@@ -944,6 +954,90 @@ export class Game {
     this.advanceTurn();
   }
 
+  handleRangedAttack(): void {
+    if (this.player.hp <= 0 || this.paused) return;
+    const ability = this.player.rangedAbility;
+    if (!ability) {
+      this.cb.log('Your class has no ranged ability. (Q)', 'log-neutral');
+      return;
+    }
+    if (this.player.isStunned) {
+      this.cb.log('You are stunned!', 'log-damage');
+      this.advanceTurn();
+      return;
+    }
+    if (this.player.rangedCooldown > 0) {
+      this.cb.log(`${ability.emoji} ${ability.name} on cooldown (${this.player.rangedCooldown} turns).`, 'log-neutral');
+      return;
+    }
+    if (this.player.rangedAmmo === 0) {
+      this.cb.log(`No ${ability.name}s left! (Replenish on next floor)`, 'log-neutral');
+      return;
+    }
+
+    const target = this.findRangedTarget(ability.range);
+    if (!target) {
+      this.cb.log(`${ability.emoji} No target in range (${ability.range} tiles).`, 'log-neutral');
+      return;
+    }
+
+    // Visual: trail particle along line to target
+    this.emitProjectileTrail(target.x, target.y, ability.emoji);
+
+    playerAttackMonster(target, this, false, ability.damageMult);
+
+    // Status effect on any non-miss (hit already applied in playerAttackMonster; check target still alive)
+    if (ability.statusEffect === 'stun' && target.hp > 0 && !target.isStunned) {
+      target.statuses.push({ type: 'stun', duration: 1, power: 0 });
+      this.cb.log(`${target.name} is smited and stunned!`, 'log-success');
+    }
+
+    // Ammo / cooldown
+    if (this.player.rangedAmmo > 0) this.player.rangedAmmo--;
+    if (ability.cooldownMax > 0) this.player.rangedCooldown = ability.cooldownMax;
+
+    if (target.hp <= 0) {
+      const bx = target.x, by = target.y;
+      killMonster(target, this);
+      if (target.isBoss && this.activeBossOnDeath) {
+        this.activeBossOnDeath(this, bx, by);
+        this.activeBossOnDeath = null;
+      }
+    }
+
+    this.advanceTurn();
+  }
+
+  private findRangedTarget(range: number): import('./entities').Monster | null {
+    const inRange = this.monsters.filter(m => {
+      const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+      return dist <= range
+        && (this.visibility[m.x]?.[m.y] ?? false)
+        && hasLineOfSight(this.player.x, this.player.y, m.x, m.y, this);
+    });
+    inRange.sort((a, b) => {
+      const da = Math.abs(a.x - this.player.x) + Math.abs(a.y - this.player.y);
+      const db = Math.abs(b.x - this.player.x) + Math.abs(b.y - this.player.y);
+      return da - db;
+    });
+    return inRange[0] ?? null;
+  }
+
+  private emitProjectileTrail(tx: number, ty: number, emoji: string): void {
+    // Bresenham path from player to target, emit a dot particle at each step
+    let x = this.player.x, y = this.player.y;
+    const dx = Math.abs(tx - x), dy = Math.abs(ty - y);
+    const sx = x < tx ? 1 : -1, sy = y < ty ? 1 : -1;
+    let err = dx - dy;
+    while (!(x === tx && y === ty)) {
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx)  { err += dx; y += sy; }
+      if (x !== tx || y !== ty) this.cb.onParticle(x, y, '·', '#ffcc02');
+    }
+    this.cb.onParticle(tx, ty, emoji, '#ffcc02');
+  }
+
   handleBlockLeft(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
@@ -1078,6 +1172,15 @@ export class Game {
       activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,
       biomeName: biome.name,
       relics: this.player.relics,
+      rangedAbility: this.player.rangedAbility
+        ? {
+            name:        this.player.rangedAbility.name,
+            emoji:       this.player.rangedAbility.emoji,
+            cooldown:    this.player.rangedCooldown,
+            cooldownMax: this.player.rangedAbility.cooldownMax,
+            ammo:        this.player.rangedAmmo >= 0 ? this.player.rangedAmmo : null,
+          }
+        : null,
     });
   }
 }

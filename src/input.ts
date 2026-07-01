@@ -15,6 +15,7 @@ export function bindKeyboard(getGame: GameGetter): void {
       case 'a': case 'ArrowLeft':  game.handleHeroMove(-1, 0);  break;
       case 'd': case 'ArrowRight': game.handleHeroMove(1, 0);   break;
       case ' ':                    game.handleHeroWait();        break;
+      case 'q': case 'Q':          game.handleRangedAttack();    break;
       case 'j':                    game.handleBlockLeft();       break;
       case 'l':                    game.handleBlockRight();      break;
       case 'i':                    game.handleBlockRotate();     break;
@@ -80,6 +81,7 @@ export function bindButtons(getGame: GameGetter): void {
       case 'block-drop':     game.handleBlockDrop();     break;
       case 'block-softdrop': game.handleBlockSoftDrop(); break;
       case 'hero-wait':      game.handleHeroWait();      break;
+      case 'hero-ranged':    game.handleRangedAttack();  break;
       case 'hero-move': {
         const dx = Number(btn.dataset['dx'] ?? 0);
         const dy = Number(btn.dataset['dy'] ?? 0);

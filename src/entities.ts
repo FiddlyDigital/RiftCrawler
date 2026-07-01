@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef, RelicDef } from './types';
+import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef, RelicDef, RangedAbility } from './types';
 
 export class Equipment {
   constructor(
@@ -54,6 +54,11 @@ export class Player {
   auraStunRadius = 0;
   critEvery = 0;
   critCount = 0;
+
+  // Ranged ability (set by class; null = Warrior / no class)
+  rangedAbility: RangedAbility | null = null;
+  rangedCooldown = 0;
+  rangedAmmo = -1;  // -1 = infinite, ≥0 = finite (Rogue darts)
 
   // Status effects
   statuses: StatusEffect[] = [];
