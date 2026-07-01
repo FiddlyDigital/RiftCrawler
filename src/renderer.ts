@@ -238,8 +238,15 @@ export class Renderer {
 
         ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b5e20' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
-        ctx.strokeStyle = cell === Cell.BOSS ? '#ff0000' : '#fff';
-        ctx.lineWidth = cell === Cell.BOSS ? 2 : 1;
+        if (cell === Cell.BOSS) {
+          ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
+        } else if (game.currentCursed) {
+          ctx.strokeStyle = '#ef5350'; ctx.lineWidth = 2;
+        } else if (game.currentBlessed) {
+          ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 2;
+        } else {
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+        }
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
         ctx.lineWidth = 1;
 
@@ -272,8 +279,34 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
-    // ── Hazard overlays ───────────────────────────────────────────────────
+    // ── Special tile overlays (swamp / lava / sacred) ────────────────────
     ctx.font = `${TS * 0.55}px Arial`;
+    for (const t of game.specialTiles) {
+      if (!game.visibility[t.x]?.[t.y]) continue;
+      const sx = t.x * TS, sy = t.y * TS;
+      if (t.type === 'lava') {
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#ff5722';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('🔥', sx + TS / 2, sy + TS / 2);
+      } else if (t.type === 'swamp') {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#388e3c';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('🌿', sx + TS / 2, sy + TS / 2);
+      } else if (t.type === 'sacred') {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ffb74d';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('✨', sx + TS / 2, sy + TS / 2);
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ── Hazard overlays ───────────────────────────────────────────────────
     for (const h of game.hazards) {
       if (!game.visibility[h.x]?.[h.y]) continue;
       const hx = h.x * TS, hy = h.y * TS;

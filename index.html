@@ -61,10 +61,20 @@
         <div style="font-size:9px;color:#888;margin-top:1px;">Best: <span id="best-score">0</span></div>
       </div>
 
-      <!-- Next piece -->
+      <!-- Next piece + Hold -->
       <div class="sidebar-card">
-        <div class="card-title">Next Piece</div>
-        <div id="next-preview-box">Loading...</div>
+        <div class="card-title">Pieces</div>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <div style="flex:1;">
+            <div style="font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Hold (H)</div>
+            <div id="held-preview-box" style="min-height:20px;opacity:0.5;">—</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Next</div>
+            <div id="next-preview-box">Loading...</div>
+          </div>
+        </div>
+        <div id="piece-state-badge" style="display:none;margin-top:4px;font-size:9px;"></div>
       </div>
 
       <!-- Dungeon feed -->
@@ -90,6 +100,9 @@
         <button class="dpad-btn block-btn" data-action="block-softdrop" aria-label="Soft drop block">▼</button>
         <div class="dpad-empty"></div>
       </div>
+      <button class="dpad-btn block-btn" data-action="block-hold"
+              aria-label="Hold piece (H)"
+              style="width:100%;margin-top:4px;font-size:10px;letter-spacing:0.5px;">◫ HOLD (H)</button>
     </div>
 
     <div class="dpad-container">

@@ -83,6 +83,12 @@ export interface HazardTile {
   warning: boolean;
 }
 
+export interface SpecialTile {
+  x: number;
+  y: number;
+  type: 'swamp' | 'lava' | 'sacred';
+}
+
 export interface RelicDef {
   id: string;
   char: string;
@@ -132,6 +138,9 @@ export interface UIState {
   score: number;
   gravityRate: number;
   nextType: ShapeKey;
+  heldType: ShapeKey | null;
+  canHold: boolean;
+  pieceState: 'normal' | 'cursed' | 'blessed';
   xp: number;
   xpToNext: number;
   playerLevel: number;

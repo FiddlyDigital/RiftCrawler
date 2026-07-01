@@ -52,6 +52,8 @@ export class UIManager {
       activeClass:      document.getElementById('active-class-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
+      heldPreview:      document.getElementById('held-preview-box')!,
+      pieceStateBadge:  document.getElementById('piece-state-badge')!,
       runStatsGrid:     document.getElementById('run-stats-grid')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
@@ -87,7 +89,27 @@ export class UIManager {
       this.lastScore = state.score;
     }
 
-    this.els['nextPreview']!.innerHTML   = NEXT_PREVIEWS[state.nextType] ?? '';
+    this.els['nextPreview']!.innerHTML = NEXT_PREVIEWS[state.nextType] ?? '';
+
+    // Held piece display
+    const heldBox = this.els['heldPreview']!;
+    heldBox.innerHTML = state.heldType ? (NEXT_PREVIEWS[state.heldType] ?? '') : '—';
+    heldBox.style.opacity = state.canHold ? '1' : '0.35';
+
+    // Cursed / blessed piece badge
+    const psBadge = this.els['pieceStateBadge']!;
+    if (state.pieceState === 'cursed') {
+      psBadge.style.display = '';
+      psBadge.style.color = '#ef5350';
+      psBadge.textContent = '⛧ CURSED PIECE';
+    } else if (state.pieceState === 'blessed') {
+      psBadge.style.display = '';
+      psBadge.style.color = '#ffd54f';
+      psBadge.textContent = '✨ BLESSED PIECE';
+    } else {
+      psBadge.style.display = 'none';
+    }
+
     this.els['playerLevel']!.textContent = `Lv.${state.playerLevel}`;
     this.els['xpBar']!.style.width       = `${Math.min(100, (state.xp / state.xpToNext) * 100)}%`;
     this.els['xpLabel']!.textContent     = `${state.xp}/${state.xpToNext} XP`;

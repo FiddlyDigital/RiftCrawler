@@ -1,5 +1,5 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo } from './types';
 import { Player, Monster, Item, Equipment } from './entities';
 import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type PerkDef, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
@@ -61,6 +61,17 @@ export class Game {
 
   // Hazard tiles (persist per floor)
   public hazards: HazardTile[] = [];
+
+  // Shape-based special terrain tiles
+  public specialTiles: SpecialTile[] = [];
+
+  // Piece state (set fresh each spawn)
+  public currentCursed = false;
+  public currentBlessed = false;
+
+  // Hold mechanic
+  public heldType: ShapeKey | null = null;
+  public canHold = true;
 
   // Modifier state (active for the whole run)
   public activeModifierId: string | null = null;
@@ -181,6 +192,11 @@ export class Game {
     const shape = SHAPES[this.currentType];
     this.blockColor = shape.color;
     this.blocksPlacedSinceStairs++;
+
+    // Roll cursed/blessed for this piece (8% cursed, 4% blessed, 88% normal)
+    const pieceRoll = Math.random();
+    this.currentCursed  = pieceRoll < 0.08;
+    this.currentBlessed = !this.currentCursed && pieceRoll < 0.12;
 
     // Lucky modifier: every 5th block guarantees an item
     if (this.luckyEvery >= 0) {
@@ -307,6 +323,8 @@ export class Game {
   private lockBlock(): void {
     const bombPositions: Array<{ x: number; y: number }> = [];
     const landedCells: Array<{ x: number; y: number }> = [];
+    const lockedFloorCells: Array<{ x: number; y: number }> = [];
+    this.canHold = true;
 
     for (let r = 0; r < this.blockMatrix.length; r++) {
       for (let c = 0; c < this.blockMatrix[r]!.length; c++) {
@@ -323,28 +341,93 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
           bombPositions.push({ x: tx, y: ty });
+          lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.MERCHANT) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1a4a1a';
           this.merchantTiles.push({ x: tx, y: ty });
+          lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
           this.hazards.push({ x: tx, y: ty, type: 'spike', timer: 5 + Math.floor(Math.random() * 4), warning: false });
+          lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SMOKE) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
           this.hazards.push({ x: tx, y: ty, type: 'smoke', timer: 0, warning: false });
+          lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_TELEPORT) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
           this.hazards.push({ x: tx, y: ty, type: 'teleport', timer: 0, warning: false });
+          lockedFloorCells.push({ x: tx, y: ty });
         } else {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
+          lockedFloorCells.push({ x: tx, y: ty });
         }
 
         this.instantiateRider(cell, tx, ty);
+      }
+    }
+
+    // Shape-based tile effects on lock
+    if (lockedFloorCells.length > 0) {
+      if (this.currentType === 'S' || this.currentType === 'Z' || this.currentType === 'L') {
+        const tileType =
+          this.currentType === 'S' ? 'swamp' :
+          this.currentType === 'Z' ? 'lava' : 'sacred';
+        const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', lava: '🔥 Lava — all take 2 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!' };
+        for (const fc of lockedFloorCells) {
+          if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
+              !this.merchantTiles.some(t => t.x === fc.x && t.y === fc.y)) {
+            this.specialTiles.push({ x: fc.x, y: fc.y, type: tileType as SpecialTile['type'] });
+          }
+        }
+        this.cb.log(msgs[tileType as keyof typeof msgs]!, 'log-tetris');
+      } else if (this.currentType === 'O' && Math.random() < 0.40) {
+        const eligible = lockedFloorCells.filter(fc =>
+          !this.getItemAt(fc.x, fc.y) && !this.getMonsterAt(fc.x, fc.y)
+        );
+        if (eligible.length > 0) {
+          const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
+          const tier = Math.min(3, 1 + Math.floor(this.dungeonLevel / 4));
+          const eqPool = EQUIPMENT.filter(e => e.tier <= tier);
+          if (eqPool.length > 0) {
+            const equipDef = eqPool[Math.floor(Math.random() * eqPool.length)]!;
+            this.items.push(new Item(fc.x, fc.y, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
+            this.cb.log('💛 Vault sealed — loot uncovered!', 'log-perk');
+            this.cb.onParticle(fc.x, fc.y, '📦 VAULT!', '#fff176');
+          }
+        }
+      } else if (this.currentType === 'T' && this.player.rangedCooldown > 0) {
+        this.player.rangedCooldown = Math.max(0, this.player.rangedCooldown - 2);
+        this.cb.log('💜 Arcane resonance — ranged cooldown reduced!', 'log-perk');
+      }
+    }
+
+    // Cursed piece: spawn an extra monster
+    if (this.currentCursed && lockedFloorCells.length > 0) {
+      const eligible = lockedFloorCells.filter(fc => !this.getMonsterAt(fc.x, fc.y));
+      if (eligible.length > 0) {
+        const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
+        this.spawnMonster(this.getRandomMonsterKey(), fc.x, fc.y);
+        this.cb.log('⛧ A cursed rift tears open — something crawls out!', 'log-damage');
+        this.cb.onParticle(fc.x, fc.y, '💀 CURSE!', '#ef5350');
+      }
+    }
+
+    // Blessed piece: consecrate one cell as sacred ground
+    if (this.currentBlessed && lockedFloorCells.length > 0) {
+      const eligible = lockedFloorCells.filter(fc =>
+        !this.specialTiles.some(t => t.x === fc.x && t.y === fc.y)
+      );
+      if (eligible.length > 0) {
+        const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
+        this.specialTiles.push({ x: fc.x, y: fc.y, type: 'sacred' });
+        this.cb.log('✨ A blessed rift — holy ground consecrated!', 'log-perk');
+        this.cb.onParticle(fc.x, fc.y, '✨ BLESSED!', '#ffb74d');
       }
     }
 
@@ -358,6 +441,47 @@ export class Game {
     this.checkLineClears();
     this.cb.onAudio?.('blockLand');
     this.spawnBlock();
+  }
+
+  // ── Special tile processing ──────────────────────────────────────────────
+
+  private processSpecialTiles(): void {
+    const deadFromTerrain: Monster[] = [];
+
+    for (const t of this.specialTiles) {
+      if (t.type === 'lava') {
+        if (this.player.x === t.x && this.player.y === t.y) {
+          const dmg = this.player.takeDamage(2);
+          this.damageTaken += dmg;
+          this.cb.log('🔥 Lava burns you! -2 HP', 'log-damage');
+          this.cb.onParticle(t.x, t.y, '-2🔥', '#ff5722');
+          this.cb.onAudio?.('playerDamage');
+          if (this.player.hp <= 0) {
+            triggerDeath(this, 'CONSUMED BY LAVA', 'You stood in lava too long.');
+            return;
+          }
+        }
+        for (const m of this.monsters) {
+          if (m.x === t.x && m.y === t.y && !deadFromTerrain.includes(m)) {
+            m.hp -= 2;
+            this.cb.onParticle(t.x, t.y, '-2🔥', '#ff5722');
+            if (m.hp <= 0) deadFromTerrain.push(m);
+          }
+        }
+      } else if (t.type === 'swamp') {
+        for (const m of this.monsters) {
+          if (m.x === t.x && m.y === t.y && !deadFromTerrain.includes(m)) {
+            m.hp -= 1;
+            this.cb.onParticle(t.x, t.y, '-1', '#66bb6a');
+            if (m.hp <= 0) deadFromTerrain.push(m);
+          }
+        }
+      }
+    }
+
+    for (const m of deadFromTerrain) {
+      killMonster(m, this);
+    }
   }
 
   // ── Monster spawning helper ───────────────────────────────────────────────
@@ -499,6 +623,7 @@ export class Game {
         this.items = this.items.filter(i => !(i.x === x && i.y === y));
         this.merchantTiles = this.merchantTiles.filter(t => !(t.x === x && t.y === y));
         this.hazards = this.hazards.filter(h => !(h.x === x && h.y === y));
+        this.specialTiles = this.specialTiles.filter(t => !(t.x === x && t.y === y));
         this.cb.onParticle(x, y, '💥', '#ff6b35');
       }
     }
@@ -600,6 +725,9 @@ export class Game {
       this.hazards = this.hazards
         .filter(h => h.y !== y)
         .map(h => h.y < y ? { ...h, y: h.y + 1 } : h);
+      this.specialTiles = this.specialTiles
+        .filter(t => t.y !== y)
+        .map(t => t.y < y ? { ...t, y: t.y + 1 } : t);
       y++;
     }
 
@@ -687,6 +815,9 @@ export class Game {
     this.items = [];
     this.merchantTiles = [];
     this.hazards = [];
+    this.specialTiles = [];
+    this.heldType = null;
+    this.canHold = true;
     this.activeBossOnHalfHp = null;
     this.activeBossOnDeath   = null;
     this.bossHalfHpTriggered = false;
@@ -720,6 +851,7 @@ export class Game {
     applyRegen(this);
     applyAuraStun(this);
     processHazards(this);
+    this.processSpecialTiles();
     this.moveGravity();
     processMonsterTurns(this);
     this.tickRangedCooldown();
@@ -735,6 +867,7 @@ export class Game {
     applyRegen(this);
     applyAuraStun(this);
     processHazards(this);
+    this.processSpecialTiles();
     this.moveGravity();
     processMonsterTurns(this);
     this.tickRangedCooldown();
@@ -951,6 +1084,14 @@ export class Game {
     } else {
       this.cb.log('You wait.', 'log-neutral');
     }
+    // Sacred ground bonus heal
+    if (this.specialTiles.some(t => t.type === 'sacred' && t.x === this.player.x && t.y === this.player.y)) {
+      const bonus = this.player.heal(2);
+      if (bonus > 0) {
+        this.cb.onParticle(this.player.x, this.player.y, `+${bonus}✨`, '#ffb74d');
+        this.cb.log('Sacred ground — blessed rest!', 'log-success');
+      }
+    }
     this.advanceTurn();
   }
 
@@ -1036,6 +1177,43 @@ export class Game {
       if (x !== tx || y !== ty) this.cb.onParticle(x, y, '·', '#ffcc02');
     }
     this.cb.onParticle(tx, ty, emoji, '#ffcc02');
+  }
+
+  handleBlockHold(): void {
+    if (this.player.hp <= 0 || this.paused) return;
+    if (!this.canHold) {
+      this.cb.log('Already held this piece — lock it first.', 'log-neutral');
+      return;
+    }
+    if (this.heldType === null) {
+      this.heldType = this.currentType;
+      this.spawnBlock();
+    } else {
+      const swapType = this.heldType;
+      this.heldType = this.currentType;
+      this.setBlockType(swapType);
+    }
+    this.canHold = false;
+    this.cb.onAudio?.('blockMove');
+    this.pushUI();
+    this.cb.onAction();
+  }
+
+  private setBlockType(type: ShapeKey): void {
+    this.currentType = type;
+    const shape = SHAPES[type];
+    this.blockColor = shape.color;
+    const roll = Math.random();
+    this.currentCursed  = roll < 0.08;
+    this.currentBlessed = !this.currentCursed && roll < 0.12;
+    this.blockMatrix = shape.matrix.map(row =>
+      row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR)
+    );
+    this.blockX = Math.floor((CONFIG.COLS - this.blockMatrix[0]!.length) / 2);
+    this.blockY = 0;
+    if (this.checkBlockCollision(this.blockX, this.blockY, this.blockMatrix)) {
+      triggerDeath(this, 'DUNGEON OVERFLOW', 'Masonry blocks stacked to the ceiling!');
+    }
   }
 
   handleBlockLeft(): void {
@@ -1146,6 +1324,13 @@ export class Game {
       return { icon: '🏪', title: 'Merchant', lines: ['Spend score on potions & gear'] };
     }
 
+    const special = this.specialTiles.find(t => t.x === x && t.y === y);
+    if (special) {
+      if (special.type === 'lava')   return { icon: '🔥', title: 'Lava',           lines: ['Burns all entities for 2 dmg/turn'] };
+      if (special.type === 'swamp')  return { icon: '🌿', title: 'Swamp',           lines: ['Deals 1 dmg/turn to monsters'] };
+      if (special.type === 'sacred') return { icon: '✨', title: 'Sacred Ground',   lines: ['Wait here for +2 bonus HP per rest'] };
+    }
+
     return null;
   }
 
@@ -1162,6 +1347,9 @@ export class Game {
       score: this.score,
       gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
       nextType: this.nextType,
+      heldType: this.heldType,
+      canHold: this.canHold,
+      pieceState: this.currentCursed ? 'cursed' : this.currentBlessed ? 'blessed' : 'normal',
       xp: this.player.xp,
       xpToNext: this.player.xpToNext,
       playerLevel: this.player.playerLevel,

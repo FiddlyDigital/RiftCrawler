@@ -21,6 +21,7 @@ export function bindKeyboard(getGame: GameGetter): void {
       case 'i':                    game.handleBlockRotate();     break;
       case 'k':                    game.handleBlockDrop();       break;
       case 'x':                    game.handleBlockSoftDrop();   break;
+      case 'h': case 'H':          game.handleBlockHold();       break;
     }
   });
 }
@@ -198,6 +199,7 @@ export function bindButtons(getGame: GameGetter): void {
       case 'block-right':    game.handleBlockRight();    break;
       case 'block-drop':     game.handleBlockDrop();     break;
       case 'block-softdrop': game.handleBlockSoftDrop(); break;
+      case 'block-hold':     game.handleBlockHold();     break;
       case 'hero-wait':      game.handleHeroWait();      break;
       case 'hero-ranged':    game.handleRangedAttack();  break;
       case 'hero-move': {
