@@ -302,6 +302,12 @@ export class Renderer {
         ctx.fillRect(sx, sy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
         ctx.fillText('✨', sx + TS / 2, sy + TS / 2);
+      } else if (t.type === 'ice') {
+        ctx.globalAlpha = 0.50;
+        ctx.fillStyle = '#81d4fa';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('❄️', sx + TS / 2, sy + TS / 2);
       }
       ctx.globalAlpha = 1.0;
     }

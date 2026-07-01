@@ -29,8 +29,16 @@ function moveMonsterToward(m: Monster, game: Game): void {
   const sy = Math.sign(game.player.y - m.y);
   let nx = m.x + sx, ny = m.y;
   if (!game.isValidMove(nx, ny) || game.getMonsterAt(nx, ny)) { nx = m.x; ny = m.y + sy; }
-  if (game.isValidMove(nx, ny) && !game.getMonsterAt(nx, ny)) {
-    m.x = nx; m.y = ny;
+  if (!game.isValidMove(nx, ny) || game.getMonsterAt(nx, ny)) return;
+  const dx = nx - m.x, dy = ny - m.y;
+  m.x = nx; m.y = ny;
+  checkHazardTrigger(m, game, false);
+  // Ice sliding
+  while (game.isIceTile(m.x, m.y)) {
+    const slideX = m.x + dx, slideY = m.y + dy;
+    if (!game.isValidMove(slideX, slideY) || game.getMonsterAt(slideX, slideY)) break;
+    if (slideX === game.player.x && slideY === game.player.y) break;
+    m.x = slideX; m.y = slideY;
     checkHazardTrigger(m, game, false);
   }
 }

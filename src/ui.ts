@@ -54,6 +54,7 @@ export class UIManager {
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
       heldPreview:      document.getElementById('held-preview-box')!,
       pieceStateBadge:  document.getElementById('piece-state-badge')!,
+      potionPouch:      document.getElementById('potion-pouch')!,
       runStatsGrid:     document.getElementById('run-stats-grid')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
@@ -169,6 +170,20 @@ export class UIManager {
     } else {
       this.els['rangedAbility']!.style.display = 'none';
       if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Q — No ability'; }
+    }
+
+    // Potion pouch display
+    const pouchEl = this.els['potionPouch']!;
+    if (state.potionPouch.length === 0) {
+      pouchEl.textContent = '—';
+    } else {
+      pouchEl.innerHTML = '';
+      for (const p of state.potionPouch) {
+        const span = document.createElement('span');
+        span.textContent = p.char;
+        span.title = p.name;
+        pouchEl.appendChild(span);
+      }
     }
   }
 

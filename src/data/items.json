@@ -7,6 +7,14 @@
     "effectType": "heal",
     "effectValue": 15
   },
+  "mana_potion": {
+    "id": "mana_potion",
+    "displayName": "Mana Potion",
+    "visualAsset": "sprite_mana_potion",
+    "cellTypeId": "ITEM_POTION",
+    "effectType": "mana",
+    "effectValue": 0
+  },
   "sword": {
     "id": "sword",
     "displayName": "Steel Sword",

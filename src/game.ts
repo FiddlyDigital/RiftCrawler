@@ -73,6 +73,9 @@ export class Game {
   public heldType: ShapeKey | null = null;
   public canHold = true;
 
+  // Potion pouch (manually consumed via U key, max 3)
+  public potionPouch: Item[] = [];
+
   // Modifier state (active for the whole run)
   public activeModifierId: string | null = null;
   public scoreMultiplier = 1.0;
@@ -374,11 +377,12 @@ export class Game {
 
     // Shape-based tile effects on lock
     if (lockedFloorCells.length > 0) {
-      if (this.currentType === 'S' || this.currentType === 'Z' || this.currentType === 'L') {
+      if (this.currentType === 'S' || this.currentType === 'Z' || this.currentType === 'L' || this.currentType === 'J') {
         const tileType =
           this.currentType === 'S' ? 'swamp' :
-          this.currentType === 'Z' ? 'lava' : 'sacred';
-        const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', lava: '🔥 Lava — all take 2 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!' };
+          this.currentType === 'Z' ? 'lava' :
+          this.currentType === 'J' ? 'ice' : 'sacred';
+        const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', lava: '🔥 Lava — all take 2 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!', ice: '❄️ Ice — entities slide across!' };
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
               !this.merchantTiles.some(t => t.x === fc.x && t.y === fc.y)) {
@@ -665,8 +669,9 @@ export class Game {
       this.items.push(new Item(tx, ty, def.char, def.name, 'relic', 0, undefined, def));
 
     } else if (cell === Cell.ITEM_POTION) {
-      const def = ITEMS['potion']!;
-      this.items.push(new Item(tx, ty, def.char, def.name, def.type, def.statValue));
+      const key = Math.random() < 0.6 ? 'potion' : 'mana_potion';
+      const def = ITEMS[key]!;
+      this.items.push(new Item(tx, ty, def.char, def.name, def.type as Item['type'], def.statValue));
 
     } else if (cell === Cell.ITEM_SWORD) {
       const def = ITEMS['sword']!;
@@ -678,6 +683,60 @@ export class Game {
       const equipDef = eligible[Math.floor(Math.random() * eligible.length)]!;
       this.items.push(new Item(tx, ty, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
     }
+  }
+
+  // ── Item pickup & potion use ──────────────────────────────────────────────
+
+  public isIceTile(x: number, y: number): boolean {
+    return this.specialTiles.some(t => t.type === 'ice' && t.x === x && t.y === y);
+  }
+
+  private pickupItemAt(item: Item, x: number, y: number): void {
+    let removeFromMap = true;
+    this.itemsPickedUp++;
+    if (item.type === 'heal' || item.type === 'mana') {
+      if (this.potionPouch.length < 3) {
+        this.potionPouch.push(item);
+        this.cb.log(`Picked up ${item.name}.`, 'log-neutral');
+        this.cb.onParticle(x, y, item.char, '#69f0ae');
+      } else {
+        this.cb.log('Pouch full — drink one first (U).', 'log-neutral');
+        removeFromMap = false;
+        this.itemsPickedUp--;
+      }
+    } else if (item.type === 'stat') {
+      this.player.atk += item.statValue;
+      this.cb.log(`ATK +${item.statValue}.`, 'log-success');
+      this.cb.onParticle(x, y, `+${item.statValue} ATK`, '#ffd54f');
+    } else if ((item.type === 'weapon' || item.type === 'armor') && item.equipDef) {
+      const equip = new Equipment(item.equipDef);
+      const prev = this.player.equip(equip);
+      this.cb.log(`Equipped ${item.name}!${prev ? ` (replaced ${prev.name})` : ''}`, 'log-perk');
+      this.cb.onParticle(x, y, '⚔️ Equip!', '#ffd54f');
+    } else if (item.type === 'relic' && item.relicDef) {
+      this.pickupRelic(item.relicDef);
+    }
+    if (removeFromMap) this.items = this.items.filter(i => i !== item);
+  }
+
+  handleUsePotion(): void {
+    if (this.player.hp <= 0 || this.paused) return;
+    if (this.potionPouch.length === 0) {
+      this.cb.log('No potions in pouch!', 'log-neutral');
+      return;
+    }
+    const potion = this.potionPouch.shift()!;
+    if (potion.type === 'heal') {
+      const amt = Math.floor(potion.statValue * this.potionHealMult);
+      const healed = this.player.heal(amt);
+      this.cb.log(`🧪 Drank ${potion.name} — +${healed} HP.`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, `+${healed}HP`, '#69f0ae');
+    } else if (potion.type === 'mana') {
+      this.player.rangedCooldown = 0;
+      this.cb.log(`💧 Drank ${potion.name} — ability recharged!`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, '✨ MANA', '#7986cb');
+    }
+    this.advanceTurn();
   }
 
   // ── Relic helpers ─────────────────────────────────────────────────────────
@@ -1021,32 +1080,23 @@ export class Game {
 
     // Pick up item
     const item = this.getItemAt(nx, ny);
-    if (item) {
-      this.itemsPickedUp++;
-      if (item.type === 'heal') {
-        const healAmt = Math.floor(item.statValue * this.potionHealMult);
-        const healed = this.player.heal(healAmt);
-        this.cb.log(`Recovered ${healed} HP.`, 'log-success');
-        this.cb.onParticle(nx, ny, `+${healed} HP`, '#69f0ae');
-      } else if (item.type === 'stat') {
-        this.player.atk += item.statValue;
-        this.cb.log(`ATK +${item.statValue}.`, 'log-success');
-        this.cb.onParticle(nx, ny, `+${item.statValue} ATK`, '#ffd54f');
-      } else if ((item.type === 'weapon' || item.type === 'armor') && item.equipDef) {
-        const equip = new Equipment(item.equipDef);
-        const prev = this.player.equip(equip);
-        this.cb.log(`Equipped ${item.name}!${prev ? ` (replaced ${prev.name})` : ''}`, 'log-perk');
-        this.cb.onParticle(nx, ny, `⚔️ Equip!`, '#ffd54f');
-      } else if (item.type === 'relic' && item.relicDef) {
-        this.pickupRelic(item.relicDef);
-      }
-      this.items = this.items.filter(i => i !== item);
-    }
+    if (item) this.pickupItemAt(item, nx, ny);
 
     this.player.x = nx; this.player.y = ny;
 
     // Check hazard triggers on new tile
     checkHazardTrigger(this.player, this, true);
+
+    // Ice sliding — continue in same direction until hitting wall, monster, or non-ice
+    while (this.isIceTile(this.player.x, this.player.y)) {
+      const sx = this.player.x + dx, sy = this.player.y + dy;
+      if (!this.isValidMove(sx, sy) || this.getMonsterAt(sx, sy) || this.isMerchantTile(sx, sy)) break;
+      this.player.x = sx; this.player.y = sy;
+      const slideItem = this.getItemAt(sx, sy);
+      if (slideItem) this.pickupItemAt(slideItem, sx, sy);
+      checkHazardTrigger(this.player, this, true);
+      if (this.map[sx]?.[sy] === Tile.STAIRS) break;
+    }
 
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS) {
       this.dungeonLevel++;
@@ -1286,7 +1336,10 @@ export class Game {
     const item = this.getItemAt(x, y);
     if (item) {
       if (item.type === 'heal') {
-        return { icon: item.char, title: item.name, lines: [`Restores ${item.statValue} HP`] };
+        return { icon: item.char, title: item.name, lines: [`Restores ${item.statValue} HP`, 'Stored in pouch (U to drink)'] };
+      }
+      if (item.type === 'mana') {
+        return { icon: item.char, title: item.name, lines: ['Recharges ranged ability instantly', 'Stored in pouch (U to drink)'] };
       }
       if (item.type === 'stat') {
         return { icon: item.char, title: item.name, lines: [`+${item.statValue} ATK`] };
@@ -1329,6 +1382,7 @@ export class Game {
       if (special.type === 'lava')   return { icon: '🔥', title: 'Lava',           lines: ['Burns all entities for 2 dmg/turn'] };
       if (special.type === 'swamp')  return { icon: '🌿', title: 'Swamp',           lines: ['Deals 1 dmg/turn to monsters'] };
       if (special.type === 'sacred') return { icon: '✨', title: 'Sacred Ground',   lines: ['Wait here for +2 bonus HP per rest'] };
+      if (special.type === 'ice')    return { icon: '❄️', title: 'Ice',             lines: ['Slide uncontrollably in direction of travel'] };
     }
 
     return null;
@@ -1360,6 +1414,7 @@ export class Game {
       activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,
       biomeName: biome.name,
       relics: this.player.relics,
+      potionPouch: this.potionPouch.map(p => ({ char: p.char, name: p.name, type: p.type })),
       rangedAbility: this.player.rangedAbility
         ? {
             name:        this.player.rangedAbility.name,

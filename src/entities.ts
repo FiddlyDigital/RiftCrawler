@@ -156,7 +156,7 @@ export class Item {
     public y: number,
     public readonly char: string,
     public readonly name: string,
-    public readonly type: 'heal' | 'stat' | 'weapon' | 'armor' | 'relic',
+    public readonly type: 'heal' | 'stat' | 'mana' | 'weapon' | 'armor' | 'relic',
     public readonly statValue: number,
     public readonly equipDef?: EquipmentDef,
     public readonly relicDef?: RelicDef,

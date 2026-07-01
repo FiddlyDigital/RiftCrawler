@@ -73,7 +73,7 @@ export interface StatusEffect {
 }
 
 export type EquipSlot = 'weapon' | 'armor';
-export type ItemType = 'heal' | 'stat' | 'weapon' | 'armor' | 'relic';
+export type ItemType = 'heal' | 'stat' | 'mana' | 'weapon' | 'armor' | 'relic';
 
 export interface HazardTile {
   x: number;
@@ -86,7 +86,7 @@ export interface HazardTile {
 export interface SpecialTile {
   x: number;
   y: number;
-  type: 'swamp' | 'lava' | 'sacred';
+  type: 'swamp' | 'lava' | 'sacred' | 'ice';
 }
 
 export interface RelicDef {
@@ -152,6 +152,7 @@ export interface UIState {
   biomeName: string;
   relics: RelicDef[];
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null } | null;
+  potionPouch: Array<{ char: string; name: string; type: string }>;
 }
 
 export type AudioEvent =
@@ -217,7 +218,7 @@ export interface BossDef {
 export interface ItemDef {
   char: string;
   name: string;
-  type: 'heal' | 'stat';
+  type: 'heal' | 'stat' | 'mana';
   statValue: number;
   cellState: CellValue;
 }
