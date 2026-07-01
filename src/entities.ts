@@ -36,6 +36,7 @@ export class Player {
 
   // Relic bonuses
   dodgeChance = 0;
+  dodgeHeal = 0;
   lineClearDamage = 0;
   statusDurationBonus = 0;
   auraStunRadius = 0;
@@ -106,6 +107,7 @@ export class Player {
 export class Monster {
   statuses: StatusEffect[] = [];
   isBoss: boolean;
+  isElite = false;
 
   constructor(
     public x: number,

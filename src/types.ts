@@ -151,6 +151,7 @@ export interface GameCallbacks {
   onAudio?: (event: AudioEvent, data?: number) => void;
   onBossWarning?: (boss: BossDef, onDone: () => void) => void;
   onBlockLand?: (cells: Array<{ x: number; y: number }>) => void;
+  onCombo?: (multiplier: number) => void;
   onFloorEvent?: (event: import('./types').FloorEventDef, onChoice: (index: number) => void) => void;
 }
 

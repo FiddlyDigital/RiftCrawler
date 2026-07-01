@@ -270,6 +270,32 @@ export const RELICS: RelicDef[] = [
       p.hp = Math.min(p.hp, p.maxHp);
     },
   },
+  {
+    id: 'reflex_coil',
+    char: '⚡',
+    name: 'Reflex Coil',
+    desc: 'Dodging an attack restores 4 HP  (great with Rogue)',
+    onPickup: (p: Player) => { p.dodgeHeal += 4; },
+  },
+  {
+    id: 'rift_shard',
+    char: '💎',
+    name: 'Rift Shard',
+    desc: 'Each row cleared grants +2 Max HP permanently  (great with Mage)',
+    onLineClear: (p: Player, count: number) => {
+      p.maxHp += 2 * count;
+      p.hp = Math.min(p.hp, p.maxHp);
+    },
+  },
+  {
+    id: 'divine_seal',
+    char: '✨',
+    name: 'Divine Seal',
+    desc: 'Triples your kill-heal (min 4 HP)  (great with Priest)',
+    onPickup: (p: Player) => {
+      p.killHeal = Math.max(p.killHeal * 3, 4);
+    },
+  },
 ];
 
 // ── Modifiers ─────────────────────────────────────────────────────────────────

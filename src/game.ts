@@ -91,7 +91,7 @@ export class Game {
   private floorsDescended = 0;
   private blocksPlacedSinceStairs = 0;
   private pendingBossFloor = false;
-  private comboCount = 0;
+  public comboCount = 0;
   private lastLineClearMs = 0;
   private merchantTiles: Array<{ x: number; y: number }> = [];
   private luckyBlockCount = 0;
@@ -360,21 +360,36 @@ export class Game {
   private spawnMonster(key: string, tx: number, ty: number): void {
     const def = MONSTERS[key];
     if (!def) return;
-    const hp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
-    const atk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
+    const isElite = Math.random() < 0.12;
+    const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
+    const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
+    const hp  = isElite ? baseHp * 2 : baseHp;
+    const atk = isElite ? Math.floor(baseAtk * 1.5) : baseAtk;
+    const name = isElite ? `⭐ ${def.name}` : def.name;
     const m = new Monster(
-      tx, ty, def.char, def.name, hp, hp, atk, def.xpReward,
+      tx, ty, def.char, name, hp, hp, atk, def.xpReward,
       false,
       def.behaviorType ?? 'melee',
       def.attackRange  ?? 1,
       def.moveSpeed    ?? 1,
       def.statusInflict,
     );
+    m.isElite = isElite;
     if (this.frozenRift) {
       m.statuses.push({ type: 'stun', duration: 1, power: 0 });
     }
     this.monsters.push(m);
-    this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373');
+    if (isElite) {
+      this.cb.onParticle(tx, ty, '⭐ ELITE!', '#ffd700');
+      this.cb.log(`⭐ Elite ${def.name} stalks out of the dark!`, 'log-boss');
+    } else {
+      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373');
+    }
+  }
+
+  dropRelicAt(x: number, y: number): void {
+    const def = RELICS[Math.floor(Math.random() * RELICS.length)]!;
+    this.items.push(new Item(x, y, def.char, def.name, 'relic', 0, undefined, def));
   }
 
   private triggerBomb(cx: number, cy: number): void {
@@ -498,6 +513,7 @@ export class Game {
         const mult = 1 + this.comboCount * 0.5;
         added = Math.floor(added * mult);
         this.cb.log(`🔥 COMBO x${this.comboCount + 1}! +${added} Score`, 'log-combo');
+        this.cb.onCombo?.(this.comboCount + 1);
       }
       this.score += added;
 

@@ -53,6 +53,7 @@ export class Renderer {
   private readonly motes: Mote[];
   private readonly revealFrames: Uint8Array;
   private lastDungeonLevel = 1;
+  private comboOverlay: { text: string; alpha: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
@@ -317,8 +318,18 @@ export class Renderer {
     // ── Monsters (only if visible) ────────────────────────────────────────
     for (const m of game.monsters) {
       if (!game.visibility[m.x]?.[m.y]) continue;
+
+      if (m.isElite) this.drawPulseGlow(m.x, m.y, '255,215,0');
+
       if (!this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS)) {
         ctx.fillText(m.char, m.x * TS + TS / 2, m.y * TS + TS / 2);
+      }
+
+      if (m.isElite) {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(m.x * TS, m.y * TS, TS, TS);
+        ctx.lineWidth = 1;
       }
 
       if (m.statuses.length > 0) {
@@ -327,12 +338,14 @@ export class Renderer {
         ctx.font = `${TS * 0.7}px Arial`;
       }
 
-      if (m.isBoss) {
+      if (m.isBoss || m.isElite) {
         const barW = TS - 2;
         const pct = m.hp / m.maxHp;
         ctx.fillStyle = '#333';
         ctx.fillRect(m.x * TS + 1, m.y * TS - 4, barW, 3);
-        ctx.fillStyle = pct > 0.5 ? '#ef5350' : '#ff1744';
+        ctx.fillStyle = m.isBoss
+          ? (pct > 0.5 ? '#ef5350' : '#ff1744')
+          : (pct > 0.5 ? '#ffd700' : '#ff9100');
         ctx.fillRect(m.x * TS + 1, m.y * TS - 4, Math.floor(barW * pct), 3);
       }
     }
@@ -363,6 +376,24 @@ export class Renderer {
 
     // ── Particles ─────────────────────────────────────────────────────────
     this.particles.tick(ctx);
+
+    // ── Combo overlay ─────────────────────────────────────────────────────
+    if (this.comboOverlay) {
+      const { text, alpha } = this.comboOverlay;
+      const cw = ctx.canvas.width, ch = ctx.canvas.height;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = 'bold 26px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillText(text, cw / 2 + 1, ch / 2 + 1);
+      ctx.fillStyle = '#ff9100';
+      ctx.fillText(text, cw / 2, ch / 2);
+      ctx.restore();
+      this.comboOverlay.alpha -= 0.028;
+      if (this.comboOverlay.alpha <= 0) this.comboOverlay = null;
+    }
 
     // ── Biome tint overlay ────────────────────────────────────────────────
     const biome = getBiomeForFloor(game.dungeonLevel);
@@ -403,6 +434,10 @@ export class Renderer {
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  public showCombo(multiplier: number): void {
+    this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0 };
   }
 
   public triggerDamageFlash(): void { this.damageFlashFrames = 8; }

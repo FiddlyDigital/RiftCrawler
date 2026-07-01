@@ -69,6 +69,7 @@ function startGame(startPaused = false): void {
     onParticle: (x, y, text, col) => renderer.spawnParticle(x, y, text, col),
     onAudio:  (event, data)        => handleAudio(event, data),
     onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
+    onCombo:     (mult)            => renderer.showCombo(mult),
 
     onDeath: (title, reason, floor, score, stats) => {
       stopTick();

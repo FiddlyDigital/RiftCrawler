@@ -9,6 +9,10 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
   if (game.player.dodgeChance > 0 && Math.random() < game.player.dodgeChance) {
     game.cb.log(`${m.name} attacks — you dodge!`, 'log-success');
     game.cb.onParticle(game.player.x, game.player.y, 'DODGE!', '#29b6f6');
+    if (game.player.dodgeHeal > 0) {
+      const healed = game.player.heal(game.player.dodgeHeal);
+      if (healed > 0) game.cb.onParticle(game.player.x, game.player.y, `+${healed} HP`, '#69f0ae');
+    }
     return;
   }
   const actual = game.player.takeDamage(Math.max(1, m.atk));
@@ -46,11 +50,16 @@ export function killMonster(m: Monster, game: Game): void {
     game.cb.log(`⚔️ BOSS SLAIN: ${m.name}!`, 'log-boss');
     game.cb.onParticle(m.x, m.y, '🏆 BOSS!', '#ffd54f');
   } else {
+    if (m.isElite) {
+      game.dropRelicAt(m.x, m.y);
+      game.cb.onParticle(m.x, m.y, '🏆 RELIC!', '#ffd700');
+      game.cb.log(`⭐ Elite vanquished! A relic drops...`, 'log-perk');
+    }
     const healBonus = game.player.heal(3);
     if (healBonus > 0) {
       game.cb.onParticle(game.player.x, game.player.y, `+${healBonus} HP`, '#69f0ae');
-      game.cb.log(`Siphoned essence of ${m.name}! +${healBonus} HP`, 'log-success');
-    } else {
+      if (!m.isElite) game.cb.log(`Siphoned essence of ${m.name}! +${healBonus} HP`, 'log-success');
+    } else if (!m.isElite) {
       game.cb.log(`Defeated ${m.name}!`, 'log-success');
     }
   }
