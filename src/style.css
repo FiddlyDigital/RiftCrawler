@@ -162,7 +162,7 @@ canvas {
 /* I · Log panel — increased height + slide-in animation */
 #log-panel {
   flex-grow: 1; overflow-y: auto; font-family: monospace; font-size: 10px;
-  display: flex; flex-direction: column-reverse; gap: 2px; max-height: 120px;
+  display: flex; flex-direction: column; gap: 2px; max-height: 120px;
 }
 @keyframes logSlide {
   from { opacity: 0; transform: translateX(-6px); }
