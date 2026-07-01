@@ -440,47 +440,47 @@ export class Game {
   }
 
   private spawnRoom(type: 'vault' | 'den' | 'shrine'): void {
-    const CONFIGS = {
-      vault:  { w: 4, h: 3, color: '#3d2b00' },
-      den:    { w: 4, h: 3, color: '#2d0000' },
-      shrine: { w: 3, h: 2, color: '#002d30' },
-    };
-    const rc = CONFIGS[type];
-    // Place in mid-map: y=17..21, safely above starting platform (y=23)
-    const roomX = Math.floor(Math.random() * (CONFIG.COLS - rc.w));
-    const roomY = 17 + Math.floor(Math.random() * 5);
-    const cx = roomX + Math.floor(rc.w / 2);
-    const cy = roomY + Math.floor(rc.h / 2);
+    // Rooms are lateral 2×3 extensions of the starting platform (x=2..7, y=23..24).
+    // Left side: x=0..1. Right side: x=8..9. y=22..24 (one row above platform top).
+    // This keeps the centre columns clear so falling blocks are never intercepted.
+    const colors = { vault: '#3d2b00', den: '#2d0000', shrine: '#002d30' } as const;
+    const side = Math.random() < 0.5 ? 'left' : 'right';
+    const roomX = side === 'left' ? 0 : CONFIG.COLS - 2;  // 0 or 8
+    const roomY = CONFIG.ROWS - 3;                         // 22 (rows 22..24)
+    const color = colors[type];
 
-    for (let dx = 0; dx < rc.w; dx++) {
-      for (let dy = 0; dy < rc.h; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      for (let dy = 0; dy < 3; dy++) {
         const x = roomX + dx, y = roomY + dy;
         this.map[x]![y]    = Tile.FLOOR;
-        this.colors[x]![y] = rc.color;
+        this.colors[x]![y] = color;
       }
     }
 
+    const innerX = roomX + (side === 'left' ? 1 : 0);  // column closer to starting platform
+    const midY   = roomY + 1;                           // middle row of the room
+
     if (type === 'vault') {
       const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(roomX + 1, cy, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
+      this.items.push(new Item(innerX, midY, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
       const tier = Math.min(3, 1 + Math.floor(this.dungeonLevel / 4));
       const eligible = EQUIPMENT.filter(e => e.tier <= tier);
       const equipDef = eligible[Math.floor(Math.random() * eligible.length)]!;
-      this.items.push(new Item(roomX + 2, cy, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
-      this.spawnMonster(this.getRandomMonsterKey(), cx, roomY);
-      this.cb.log('💰 A Treasure Vault lies ahead — guarded.', 'log-perk');
+      this.items.push(new Item(roomX + (side === 'left' ? 0 : 1), midY, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
+      this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
+      this.cb.log(`💰 A Treasure Vault lies to the ${side} — guarded.`, 'log-perk');
     } else if (type === 'den') {
-      const positions: Array<[number, number]> = [[0, 0], [1, 0], [2, 0], [1, 1]];
+      const positions: Array<[number, number]> = [[0, 0], [1, 0], [0, 1]];
       for (const [pdx, pdy] of positions) {
         this.spawnMonster(this.getRandomMonsterKey(), roomX + pdx, roomY + pdy);
       }
-      this.cb.log('☠️ A Monster Den lurks in the shadows...', 'log-damage');
+      this.cb.log(`☠️ A Monster Den lurks to the ${side}...`, 'log-damage');
     } else {
       const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(cx, cy, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
+      this.items.push(new Item(roomX, midY, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
       const potionDef = ITEMS['potion']!;
-      this.items.push(new Item(cx - 1, cy, potionDef.char, potionDef.name, potionDef.type, potionDef.statValue));
-      this.cb.log('✨ An Ancient Shrine whispers from the dark...', 'log-perk');
+      this.items.push(new Item(innerX, midY, potionDef.char, potionDef.name, potionDef.type, potionDef.statValue));
+      this.cb.log(`✨ An Ancient Shrine whispers to the ${side}...`, 'log-perk');
     }
   }
 
