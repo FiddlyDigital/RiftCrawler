@@ -1,7 +1,7 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo } from './types';
 import { Player, Monster, Item, Equipment } from './entities';
-import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, type PerkDef } from './content';
+import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type PerkDef, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, triggerDeath } from './systems/combat';
@@ -71,6 +71,14 @@ export class Game {
   public frozenRift = false;
   public luckyEvery = -1;  // -1 = disabled; 0+ = counter
 
+  // Class state
+  public activeClassId: string | null = null;
+
+  // Biome state
+  public biomeId = 'stone';
+  public biomeMonsterHpMult = 1.0;
+  public biomeGravityPct = 0;
+
   // Run stats
   public monstersKilled = 0;
   public bossesKilled = 0;
@@ -80,6 +88,7 @@ export class Game {
   public itemsPickedUp = 0;
 
   // Internal counters
+  private floorsDescended = 0;
   private blocksPlacedSinceStairs = 0;
   private pendingBossFloor = false;
   private comboCount = 0;
@@ -351,7 +360,7 @@ export class Game {
   private spawnMonster(key: string, tx: number, ty: number): void {
     const def = MONSTERS[key];
     if (!def) return;
-    const hp  = def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel;
+    const hp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
     const atk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const m = new Monster(
       tx, ty, def.char, def.name, hp, hp, atk, def.xpReward,
@@ -535,9 +544,18 @@ export class Game {
 
   private transitionToNextFloor(): void {
     this.dungeonLevel++;
+    this.floorsDescended++;
     if (this.dungeonLevel % 5 === 0) this.pendingBossFloor = true;
+    this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
+  }
+
+  private updateBiome(): void {
+    const biome = getBiomeForFloor(this.dungeonLevel);
+    this.biomeId = biome.id;
+    this.biomeMonsterHpMult = biome.monsterHpMult;
+    this.biomeGravityPct = biome.gravityPctBonus;
   }
 
   resetDungeonState(): void {
@@ -621,6 +639,21 @@ export class Game {
     this.paused = false;
     this.pushUI();
     this.cb.onAction();
+  }
+
+  // ── Class selection ──────────────────────────────────────────────────────
+
+  getRandomClasses(count = 4): ClassDef[] {
+    return CLASSES.slice(0, count);
+  }
+
+  applyClass(id: string): void {
+    const cls = CLASSES.find(c => c.id === id);
+    if (!cls) return;
+    cls.apply(this.player);
+    this.activeClassId = id;
+    this.cb.log(`Playing as ${cls.emoji} ${cls.name}: ${cls.tagline}`, 'log-perk');
+    this.pushUI();
   }
 
   // ── Modifier selection ───────────────────────────────────────────────────
@@ -746,10 +779,24 @@ export class Game {
 
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS) {
       this.dungeonLevel++;
+      this.floorsDescended++;
       if (this.dungeonLevel % 5 === 0) this.pendingBossFloor = true;
       this.cb.onAudio?.('descend');
+      this.updateBiome();
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
       this.resetDungeonState();
+      // Floor event fires every 3 voluntary descents (skip boss floors)
+      const isBossFloor = this.dungeonLevel % 5 === 0;
+      if (!isBossFloor && this.floorsDescended % 3 === 0 && this.cb.onFloorEvent) {
+        const event = getRandomFloorEvent();
+        this.paused = true;
+        this.cb.onFloorEvent(event, (index) => {
+          const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+          this.cb.log(msg, 'log-perk');
+          this.paused = false;
+          this.cb.onAction();
+        });
+      }
     } else {
       this.advanceTurn();
     }
@@ -884,12 +931,14 @@ export class Game {
 
   private pushUI(): void {
     const activeMod = MODIFIERS.find(m => m.id === this.activeModifierId);
+    const activeCls = CLASSES.find(c => c.id === this.activeClassId);
+    const biome = getBiomeForFloor(this.dungeonLevel);
     this.cb.updateUI({
       hp: this.player.hp,
       maxHp: this.player.maxHp,
       floor: this.dungeonLevel,
       score: this.score,
-      gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent),
+      gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
       nextType: this.nextType,
       xp: this.player.xp,
       xpToNext: this.player.xpToNext,
@@ -898,6 +947,8 @@ export class Game {
       armorName: this.player.armor?.name ?? null,
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
+      activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,
+      biomeName: biome.name,
       relics: this.player.relics,
     });
   }

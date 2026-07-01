@@ -24,7 +24,7 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 // ── Tick management ──────────────────────────────────────────────────────────
 
 function getTickMs(): number {
-  return tickMsForLevel(game.dungeonLevel, game.player.tickSlowPercent);
+  return tickMsForLevel(game.dungeonLevel, game.player.tickSlowPercent + game.biomeGravityPct);
 }
 
 function startTick(): void {
@@ -108,6 +108,14 @@ function startGame(startPaused = false): void {
         startTick();
       });
     },
+
+    onFloorEvent: (event, onChoice) => {
+      stopTick();
+      ui.showFloorEvent(event, (index) => {
+        onChoice(index);
+        startTick();
+      });
+    },
   });
 
   if (startPaused) game.paused = true;
@@ -116,15 +124,17 @@ function startGame(startPaused = false): void {
   trackGameStart(1);
 }
 
-// ── Modifier picker then launch ───────────────────────────────────────────────
+// ── Class + Modifier picker then launch ──────────────────────────────────────
 
 function launchWithModifier(onReady: () => void): void {
-  // Initialise the game first so getRandomModifiers() works (game is used in applyModifier)
-  // Then show the picker — user picks — then unpause and start tick
-  const mods = game.getRandomModifiers(3);
-  ui.showModifierPick(mods, (modId) => {
-    game.applyModifier(modId);
-    onReady();
+  const classes = game.getRandomClasses(4);
+  ui.showClassSelection(classes, (classId) => {
+    game.applyClass(classId);
+    const mods = game.getRandomModifiers(3);
+    ui.showModifierPick(mods, (modId) => {
+      game.applyModifier(modId);
+      onReady();
+    });
   });
 }
 

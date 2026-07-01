@@ -49,6 +49,8 @@
         <div id="relic-slots" style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap;min-height:14px;"></div>
         <div id="status-row"  style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px;"></div>
         <div id="active-modifier-badge" style="display:none;margin-top:3px;font-size:9px;color:var(--accent-color);"></div>
+        <div id="active-class-badge"    style="display:none;margin-top:2px;font-size:9px;color:#7c4dff;"></div>
+        <div id="biome-badge"           style="display:none;margin-top:2px;font-size:9px;color:#26a69a;"></div>
       </div>
 
       <!-- Score -->
@@ -209,6 +211,25 @@
     <p style="color:#888;margin:4px 0 10px 0;font-size:12px;">Score: <b id="shop-gold" style="color:var(--accent-color);">0</b> pts</p>
     <div id="shop-items" style="display:flex;flex-direction:column;gap:6px;"></div>
     <button class="restart-btn" id="shop-close" style="background-color:#333;color:#ccc;margin-top:12px;">Leave Shop</button>
+  </div>
+</div>
+
+<!-- Class selection modal -->
+<div id="class-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="class-title">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title" id="class-title" style="color:#7c4dff;font-size:20px;">CHOOSE YOUR CLASS</div>
+    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Your class shapes the entire run. There is no going back.</p>
+    <div id="class-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Floor event modal -->
+<div id="floor-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="floor-event-title">
+  <div class="modal-card" style="max-width:340px;">
+    <div id="floor-event-emoji" style="font-size:36px;margin-bottom:6px;line-height:1;"></div>
+    <div class="modal-title" id="floor-event-title" style="color:#ffab00;font-size:18px;"></div>
+    <p id="floor-event-flavor" style="color:#666;margin:6px 0 14px 0;font-size:11px;font-style:italic;"></p>
+    <div id="floor-event-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 

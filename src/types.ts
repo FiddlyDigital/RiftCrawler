@@ -1,6 +1,39 @@
 import type { ShapeKey } from './config';
 import type { Player } from './entities';
 
+export interface ClassDef {
+  id: string;
+  emoji: string;
+  name: string;
+  tagline: string;
+  statPreview: string;
+  apply: (player: Player) => void;
+}
+
+export interface BiomeDef {
+  id: string;
+  name: string;
+  minFloor: number;
+  tileRgb: string;
+  monsterHpMult: number;
+  gravityPctBonus: number;
+  desc: string;
+}
+
+export interface FloorEventOption {
+  label: string;
+  desc: string;
+  apply: (game: import('./game').Game) => string;
+}
+
+export interface FloorEventDef {
+  id: string;
+  emoji: string;
+  title: string;
+  flavor: string;
+  options: FloorEventOption[];
+}
+
 export const Tile = { VOID: 0, FLOOR: 1, STAIRS: 2 } as const;
 export type TileValue = (typeof Tile)[keyof typeof Tile];
 
@@ -97,6 +130,8 @@ export interface UIState {
   armorName: string | null;
   statuses: StatusEffect[];
   activeModifier: { emoji: string; name: string } | null;
+  activeClass: { emoji: string; name: string } | null;
+  biomeName: string;
   relics: RelicDef[];
 }
 
@@ -116,6 +151,7 @@ export interface GameCallbacks {
   onAudio?: (event: AudioEvent, data?: number) => void;
   onBossWarning?: (boss: BossDef, onDone: () => void) => void;
   onBlockLand?: (cells: Array<{ x: number; y: number }>) => void;
+  onFloorEvent?: (event: import('./types').FloorEventDef, onChoice: (index: number) => void) => void;
 }
 
 export interface RunRecord {

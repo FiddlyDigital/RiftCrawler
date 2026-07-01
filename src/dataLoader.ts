@@ -6,7 +6,8 @@ import equipmentData      from './data/equipment.json';
 import perksData          from './data/perks.json';
 import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef } from './types';
+import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef } from './types';
+import { Equipment } from './entities';
 import type { Player } from './entities';
 import type { MonsterDef, BossDef, ItemDef, EquipmentDef } from './types';
 
@@ -360,3 +361,288 @@ export const SHAPES = shapesData as Record<ShapeKey, ShapeDef>;
 export const NEXT_PREVIEWS: Record<ShapeKey, string> = Object.fromEntries(
   Object.entries(shapesData as Record<ShapeKey, RawShape>).map(([k, v]) => [k, v.preview])
 ) as Record<ShapeKey, string>;
+
+// ── Starting classes ──────────────────────────────────────────────────────────
+
+export const CLASSES: ClassDef[] = [
+  {
+    id: 'warrior',
+    emoji: '⚔️',
+    name: 'Warrior',
+    tagline: 'Front-line fighter. Tough and straightforward.',
+    statPreview: '+20 HP  −2 ATK  +3 DEF',
+    apply: (p: Player) => {
+      p.maxHp += 20; p.hp += 20;
+      p.atk = Math.max(1, p.atk - 2);
+      p.damageReduction += 3;
+    },
+  },
+  {
+    id: 'rogue',
+    emoji: '🗡️',
+    name: 'Rogue',
+    tagline: 'Strike fast, stay elusive. High risk, high reward.',
+    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th',
+    apply: (p: Player) => {
+      p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
+      p.atk += 3;
+      p.dodgeChance += 0.20;
+      p.critEvery = 5;
+    },
+  },
+  {
+    id: 'mage',
+    emoji: '🔮',
+    name: 'Mage',
+    tagline: 'Harness rift energy. Line clears deal extra damage.',
+    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg',
+    apply: (p: Player) => {
+      p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
+      p.visionRadius += 2;
+      p.lineClearDamage += 5;
+    },
+  },
+  {
+    id: 'priest',
+    emoji: '✨',
+    name: 'Priest',
+    tagline: 'Survive through healing. Regenerate and siphon life.',
+    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill',
+    apply: (p: Player) => {
+      p.maxHp += 10; p.hp += 10;
+      p.atk = Math.max(1, p.atk - 1);
+      p.regenPerTick += 1;
+      p.killHeal += 4;
+    },
+  },
+];
+
+// ── Biomes ────────────────────────────────────────────────────────────────────
+// Ordered highest minFloor first so getBiomeForFloor can use .find()
+
+export const BIOMES: BiomeDef[] = [
+  {
+    id: 'rift',
+    name: 'Corrupted Rift',
+    minFloor: 10,
+    tileRgb: '100,40,140',
+    monsterHpMult: 1.0,
+    gravityPctBonus: -25,
+    desc: 'Reality fractures. Blocks fall 25% faster.',
+  },
+  {
+    id: 'cavern',
+    name: 'Crystal Caverns',
+    minFloor: 5,
+    tileRgb: '30,90,160',
+    monsterHpMult: 1.25,
+    gravityPctBonus: 0,
+    desc: 'Ancient crystals harden foes. Monsters have +25% HP.',
+  },
+  {
+    id: 'stone',
+    name: 'Stone Halls',
+    minFloor: 1,
+    tileRgb: '',
+    monsterHpMult: 1.0,
+    gravityPctBonus: 0,
+    desc: 'Familiar ruins. Standard difficulty.',
+  },
+];
+
+export function getBiomeForFloor(floor: number): BiomeDef {
+  return BIOMES.find(b => floor >= b.minFloor) ?? BIOMES[BIOMES.length - 1]!;
+}
+
+// ── Floor events ──────────────────────────────────────────────────────────────
+
+export const FLOOR_EVENTS: FloorEventDef[] = [
+  {
+    id: 'ancient_shrine',
+    emoji: '🏛️',
+    title: 'Ancient Shrine',
+    flavor: 'A worn altar pulses with faint magic. Power can be bought — for a price.',
+    options: [
+      {
+        label: 'Offer HP (20)',
+        desc: 'Sacrifice 20 HP for a random perk.',
+        apply: (game) => {
+          game.player.hp = Math.max(1, game.player.hp - 20);
+          game.damageTaken += 20;
+          const perk = PERKS[Math.floor(Math.random() * PERKS.length)]!;
+          perk.apply(game.player);
+          return `The shrine grants: ${perk.name}! (${perk.desc})`;
+        },
+      },
+      {
+        label: 'Leave undisturbed',
+        desc: 'Nothing happens.',
+        apply: () => 'You leave the shrine undisturbed.',
+      },
+    ],
+  },
+  {
+    id: 'healing_spring',
+    emoji: '💧',
+    title: 'Healing Spring',
+    flavor: 'A clear pool bubbles up from the stone floor. Its waters shimmer with life.',
+    options: [
+      {
+        label: 'Drink deeply',
+        desc: 'Restore to full HP.',
+        apply: (game) => {
+          const gained = game.player.heal(game.player.maxHp);
+          return `The spring restores you fully. +${gained} HP`;
+        },
+      },
+      {
+        label: 'Fill your flask',
+        desc: 'Heal 25 HP and gain +1 regen per tick.',
+        apply: (game) => {
+          const gained = game.player.heal(25);
+          game.player.regenPerTick += 1;
+          return `Healed ${gained} HP and gained passive regeneration.`;
+        },
+      },
+    ],
+  },
+  {
+    id: 'fallen_champion',
+    emoji: '⚔️',
+    title: 'Fallen Champion',
+    flavor: 'The corpse of a warrior lies here, still clutching their belongings.',
+    options: [
+      {
+        label: 'Take their gear',
+        desc: 'Equip a random piece of equipment.',
+        apply: (game) => {
+          const tier = Math.min(3, 1 + Math.floor(game.dungeonLevel / 3));
+          const eligible = EQUIPMENT.filter(e => e.tier <= tier);
+          const def = eligible[Math.floor(Math.random() * eligible.length)]!;
+          const prev = game.player.equip(new Equipment(def));
+          return prev
+            ? `Equipped ${def.name}, replacing ${prev.name}.`
+            : `Equipped ${def.name}!`;
+        },
+      },
+      {
+        label: 'Take their rations',
+        desc: 'Heal 35 HP.',
+        apply: (game) => {
+          const gained = game.player.heal(35);
+          return `You eat the champion's rations. +${gained} HP`;
+        },
+      },
+    ],
+  },
+  {
+    id: 'dark_bargain',
+    emoji: '👁️',
+    title: 'Dark Bargain',
+    flavor: 'A disembodied voice whispers from the shadows, offering terrible power.',
+    options: [
+      {
+        label: 'Accept the deal',
+        desc: '+12 ATK, −25 Max HP.',
+        apply: (game) => {
+          game.player.atk += 12;
+          game.player.maxHp = Math.max(10, game.player.maxHp - 25);
+          game.player.hp = Math.min(game.player.hp, game.player.maxHp);
+          return 'Power surges through you — at terrible cost. +12 ATK, −25 Max HP.';
+        },
+      },
+      {
+        label: 'Refuse the voice',
+        desc: 'Nothing happens. Some deals aren\'t worth making.',
+        apply: () => 'You refuse the dark voice. It fades, frustrated.',
+      },
+    ],
+  },
+  {
+    id: 'tome_of_knowledge',
+    emoji: '📖',
+    title: 'Tome of Knowledge',
+    flavor: 'A dusty tome lies open to a marked page, its text glowing faintly.',
+    options: [
+      {
+        label: 'Study tactics',
+        desc: 'Gain 150 XP.',
+        apply: (game) => {
+          const levelled = game.player.gainXP(150);
+          if (levelled) {
+            game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
+            game.paused = true;
+            game.cb.onLevelUp(game.player.playerLevel);
+          }
+          return `You absorb the battle tactics. +150 XP`;
+        },
+      },
+      {
+        label: 'Learn from lore',
+        desc: '+2 vision radius permanently.',
+        apply: (game) => {
+          game.player.visionRadius += 2;
+          return 'Your perception expands. +2 vision radius.';
+        },
+      },
+    ],
+  },
+  {
+    id: 'abandoned_cache',
+    emoji: '💰',
+    title: 'Abandoned Cache',
+    flavor: 'A hidden stash behind a loose stone. Someone left in a hurry.',
+    options: [
+      {
+        label: 'Search carefully',
+        desc: 'Gain 800 score.',
+        apply: (game) => {
+          game.score += 800;
+          return 'You find 800 pts worth of loot!';
+        },
+      },
+      {
+        label: 'Grab quickly',
+        desc: '50/50: gain 2000 score OR trigger a trap (−30 HP).',
+        apply: (game) => {
+          if (Math.random() < 0.5) {
+            game.score += 2000;
+            return '🎉 Jackpot! +2000 score!';
+          }
+          const dmg = game.player.takeDamage(30);
+          game.damageTaken += dmg;
+          return `💥 It was booby-trapped! −${dmg} HP`;
+        },
+      },
+    ],
+  },
+  {
+    id: 'mystic_font',
+    emoji: '✨',
+    title: 'Mystic Font',
+    flavor: 'Runes carved into the floor glow with trapped rift energy.',
+    options: [
+      {
+        label: 'Purify',
+        desc: 'Cure all status effects and gain poison immunity.',
+        apply: (game) => {
+          game.player.statuses = [];
+          game.player.poisonImmune = true;
+          return 'All afflictions cleansed. Poison cannot touch you.';
+        },
+      },
+      {
+        label: 'Empower',
+        desc: '+2 ATK permanently.',
+        apply: (game) => {
+          game.player.atk += 2;
+          return 'Rift energy floods your muscles. +2 ATK.';
+        },
+      },
+    ],
+  },
+];
+
+export function getRandomFloorEvent(): FloorEventDef {
+  return FLOOR_EVENTS[Math.floor(Math.random() * FLOOR_EVENTS.length)]!;
+}

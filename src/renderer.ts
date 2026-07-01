@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
+import { getBiomeForFloor } from './content';
 import type { Game } from './game';
 import type { SpriteCoord } from './types';
 import spriteMapData from './data/sprite-map.json';
@@ -362,6 +363,13 @@ export class Renderer {
 
     // ── Particles ─────────────────────────────────────────────────────────
     this.particles.tick(ctx);
+
+    // ── Biome tint overlay ────────────────────────────────────────────────
+    const biome = getBiomeForFloor(game.dungeonLevel);
+    if (biome.tileRgb) {
+      ctx.fillStyle = `rgba(${biome.tileRgb},0.07)`;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
 
     // ── Low-HP vignette ──────────────────────────────────────────────────
     if (game.player.hp > 0 && game.player.hp / game.player.maxHp <= 0.25) {

@@ -1,5 +1,5 @@
 import { NEXT_PREVIEWS } from './config';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef } from './types';
 import type { PerkDef, MerchantItem } from './content';
 import type { RunRecord } from './types';
 
@@ -10,6 +10,8 @@ export class UIManager {
   private readonly shopModal: HTMLElement;
   private readonly modifierModal: HTMLElement;
   private readonly bossWarningModal: HTMLElement;
+  private readonly classModal: HTMLElement;
+  private readonly floorEventModal: HTMLElement;
   private readonly inspectTooltip: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
   private lastScore = -1;
@@ -22,6 +24,8 @@ export class UIManager {
     this.shopModal         = document.getElementById('shop-modal')!;
     this.modifierModal     = document.getElementById('modifier-modal')!;
     this.bossWarningModal  = document.getElementById('boss-warning-modal')!;
+    this.classModal        = document.getElementById('class-modal')!;
+    this.floorEventModal   = document.getElementById('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
@@ -45,6 +49,8 @@ export class UIManager {
       runHistory:       document.getElementById('run-history')!,
       relicSlots:       document.getElementById('relic-slots')!,
       activeModifier:   document.getElementById('active-modifier-badge')!,
+      activeClass:      document.getElementById('active-class-badge')!,
+      biomeName:        document.getElementById('biome-badge')!,
       runStatsGrid:     document.getElementById('run-stats-grid')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
@@ -103,6 +109,22 @@ export class UIManager {
       this.els['activeModifier']!.textContent = `${state.activeModifier.emoji} ${state.activeModifier.name}`;
     } else {
       this.els['activeModifier']!.style.display = 'none';
+    }
+
+    // Active class badge
+    if (state.activeClass) {
+      this.els['activeClass']!.style.display = '';
+      this.els['activeClass']!.textContent = `${state.activeClass.emoji} ${state.activeClass.name}`;
+    } else {
+      this.els['activeClass']!.style.display = 'none';
+    }
+
+    // Biome badge (only show when not on the default biome)
+    if (state.biomeName && state.biomeName !== 'Stone Halls') {
+      this.els['biomeName']!.style.display = '';
+      this.els['biomeName']!.textContent = `🌐 ${state.biomeName}`;
+    } else {
+      this.els['biomeName']!.style.display = 'none';
     }
   }
 
@@ -171,6 +193,41 @@ export class UIManager {
       container.appendChild(btn);
     }
     this.modifierModal.style.display = 'flex';
+  }
+
+  showClassSelection(classes: ClassDef[], onSelect: (id: string) => void): void {
+    const container = document.getElementById('class-choices')!;
+    container.innerHTML = '';
+    for (const cls of classes) {
+      const btn = document.createElement('button');
+      btn.className = 'modifier-btn';
+      btn.innerHTML = `<span class="modifier-emoji">${cls.emoji}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span style="color:#555;font-size:9px;">${cls.statPreview}</span></div>`;
+      btn.addEventListener('click', () => {
+        this.classModal.style.display = 'none';
+        onSelect(cls.id);
+      });
+      container.appendChild(btn);
+    }
+    this.classModal.style.display = 'flex';
+  }
+
+  showFloorEvent(event: FloorEventDef, onChoice: (index: number) => void): void {
+    (document.getElementById('floor-event-emoji') as HTMLElement).textContent  = event.emoji;
+    (document.getElementById('floor-event-title') as HTMLElement).textContent  = event.title;
+    (document.getElementById('floor-event-flavor') as HTMLElement).textContent = event.flavor;
+    const container = document.getElementById('floor-event-choices')!;
+    container.innerHTML = '';
+    event.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'modifier-btn';
+      btn.innerHTML = `<div class="modifier-info"><strong>${opt.label}</strong><span>${opt.desc}</span></div>`;
+      btn.addEventListener('click', () => {
+        this.floorEventModal.style.display = 'none';
+        onChoice(i);
+      });
+      container.appendChild(btn);
+    });
+    this.floorEventModal.style.display = 'flex';
   }
 
   showBossWarning(boss: BossDef, onDone: () => void): void {
