@@ -189,6 +189,9 @@ export interface BossDef {
   atkMult: number;
   xpReward: number;
   flavorText: string;
+  biomeId?: string;
+  onHalfHp?: (game: import('./game').Game) => void;
+  onDeath?:  (game: import('./game').Game, x: number, y: number) => void;
 }
 
 export interface ItemDef {

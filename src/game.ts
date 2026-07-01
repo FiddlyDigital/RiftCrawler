@@ -96,6 +96,11 @@ export class Game {
   private merchantTiles: Array<{ x: number; y: number }> = [];
   private luckyBlockCount = 0;
 
+  // Active boss mechanics (set at spawn, cleared on floor reset)
+  private activeBossOnHalfHp: ((game: Game) => void) | null = null;
+  private activeBossOnDeath:   ((game: Game, x: number, y: number) => void) | null = null;
+  private bossHalfHpTriggered = false;
+
   readonly cb: GameCallbacks;
 
   constructor(callbacks: GameCallbacks) {
@@ -392,6 +397,93 @@ export class Game {
     this.items.push(new Item(x, y, def.char, def.name, 'relic', 0, undefined, def));
   }
 
+  // Called by Crystal Golem onDeath
+  spawnCrystalShards(bx: number, by: number): void {
+    const shardHp  = 8 + this.dungeonLevel * 2;
+    const shardAtk = 3 + Math.floor(this.dungeonLevel * 0.5);
+    const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    let spawned = 0;
+    for (const [dx, dy] of dirs) {
+      if (spawned >= 2) break;
+      const sx = bx + dx, sy = by + dy;
+      if (this.isValidMove(sx, sy) && !this.getMonsterAt(sx, sy)) {
+        this.monsters.push(new Monster(sx, sy, '🔷', 'Crystal Shard', shardHp, shardHp, shardAtk, 30));
+        this.cb.onParticle(sx, sy, '💎', '#80d8ff');
+        spawned++;
+      }
+    }
+    this.cb.log('💎 The Crystal Golem shatters — shards emerge!', 'log-boss');
+  }
+
+  // Called by Rift Tyrant onHalfHp
+  triggerGravityBurst(): void {
+    this.blockY = Math.max(0, this.blockY - 5);
+    this.cb.log('⚡ Rift Tyrant tears the weave — gravity surges!', 'log-boss');
+    this.cb.onParticle(this.player.x, this.player.y, '⚡ SURGE!', '#aa00ff');
+    this.cb.onAudio?.('bossWarn');
+  }
+
+  // ── Dungeon rooms ────────────────────────────────────────────────────────
+
+  private maybeSpawnDungeonRoom(): void {
+    if (Math.random() > 0.25) return;
+    const roll = Math.random();
+    if (roll < 0.33)      this.spawnRoom('vault');
+    else if (roll < 0.66) this.spawnRoom('den');
+    else                  this.spawnRoom('shrine');
+  }
+
+  private getRandomMonsterKey(): string {
+    const all = ['rat', 'skeleton', 'goblin_archer', 'cave_slime', 'berserker_orc', 'plague_bat'];
+    const maxIdx = Math.min(all.length - 1, 1 + Math.floor(this.dungeonLevel / 3));
+    return all[Math.floor(Math.random() * (maxIdx + 1))]!;
+  }
+
+  private spawnRoom(type: 'vault' | 'den' | 'shrine'): void {
+    const CONFIGS = {
+      vault:  { w: 4, h: 3, color: '#3d2b00' },
+      den:    { w: 4, h: 3, color: '#2d0000' },
+      shrine: { w: 3, h: 2, color: '#002d30' },
+    };
+    const rc = CONFIGS[type];
+    // Place in mid-map: y=17..21, safely above starting platform (y=23)
+    const roomX = Math.floor(Math.random() * (CONFIG.COLS - rc.w));
+    const roomY = 17 + Math.floor(Math.random() * 5);
+    const cx = roomX + Math.floor(rc.w / 2);
+    const cy = roomY + Math.floor(rc.h / 2);
+
+    for (let dx = 0; dx < rc.w; dx++) {
+      for (let dy = 0; dy < rc.h; dy++) {
+        const x = roomX + dx, y = roomY + dy;
+        this.map[x]![y]    = Tile.FLOOR;
+        this.colors[x]![y] = rc.color;
+      }
+    }
+
+    if (type === 'vault') {
+      const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
+      this.items.push(new Item(roomX + 1, cy, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
+      const tier = Math.min(3, 1 + Math.floor(this.dungeonLevel / 4));
+      const eligible = EQUIPMENT.filter(e => e.tier <= tier);
+      const equipDef = eligible[Math.floor(Math.random() * eligible.length)]!;
+      this.items.push(new Item(roomX + 2, cy, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
+      this.spawnMonster(this.getRandomMonsterKey(), cx, roomY);
+      this.cb.log('💰 A Treasure Vault lies ahead — guarded.', 'log-perk');
+    } else if (type === 'den') {
+      const positions: Array<[number, number]> = [[0, 0], [1, 0], [2, 0], [1, 1]];
+      for (const [pdx, pdy] of positions) {
+        this.spawnMonster(this.getRandomMonsterKey(), roomX + pdx, roomY + pdy);
+      }
+      this.cb.log('☠️ A Monster Den lurks in the shadows...', 'log-damage');
+    } else {
+      const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
+      this.items.push(new Item(cx, cy, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
+      const potionDef = ITEMS['potion']!;
+      this.items.push(new Item(cx - 1, cy, potionDef.char, potionDef.name, potionDef.type, potionDef.statValue));
+      this.cb.log('✨ An Ancient Shrine whispers from the dark...', 'log-perk');
+    }
+  }
+
   private triggerBomb(cx: number, cy: number): void {
     this.cb.log('💣 BOOM! Bomb block detonated!', 'log-tetris');
     for (let dx = -1; dx <= 1; dx++) {
@@ -419,12 +511,19 @@ export class Game {
     if (cell === Cell.MONSTER_BAT)    { this.spawnMonster('plague_bat',     tx, ty); return; }
 
     if (cell === Cell.BOSS) {
-      const bossDef = BOSSES[(Math.floor(this.dungeonLevel / 5) - 1) % BOSSES.length]!;
+      // Prefer a biome-specific boss; fall back to generic pool
+      const biomeBosses   = BOSSES.filter(b => b.biomeId === this.biomeId);
+      const genericBosses = BOSSES.filter(b => !b.biomeId);
+      const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
+      const bossDef = bossPool[(Math.floor(this.dungeonLevel / 5) - 1) % bossPool.length]!;
       const baseHp = 18 + (this.dungeonLevel - 1) * 3;
       const baseAtk = 5 + (this.dungeonLevel - 1);
       const hp = Math.floor(baseHp * bossDef.hpMult);
       const atk = Math.floor(baseAtk * bossDef.atkMult);
       this.monsters.push(new Monster(tx, ty, bossDef.char, bossDef.name, hp, hp, atk, bossDef.xpReward, true));
+      this.activeBossOnHalfHp = bossDef.onHalfHp ?? null;
+      this.activeBossOnDeath   = bossDef.onDeath  ?? null;
+      this.bossHalfHpTriggered = false;
       this.cb.log(`⚠️ ${bossDef.flavorText} ${bossDef.name} descends!`, 'log-boss');
       this.cb.onParticle(tx, ty, '⚠️ BOSS', '#ff0000');
       // Boss cinematic pause
@@ -583,9 +682,13 @@ export class Game {
     this.items = [];
     this.merchantTiles = [];
     this.hazards = [];
+    this.activeBossOnHalfHp = null;
+    this.activeBossOnDeath   = null;
+    this.bossHalfHpTriggered = false;
     this.player.x = 4;
     this.player.y = 23;
     this.generateStartPlatform();
+    this.maybeSpawnDungeonRoom();
     this.spawnBlock();
     this.updateVisibility();
   }
@@ -760,7 +863,20 @@ export class Game {
         this.cb.log(`${monster.name} is stunned!`, 'log-success');
       }
 
-      if (monster.hp <= 0) killMonster(monster, this);
+      // Biome boss half-HP mechanic
+      if (monster.isBoss && !this.bossHalfHpTriggered && monster.hp <= monster.maxHp * 0.5 && this.activeBossOnHalfHp) {
+        this.bossHalfHpTriggered = true;
+        this.activeBossOnHalfHp(this);
+      }
+
+      if (monster.hp <= 0) {
+        const bx = monster.x, by = monster.y;
+        killMonster(monster, this);
+        if (monster.isBoss && this.activeBossOnDeath) {
+          this.activeBossOnDeath(this, bx, by);
+          this.activeBossOnDeath = null;
+        }
+      }
       this.advanceTurn(); return;
     }
 

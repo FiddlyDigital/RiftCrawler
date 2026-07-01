@@ -124,14 +124,37 @@ export const MONSTER_DEFS: MonsterDef[] = Object.values(MONSTERS);
 
 // ── Bosses ────────────────────────────────────────────────────────────────────
 
-export const BOSSES: BossDef[] = (bossesData as RawBoss[]).map(raw => ({
-  char:       vis(raw.visualAsset),
-  name:       raw.displayName,
-  hpMult:     raw.hpMult,
-  atkMult:    raw.atkMult,
-  xpReward:   raw.xpValue,
-  flavorText: raw.flavorText,
-}));
+export const BOSSES: BossDef[] = [
+  ...(bossesData as RawBoss[]).map(raw => ({
+    char:       vis(raw.visualAsset),
+    name:       raw.displayName,
+    hpMult:     raw.hpMult,
+    atkMult:    raw.atkMult,
+    xpReward:   raw.xpValue,
+    flavorText: raw.flavorText,
+  })),
+  // Biome-specific bosses — never appear outside their biome
+  {
+    biomeId:    'cavern',
+    char:       '💎',
+    name:       'Crystal Golem',
+    hpMult:     4.5,
+    atkMult:    2.0,
+    xpReward:   240,
+    flavorText: 'It cannot be destroyed... only shattered.',
+    onDeath:    (game, x, y) => game.spawnCrystalShards(x, y),
+  },
+  {
+    biomeId:    'rift',
+    char:       '👁️',
+    name:       'Rift Tyrant',
+    hpMult:     5.0,
+    atkMult:    2.5,
+    xpReward:   280,
+    flavorText: 'Reality bends around it...',
+    onHalfHp:   (game) => game.triggerGravityBurst(),
+  },
+];
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 
