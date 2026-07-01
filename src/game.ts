@@ -4,7 +4,7 @@ import { Player, Monster, Item, Equipment } from './entities';
 import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type PerkDef, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
-import { killMonster, triggerDeath } from './systems/combat';
+import { killMonster, triggerDeath, playerAttackMonster } from './systems/combat';
 import { processMonsterTurns } from './systems/monsterAI';
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
@@ -380,6 +380,7 @@ export class Game {
       def.statusInflict,
     );
     m.isElite = isElite;
+    m.combatLevel = Math.min(6, def.combatLevel + (isElite ? 1 : 0));
     if (this.frozenRift) {
       m.statuses.push({ type: 'stun', duration: 1, power: 0 });
     }
@@ -407,7 +408,9 @@ export class Game {
       if (spawned >= 2) break;
       const sx = bx + dx, sy = by + dy;
       if (this.isValidMove(sx, sy) && !this.getMonsterAt(sx, sy)) {
-        this.monsters.push(new Monster(sx, sy, '🔷', 'Crystal Shard', shardHp, shardHp, shardAtk, 30));
+        const shard = new Monster(sx, sy, '🔷', 'Crystal Shard', shardHp, shardHp, shardAtk, 30);
+        shard.combatLevel = 3;
+        this.monsters.push(shard);
         this.cb.onParticle(sx, sy, '💎', '#80d8ff');
         spawned++;
       }
@@ -520,7 +523,9 @@ export class Game {
       const baseAtk = 5 + (this.dungeonLevel - 1);
       const hp = Math.floor(baseHp * bossDef.hpMult);
       const atk = Math.floor(baseAtk * bossDef.atkMult);
-      this.monsters.push(new Monster(tx, ty, bossDef.char, bossDef.name, hp, hp, atk, bossDef.xpReward, true));
+      const boss = new Monster(tx, ty, bossDef.char, bossDef.name, hp, hp, atk, bossDef.xpReward, true);
+      boss.combatLevel = 5;
+      this.monsters.push(boss);
       this.activeBossOnHalfHp = bossDef.onHalfHp ?? null;
       this.activeBossOnDeath   = bossDef.onDeath  ?? null;
       this.bossHalfHpTriggered = false;
@@ -841,27 +846,18 @@ export class Game {
       return;
     }
 
-    // Attack monster — crit every N moves if Mana Beads active
+    // Attack monster — Mana Beads forces a critical every N attacks
     const monster = this.getMonsterAt(nx, ny);
     if (monster) {
-      let dmg = this.player.totalAtk;
+      let forceCrit = false;
       if (this.player.critEvery > 0) {
         this.player.critCount++;
         if (this.player.critCount >= this.player.critEvery) {
-          dmg = dmg * 2;
+          forceCrit = true;
           this.player.critCount = 0;
-          this.cb.onParticle(nx, ny, '💥 CRIT!', '#ffd54f');
         }
       }
-      monster.hp -= dmg;
-      this.cb.log(`Hit ${monster.name} for ${dmg}.${monster.isBoss ? ' (BOSS)' : ''}`, 'log-success');
-      this.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#69f0ae');
-      this.cb.onAudio?.('hit');
-
-      if (Math.random() < 0.10 && !monster.isStunned) {
-        monster.statuses.push({ type: 'stun', duration: 1, power: 0 });
-        this.cb.log(`${monster.name} is stunned!`, 'log-success');
-      }
+      playerAttackMonster(monster, this, forceCrit);
 
       // Biome boss half-HP mechanic
       if (monster.isBoss && !this.bossHalfHpTriggered && monster.hp <= monster.maxHp * 0.5 && this.activeBossOnHalfHp) {

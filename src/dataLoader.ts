@@ -39,6 +39,7 @@ export interface MerchantItem {
 
 interface RawMonster {
   id: string; displayName: string; visualAsset: string; cellTypeId: string;
+  combatLevel?: number;
   baseHp: number; baseAtk: number;
   hpScaleCoefficient: number; atkScaleCoefficient: number;
   xpValue: number; spawnMsg: string;
@@ -96,15 +97,16 @@ export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(
   Object.entries(monstersData as Record<string, RawMonster>).map(([key, raw]) => [
     key,
     {
-      char:        vis(raw.visualAsset),
-      name:        raw.displayName,
-      baseHp:      raw.baseHp,
-      hpPerLevel:  raw.hpScaleCoefficient,
-      baseAtk:     raw.baseAtk,
-      atkPerLevel: raw.atkScaleCoefficient,
-      cellState:   CELL_MAP[raw.cellTypeId] ?? Cell.FLOOR,
-      spawnMsg:    raw.spawnMsg,
-      xpReward:    raw.xpValue,
+      char:         vis(raw.visualAsset),
+      name:         raw.displayName,
+      combatLevel:  raw.combatLevel ?? 2,
+      baseHp:       raw.baseHp,
+      hpPerLevel:   raw.hpScaleCoefficient,
+      baseAtk:      raw.baseAtk,
+      atkPerLevel:  raw.atkScaleCoefficient,
+      cellState:    CELL_MAP[raw.cellTypeId] ?? Cell.FLOOR,
+      spawnMsg:     raw.spawnMsg,
+      xpReward:     raw.xpValue,
       statusInflict: raw.statusInflict
         ? {
             type:     raw.statusInflict.type as StatusType,
@@ -419,11 +421,12 @@ export const CLASSES: ClassDef[] = [
     emoji: '⚔️',
     name: 'Warrior',
     tagline: 'Front-line fighter. Tough and straightforward.',
-    statPreview: '+20 HP  −2 ATK  +3 DEF',
+    statPreview: '+20 HP  −2 ATK  +3 DEF  D8 dice',
     apply: (p: Player) => {
       p.maxHp += 20; p.hp += 20;
       p.atk = Math.max(1, p.atk - 2);
       p.damageReduction += 3;
+      p.baseCombatLevel = 3;
     },
   },
   {
@@ -431,12 +434,13 @@ export const CLASSES: ClassDef[] = [
     emoji: '🗡️',
     name: 'Rogue',
     tagline: 'Strike fast, stay elusive. High risk, high reward.',
-    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th',
+    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th  D6 dice',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
       p.atk += 3;
       p.dodgeChance += 0.20;
       p.critEvery = 5;
+      p.baseCombatLevel = 2;
     },
   },
   {
@@ -444,11 +448,12 @@ export const CLASSES: ClassDef[] = [
     emoji: '🔮',
     name: 'Mage',
     tagline: 'Harness rift energy. Line clears deal extra damage.',
-    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg',
+    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg  D6 dice',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
       p.visionRadius += 2;
       p.lineClearDamage += 5;
+      p.baseCombatLevel = 2;
     },
   },
   {
@@ -456,12 +461,13 @@ export const CLASSES: ClassDef[] = [
     emoji: '✨',
     name: 'Priest',
     tagline: 'Survive through healing. Regenerate and siphon life.',
-    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill',
+    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill  D8 dice',
     apply: (p: Player) => {
       p.maxHp += 10; p.hp += 10;
       p.atk = Math.max(1, p.atk - 1);
       p.regenPerTick += 1;
       p.killHeal += 4;
+      p.baseCombatLevel = 3;
     },
   },
 ];

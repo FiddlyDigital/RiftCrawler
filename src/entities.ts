@@ -34,6 +34,18 @@ export class Player {
   damageReduction = 0;
   tickSlowPercent = 0;
 
+  // Combat dice level (1=D4 … 6=D20); overridden by class, scales with playerLevel
+  baseCombatLevel = 2;
+
+  get combatLevel(): number {
+    const lvl = this.playerLevel;
+    if (lvl >= 9) return 6;
+    if (lvl >= 7) return 5;
+    if (lvl >= 5) return 4;
+    if (lvl >= 3) return Math.max(this.baseCombatLevel, 3);
+    return this.baseCombatLevel;
+  }
+
   // Relic bonuses
   dodgeChance = 0;
   dodgeHeal = 0;
@@ -108,6 +120,7 @@ export class Monster {
   statuses: StatusEffect[] = [];
   isBoss: boolean;
   isElite = false;
+  combatLevel = 2;
 
   constructor(
     public x: number,

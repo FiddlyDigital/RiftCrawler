@@ -169,6 +169,7 @@ export interface RunRecord {
 export interface MonsterDef {
   char: string;
   name: string;
+  combatLevel: number;
   baseHp: number;
   hpPerLevel: number;
   baseAtk: number;
