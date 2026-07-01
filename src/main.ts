@@ -2,7 +2,7 @@ import './style.css';
 import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
-import { bindKeyboard, bindButtons, bindCanvasInspect } from './input';
+import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
 import { getHighScore, recordRunEnd, loadHistory } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
 import { MERCHANT_STOCK } from './content';
@@ -144,6 +144,7 @@ function launchWithModifier(onReady: () => void): void {
 startGame(true); // initialise paused — start screen sits on top
 bindKeyboard(() => game);
 bindButtons(() => game);
+bindGamepad(() => game);
 
 let lastInspectTile: { x: number; y: number } | null = null;
 bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
