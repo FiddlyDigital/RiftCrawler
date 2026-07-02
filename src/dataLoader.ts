@@ -2,14 +2,12 @@ import visualRegistryData from './data/visual-registry.json';
 import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
 import itemsData          from './data/items.json';
-import equipmentData      from './data/equipment.json';
 import perksData          from './data/perks.json';
 import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility } from './types';
-import { Equipment } from './entities';
+import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef } from './types';
 import type { Player } from './entities';
-import type { MonsterDef, BossDef, ItemDef, EquipmentDef } from './types';
+import type { MonsterDef, BossDef, ItemDef } from './types';
 
 // ── Visual registry ───────────────────────────────────────────────────────────
 
@@ -59,11 +57,6 @@ interface RawItem {
   effectType: string; effectValue: number;
 }
 
-interface RawEquipment {
-  id: string; displayName: string; visualAsset: string;
-  slot: string; atkBonus: number; defBonus: number; tier: number;
-}
-
 interface RawPerk {
   id: string; name: string; desc: string; effectType: string; effectValue: number;
 }
@@ -84,7 +77,6 @@ const CELL_MAP: Record<string, CellValue> = {
   MONSTER_SKEL:   Cell.MONSTER_SKEL,
   ITEM_POTION:    Cell.ITEM_POTION,
   ITEM_SWORD:     Cell.ITEM_SWORD,
-  ITEM_EQUIPMENT: Cell.ITEM_EQUIPMENT,
   MONSTER_ARCHER: Cell.MONSTER_ARCHER,
   MONSTER_SLIME:  Cell.MONSTER_SLIME,
   MONSTER_ORC:    Cell.MONSTER_ORC,
@@ -182,16 +174,64 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries(
   ])
 );
 
-// ── Equipment ─────────────────────────────────────────────────────────────────
+// ── Boons ─────────────────────────────────────────────────────────────────────
 
-export const EQUIPMENT: EquipmentDef[] = (equipmentData as RawEquipment[]).map(raw => ({
-  char:     vis(raw.visualAsset),
-  name:     raw.displayName,
-  slot:     raw.slot as EquipSlot,
-  atkBonus: raw.atkBonus,
-  defBonus: raw.defBonus,
-  tier:     raw.tier,
-}));
+export const BOONS: BoonDef[] = [
+  // ── Tier I — Shards ──────────────────────────────────────────────────────
+  { id: 'whetstone',     char: '⚔️',  name: 'Whetstone',     tier: 1, desc: '+2 ATK per stack',              onAdd: (p) => { p.atk += 2; } },
+  { id: 'vital_crystal', char: '❤️',  name: 'Vital Crystal', tier: 1, desc: '+8 Max HP per stack',           onAdd: (p) => { p.maxHp += 8; p.hp += 8; } },
+  { id: 'iron_scale',    char: '🛡️',  name: 'Iron Scale',    tier: 1, desc: '+1 damage reduction per stack', onAdd: (p) => { p.damageReduction += 1; } },
+  { id: 'mending_drip',  char: '💧',  name: 'Mending Drip',  tier: 1, desc: '+0.5 HP regen/tick per stack',  onAdd: (p) => { p.regenPerTick += 0.5; } },
+  { id: 'sight_shard',   char: '👁️',  name: 'Sight Shard',   tier: 1, desc: '+1 vision radius per stack',   onAdd: (p) => { p.visionRadius += 1; } },
+  { id: 'gravity_well',  char: '⏳',  name: 'Gravity Well',  tier: 1, desc: '5% slower gravity per stack',   onAdd: (p) => { p.tickSlowPercent -= 5; } },
+  // ── Tier II — Cores ───────────────────────────────────────────────────────
+  { id: 'bloodtap',  char: '🩸', name: 'Bloodtap Core',  tier: 2, desc: '+3 HP on kill per stack',           onAdd: (p) => { p.killHeal += 3; } },
+  { id: 'thornweave', char: '🌵', name: 'Thornweave Core', tier: 2, desc: '+3 thorn dmg to attacker per stack', onAdd: (p) => { p.thornDamage += 3; } },
+  { id: 'riftblast',  char: '💥', name: 'Riftblast Core', tier: 2, desc: '+4 line-clear monster dmg per stack', onAdd: (p) => { p.lineClearDamage += 4; } },
+  { id: 'ghost_step', char: '🌀', name: 'Ghost Step',     tier: 2, desc: '+10% dodge (max 75%) per stack',   onAdd: (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.10); } },
+  { id: 'cruelty',    char: '⚡', name: 'Cruelty Core',   tier: 2, desc: '+1 ATK per kill this floor (per stack)', onAdd: (p) => { p.killAtkBonus += 1; } },
+  {
+    id: 'void_loop', char: '🔮', name: 'Void Loop', tier: 2, desc: 'Every Nth attack crits (N decreases per stack)',
+    onAdd: (p, stacks) => {
+      if (stacks === 1) { p.critEvery = 6; p.critCount = 0; }
+      else p.critEvery = Math.max(2, p.critEvery - 1);
+    },
+  },
+  // ── Tier III — Runes ─────────────────────────────────────────────────────
+  { id: 'annihilation', char: '☄️', name: 'Annihilation Rune', tier: 3, desc: 'Line clears deal floor×4 dmg to ALL monsters per stack', onAdd: (p) => { p.lineClearAoeDmgMult += 4; } },
+  { id: 'deathward',    char: '💀', name: 'Deathward Rune',    tier: 3, desc: 'Survive a killing blow once per floor per stack',         onAdd: (p) => { p.deathwardCharges += 1; } },
+  { id: 'rift_tide',    char: '🌊', name: 'Rift Tide',         tier: 3, desc: '20% slower gravity, +0.3× line-clear score per stack',    onAdd: (p) => { p.tickSlowPercent -= 20; p.lineClearScoreMult += 0.3; } },
+  { id: 'void_prism',   char: '🌌', name: 'Void Prism',        tier: 3, desc: '+1 ATK & +2 HP per distinct boon per stack',              onAdd: (_p, _s) => { /* handled by recomputeVoidPrism */ } },
+];
+
+export const BOONS_BY_TIER: Record<1 | 2 | 3, BoonDef[]> = {
+  1: BOONS.filter(b => b.tier === 1),
+  2: BOONS.filter(b => b.tier === 2),
+  3: BOONS.filter(b => b.tier === 3),
+};
+
+export function getBoonTierForFloor(floor: number): 1 | 2 | 3 {
+  const r = Math.random();
+  if (floor <= 3) {
+    if (r < 0.82) return 1;
+    if (r < 0.98) return 2;
+    return 3;
+  }
+  if (floor <= 7) {
+    if (r < 0.40) return 1;
+    if (r < 0.85) return 2;
+    return 3;
+  }
+  if (r < 0.15) return 1;
+  if (r < 0.55) return 2;
+  return 3;
+}
+
+export function getThreeRandomBoons(pool: BoonDef[]): BoonDef[] {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  if (shuffled.length <= 3) return shuffled;
+  return shuffled.slice(0, 3);
+}
 
 // ── Perk effect resolvers ─────────────────────────────────────────────────────
 
@@ -599,16 +639,14 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     flavor: 'The corpse of a warrior lies here, still clutching their belongings.',
     options: [
       {
-        label: 'Take their gear',
-        desc: 'Equip a random piece of equipment.',
+        label: 'Take their boon',
+        desc: 'Absorb the power of a fallen hero.',
         apply: (game) => {
-          const tier = Math.min(3, 1 + Math.floor(game.dungeonLevel / 3));
-          const eligible = EQUIPMENT.filter(e => e.tier <= tier);
-          const def = eligible[Math.floor(Math.random() * eligible.length)]!;
-          const prev = game.player.equip(new Equipment(def));
-          return prev
-            ? `Equipped ${def.name}, replacing ${prev.name}.`
-            : `Equipped ${def.name}!`;
+          const tier = game.dungeonLevel >= 5 ? 2 : 1;
+          const pool = BOONS_BY_TIER[tier as 1 | 2];
+          const def = pool[Math.floor(Math.random() * pool.length)]!;
+          game.player.addBoon(def);
+          return `You absorb the champion's power: ${def.name}!`;
         },
       },
       {

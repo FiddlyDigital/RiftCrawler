@@ -1,16 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef, RelicDef, RangedAbility } from './types';
-
-export class Equipment {
-  constructor(
-    public readonly def: EquipmentDef,
-  ) {}
-  get name(): string { return this.def.name; }
-  get char(): string { return this.def.char; }
-  get slot(): EquipSlot { return this.def.slot; }
-  get atkBonus(): number { return this.def.atkBonus; }
-  get defBonus(): number { return this.def.defBonus; }
-}
+import type { StatusEffect, MonsterDef, RelicDef, RangedAbility, BoonDef } from './types';
 
 export class Player {
   x: number;
@@ -67,12 +56,18 @@ export class Player {
   // Status effects
   statuses: StatusEffect[] = [];
 
-  // Equipment
-  weapon: Equipment | null = null;
-  armor: Equipment | null = null;
-
   // Relics (max 2)
   relics: RelicDef[] = [];
+
+  // Boons
+  boons: Array<{ id: string; stacks: number; def: BoonDef }> = [];
+  thornDamage = 0;
+  killAtkBonus = 0;
+  killAtkFloorBonus = 0;
+  lineClearAoeDmgMult = 0;
+  lineClearScoreMult = 1;
+  deathwardCharges = 0;
+  voidPrismBonus = { atk: 0, hp: 0 };
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -83,11 +78,11 @@ export class Player {
   }
 
   get totalAtk(): number {
-    return this.atk + (this.weapon?.atkBonus ?? 0);
+    return this.atk;
   }
 
   get totalDef(): number {
-    return (this.armor?.defBonus ?? 0) + this.damageReduction;
+    return this.damageReduction;
   }
 
   get isStunned(): boolean {
@@ -117,11 +112,24 @@ export class Player {
     return false;
   }
 
-  equip(equip: Equipment): Equipment | null {
-    const prev = equip.slot === 'weapon' ? this.weapon : this.armor;
-    if (equip.slot === 'weapon') this.weapon = equip;
-    else this.armor = equip;
-    return prev;
+  addBoon(def: BoonDef): void {
+    const entry = this.boons.find(b => b.id === def.id);
+    const newStacks = entry ? ++entry.stacks : 1;
+    if (!entry) this.boons.push({ id: def.id, stacks: newStacks, def });
+    def.onAdd(this, newStacks);
+    this.recomputeVoidPrism();
+  }
+
+  private recomputeVoidPrism(): void {
+    const prism = this.boons.find(b => b.id === 'void_prism');
+    if (!prism) return;
+    const distinct = this.boons.length;
+    const bonus = distinct * prism.stacks;
+    this.atk += bonus - this.voidPrismBonus.atk;
+    const hpDelta = (bonus * 2) - this.voidPrismBonus.hp;
+    this.maxHp += hpDelta;
+    this.hp = Math.min(this.hp + hpDelta, this.maxHp);
+    this.voidPrismBonus = { atk: bonus, hp: bonus * 2 };
   }
 }
 
@@ -160,9 +168,8 @@ export class Item {
     public y: number,
     public readonly char: string,
     public readonly name: string,
-    public readonly type: 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'weapon' | 'armor' | 'relic',
+    public readonly type: 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'relic',
     public readonly statValue: number,
-    public readonly equipDef?: EquipmentDef,
     public readonly relicDef?: RelicDef,
   ) {}
 }

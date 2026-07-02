@@ -33,11 +33,10 @@
         <div style="margin-top:2px;font-size:9px;color:#aaa;">Tick: <span id="stat-rate">1500ms</span></div>
       </div>
 
-      <!-- Equipment -->
+      <!-- Boons & Relics -->
       <div class="sidebar-card">
-        <div class="card-title">Equipment</div>
-        <div id="weapon-slot" style="font-size:9px;margin-bottom:1px;">⚔️ —</div>
-        <div id="armor-slot"  style="font-size:9px;">🛡️ —</div>
+        <div class="card-title">Boons</div>
+        <div id="boon-panel" class="boon-grid">—</div>
         <div id="relic-slots" style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap;min-height:14px;"></div>
         <div style="margin-top:4px;">
           <div style="font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:.5px;">Pouch (U)</div>
@@ -251,6 +250,15 @@
     <div class="modal-title" id="class-title" style="color:#7c4dff;font-size:20px;">CHOOSE YOUR CLASS</div>
     <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Your class shapes the entire run. There is no going back.</p>
     <div id="class-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Altar boon selection modal -->
+<div id="altar-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="altar-title">
+  <div class="modal-card">
+    <div class="modal-title" id="altar-title" style="font-size:18px;color:#ce93d8;">⛩️ Minor Altar — Choose a Boon</div>
+    <p style="color:#888;margin:4px 0 12px 0;font-size:12px;">Boons stack — pick the same one again to amplify its effect.</p>
+    <div id="altar-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 

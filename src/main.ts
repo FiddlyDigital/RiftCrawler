@@ -133,6 +133,15 @@ function startGame(startPaused = false): void {
         startTick();
       });
     },
+
+    onOpenAltar: (tier, choices, onChoice) => {
+      stopTick();
+      audio.playPerk();
+      ui.showAltarModal(tier, choices, (index) => {
+        onChoice(index);
+        startTick();
+      });
+    },
   });
 
   if (startPaused) game.paused = true;

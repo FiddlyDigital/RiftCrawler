@@ -213,6 +213,16 @@ export class Renderer {
               ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
               ctx.fillText('🏪', x * TS + TS / 2, y * TS + TS / 2);
             }
+          } else {
+            const altar = this.getAltarAt(game, x, y);
+            if (altar && visible) {
+              const rgb = altar.tier === 3 ? '255,180,0' : altar.tier === 2 ? '41,182,246' : '156,39,176';
+              this.drawPulseGlow(x, y, rgb);
+              ctx.font = `${TS * 0.65}px Arial`;
+              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+              ctx.fillText('⛩️', x * TS + TS / 2, y * TS + TS / 2);
+              ctx.font = `${TS * 0.7}px Arial`;
+            }
           }
         } else {
           ctx.fillStyle = '#06060a';
@@ -241,7 +251,7 @@ export class Renderer {
         const tx = game.blockX + c, ty = game.blockY + r;
         if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
 
-        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b5e20' : game.blockColor;
+        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b5e20' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         if (cell === Cell.BOSS) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
@@ -519,6 +529,11 @@ export class Renderer {
     return (game as unknown as { merchantTiles: Array<{ x: number; y: number }> })
       .merchantTiles.some((t: { x: number; y: number }) => t.x === x && t.y === y);
   }
+
+  private getAltarAt(game: Game, x: number, y: number): { tier: 1 | 2 | 3 } | undefined {
+    return (game as unknown as { altarTiles: Array<{ x: number; y: number; tier: 1 | 2 | 3 }> })
+      .altarTiles.find((a: { x: number; y: number }) => a.x === x && a.y === y);
+  }
 }
 
 const CELL_EMOJI: Partial<Record<number, string>> = {
@@ -534,8 +549,8 @@ const CELL_EMOJI: Partial<Record<number, string>> = {
   [Cell.BOMB]:           '💣',
   [Cell.MERCHANT]:       '🏪',
   [Cell.BOSS]:           '⚠️',
-  [Cell.ITEM_EQUIPMENT]: '📦',
   [Cell.RELIC]:          '🔮',
+  [Cell.ALTAR]:          '⛩️',
   [Cell.TRAP_SPIKE]:     '⬆️',
   [Cell.TRAP_SMOKE]:     '💨',
   [Cell.TRAP_TELEPORT]:  '🌀',

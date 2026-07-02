@@ -1,7 +1,7 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo } from './types';
-import { Player, Monster, Item, Equipment } from './entities';
-import { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type PerkDef, type ClassDef } from './content';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo, type AltarTile } from './types';
+import { Player, Monster, Item } from './entities';
+import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, PERKS, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type PerkDef, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, triggerDeath, playerAttackMonster } from './systems/combat';
@@ -110,6 +110,7 @@ export class Game {
   public comboCount = 0;
   private lastLineClearMs = 0;
   private merchantTiles: Array<{ x: number; y: number }> = [];
+  public altarTiles: AltarTile[] = [];
   private luckyBlockCount = 0;
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
@@ -214,6 +215,7 @@ export class Game {
     let bossInjected = false;
     let bombInjected = false;
     let merchantInjected = false;
+    let altarInjected = false;
     let trapInjected = false;
     let relicInjected = false;
     let luckyItemInjected = false;
@@ -239,7 +241,7 @@ export class Game {
         // Lucky guaranteed item
         if (luckyItemThisBlock && !luckyItemInjected) {
           luckyItemInjected = true;
-          return Math.random() < 0.6 ? Cell.ITEM_POTION : Cell.ITEM_EQUIPMENT;
+          return Math.random() < 0.6 ? Cell.ITEM_POTION : Cell.ITEM_SWORD;
         }
 
         // Special blocks
@@ -250,6 +252,10 @@ export class Game {
         if (!merchantInjected && Math.random() < 0.04) {
           merchantInjected = true;
           return Cell.MERCHANT;
+        }
+        if (!altarInjected && Math.random() < 0.035) {
+          altarInjected = true;
+          return Cell.ALTAR;
         }
         if (!relicInjected && Math.random() < 0.03) {
           relicInjected = true;
@@ -276,7 +282,6 @@ export class Game {
           return Cell.MONSTER_BAT;
         }
         if (rand < monsterChance + 0.09) return Math.random() < 0.6 ? Cell.ITEM_POTION : Cell.ITEM_SWORD;
-        if (rand < monsterChance + 0.11) return Cell.ITEM_EQUIPMENT;
         return Cell.FLOOR;
       }),
     );
@@ -312,11 +317,15 @@ export class Game {
 
   isValidMove(x: number, y: number): boolean {
     if (x < 0 || x >= CONFIG.COLS || y < 0 || y >= CONFIG.ROWS) return false;
-    return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isMerchantTile(x, y);
+    return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isMerchantTile(x, y) || this.isAltarTile(x, y);
   }
 
   private isMerchantTile(x: number, y: number): boolean {
     return this.merchantTiles.some(t => t.x === x && t.y === y);
+  }
+
+  private isAltarTile(x: number, y: number): boolean {
+    return this.altarTiles.some(a => a.x === x && a.y === y);
   }
 
   getHazardAt(x: number, y: number): HazardTile | undefined {
@@ -351,6 +360,13 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1a4a1a';
           this.merchantTiles.push({ x: tx, y: ty });
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.ALTAR) {
+          const tier = getBoonTierForFloor(this.dungeonLevel);
+          const altarColor = tier === 3 ? '#2a1a00' : tier === 2 ? '#001a2a' : '#1a0a2a';
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = altarColor;
+          this.altarTiles.push({ x: tx, y: ty, tier });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -401,18 +417,17 @@ export class Game {
         this.cb.log('⬆️ Spike Field — fires every 5 ticks!', 'log-tetris');
       } else if (this.currentType === 'O' && Math.random() < (this.activeClassId === 'architect' ? 0.80 : 0.40)) {
         const eligible = lockedFloorCells.filter(fc =>
-          !this.getItemAt(fc.x, fc.y) && !this.getMonsterAt(fc.x, fc.y)
+          !this.getItemAt(fc.x, fc.y) && !this.getMonsterAt(fc.x, fc.y) &&
+          !this.altarTiles.some(a => a.x === fc.x && a.y === fc.y)
         );
         if (eligible.length > 0) {
           const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
-          const tier = Math.min(3, 1 + Math.floor(this.dungeonLevel / 4));
-          const eqPool = EQUIPMENT.filter(e => e.tier <= tier);
-          if (eqPool.length > 0) {
-            const equipDef = eqPool[Math.floor(Math.random() * eqPool.length)]!;
-            this.items.push(new Item(fc.x, fc.y, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
-            this.cb.log('💛 Vault sealed — loot uncovered!', 'log-perk');
-            this.cb.onParticle(fc.x, fc.y, '📦 VAULT!', '#fff176');
-          }
+          const tier: 1 | 2 | 3 = 1;
+          const altarColor = '#1a0a2a';
+          this.colors[fc.x]![fc.y] = altarColor;
+          this.altarTiles.push({ x: fc.x, y: fc.y, tier });
+          this.cb.log('⛩️ Vault sealed — an Altar revealed!', 'log-perk');
+          this.cb.onParticle(fc.x, fc.y, '⛩️ ALTAR!', '#ce93d8');
         }
       } else if (this.currentType === 'T' && this.player.rangedCooldown > 0) {
         const cdReduce = this.activeClassId === 'architect' ? 4 : 2;
@@ -514,7 +529,7 @@ export class Game {
 
   dropRelicAt(x: number, y: number): void {
     const def = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-    this.items.push(new Item(x, y, def.char, def.name, 'relic', 0, undefined, def));
+    this.items.push(new Item(x, y, def.char, def.name, 'relic', 0, def));
   }
 
   // Called by Crystal Golem onDeath
@@ -584,11 +599,13 @@ export class Game {
 
     if (type === 'vault') {
       const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(innerX, midY, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
-      const tier = Math.min(3, 1 + Math.floor(this.dungeonLevel / 4));
-      const eligible = EQUIPMENT.filter(e => e.tier <= tier);
-      const equipDef = eligible[Math.floor(Math.random() * eligible.length)]!;
-      this.items.push(new Item(roomX + (side === 'left' ? 0 : 1), midY, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
+      this.items.push(new Item(innerX, midY, relicDef.char, relicDef.name, 'relic', 0, relicDef));
+      // Place a bonus altar in the vault
+      const altarX = roomX + (side === 'left' ? 0 : 1);
+      const altarTier: 1 | 2 | 3 = this.dungeonLevel >= 8 ? 3 : this.dungeonLevel >= 4 ? 2 : 1;
+      const altarColor = altarTier === 3 ? '#2a1a00' : altarTier === 2 ? '#001a2a' : '#1a0a2a';
+      this.colors[altarX]![midY] = altarColor;
+      this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
       this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
       this.cb.log(`💰 A Treasure Vault lies to the ${side} — guarded.`, 'log-perk');
     } else if (type === 'den') {
@@ -599,7 +616,7 @@ export class Game {
       this.cb.log(`☠️ A Monster Den lurks to the ${side}...`, 'log-damage');
     } else {
       const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(roomX, midY, relicDef.char, relicDef.name, 'relic', 0, undefined, relicDef));
+      this.items.push(new Item(roomX, midY, relicDef.char, relicDef.name, 'relic', 0, relicDef));
       const potionDef = ITEMS['potion']!;
       this.items.push(new Item(innerX, midY, potionDef.char, potionDef.name, potionDef.type, potionDef.statValue));
       this.cb.log(`✨ An Ancient Shrine whispers to the ${side}...`, 'log-perk');
@@ -617,6 +634,7 @@ export class Game {
         this.monsters = this.monsters.filter(m => !(m.x === x && m.y === y));
         this.items = this.items.filter(i => !(i.x === x && i.y === y));
         this.merchantTiles = this.merchantTiles.filter(t => !(t.x === x && t.y === y));
+        this.altarTiles = this.altarTiles.filter(a => !(a.x === x && a.y === y));
         this.hazards = this.hazards.filter(h => !(h.x === x && h.y === y));
         this.specialTiles = this.specialTiles.filter(t => !(t.x === x && t.y === y));
         this.cb.onParticle(x, y, '💥', '#ff6b35');
@@ -657,7 +675,7 @@ export class Game {
 
     } else if (cell === Cell.RELIC) {
       const def = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(tx, ty, def.char, def.name, 'relic', 0, undefined, def));
+      this.items.push(new Item(tx, ty, def.char, def.name, 'relic', 0, def));
 
     } else if (cell === Cell.ITEM_POTION) {
       const r = Math.random();
@@ -672,12 +690,6 @@ export class Game {
     } else if (cell === Cell.ITEM_SWORD) {
       const def = ITEMS['sword']!;
       this.items.push(new Item(tx, ty, def.char, def.name, def.type, def.statValue));
-
-    } else if (cell === Cell.ITEM_EQUIPMENT) {
-      const tier = Math.min(3, 1 + Math.floor(this.dungeonLevel / 4));
-      const eligible = EQUIPMENT.filter(e => e.tier <= tier);
-      const equipDef = eligible[Math.floor(Math.random() * eligible.length)]!;
-      this.items.push(new Item(tx, ty, equipDef.char, equipDef.name, equipDef.slot, 0, equipDef));
     }
   }
 
@@ -705,12 +717,6 @@ export class Game {
       this.player.atk += item.statValue;
       this.cb.log(`ATK +${item.statValue}.`, 'log-success');
       this.cb.onParticle(x, y, `+${item.statValue} ATK`, '#ffd54f', 16);
-      this.cb.onAudio?.('itemPickup');
-    } else if ((item.type === 'weapon' || item.type === 'armor') && item.equipDef) {
-      const equip = new Equipment(item.equipDef);
-      const prev = this.player.equip(equip);
-      this.cb.log(`Equipped ${item.name}!${prev ? ` (replaced ${prev.name})` : ''}`, 'log-perk');
-      this.cb.onParticle(x, y, '⚔️ Equip!', '#ffd54f', 16);
       this.cb.onAudio?.('itemPickup');
     } else if (item.type === 'relic' && item.relicDef) {
       this.pickupRelic(item.relicDef);
@@ -809,6 +815,9 @@ export class Game {
       this.merchantTiles = this.merchantTiles
         .filter(t => t.y !== y)
         .map(t => t.y < y ? { x: t.x, y: t.y + 1 } : t);
+      this.altarTiles = this.altarTiles
+        .filter(a => a.y !== y)
+        .map(a => a.y < y ? { ...a, y: a.y + 1 } : a);
       this.hazards = this.hazards
         .filter(h => h.y !== y)
         .map(h => h.y < y ? { ...h, y: h.y + 1 } : h);
@@ -827,7 +836,7 @@ export class Game {
       this.lastLineClearMs = now;
       if (this.comboCount > this.biggestCombo) this.biggestCombo = this.comboCount;
 
-      let added = Math.floor(scoreForLines(rowsCleared, this.dungeonLevel) * this.scoreMultiplier);
+      let added = Math.floor(scoreForLines(rowsCleared, this.dungeonLevel) * this.scoreMultiplier * this.player.lineClearScoreMult);
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
         added = Math.floor(added * mult);
@@ -867,6 +876,16 @@ export class Game {
             m.hp -= dmg;
             this.cb.onParticle(m.x, m.y, `💥-${dmg}`, '#ff6d00', 14);
           }
+        }
+        this.monsters = this.monsters.filter(m => m.hp > 0);
+      }
+
+      // Annihilation Rune: line clears deal floor×mult dmg to ALL monsters
+      if (this.player.lineClearAoeDmgMult > 0) {
+        const aoeDmg = Math.floor(this.player.lineClearAoeDmgMult * this.dungeonLevel);
+        for (const m of this.monsters) {
+          m.hp -= aoeDmg;
+          this.cb.onParticle(m.x, m.y, `☄️-${aoeDmg}`, '#ff6d00');
         }
         this.monsters = this.monsters.filter(m => m.hp > 0);
       }
@@ -925,6 +944,7 @@ export class Game {
     this.monsters = [];
     this.items = [];
     this.merchantTiles = [];
+    this.altarTiles = [];
     this.hazards = [];
     this.specialTiles = [];
     this.killsThisFloor = 0;
@@ -939,6 +959,13 @@ export class Game {
     if (this.player.rangedAmmo >= 0) {
       this.player.rangedAmmo = Math.min(5, this.player.rangedAmmo + 3);
     }
+    // Cruelty Core: reset per-floor ATK bonus
+    this.player.atk -= this.player.killAtkFloorBonus;
+    this.player.killAtkFloorBonus = 0;
+    // Deathward Rune: replenish charges from stacks
+    this.player.deathwardCharges = this.player.boons
+      .filter(b => b.id === 'deathward')
+      .reduce((sum, b) => sum + b.stacks, 0);
     this.generateStartPlatform();
     this.maybeSpawnDungeonRoom();
     this.spawnBlock();
@@ -1089,6 +1116,18 @@ export class Game {
     this.cb.onAction();
   }
 
+  openAltar(tier: 1 | 2 | 3): void {
+    this.paused = true;
+    const pool = BOONS_BY_TIER[tier];
+    const choices = getThreeRandomBoons(pool);
+    this.cb.onOpenAltar?.(tier, choices, (index) => {
+      this.player.addBoon(choices[index]!);
+      this.paused = false;
+      this.pushUI();
+      this.cb.onAction?.();
+    });
+  }
+
   // ── Action handlers ──────────────────────────────────────────────────────
 
   handleHeroMove(dx: number, dy: number): void {
@@ -1111,6 +1150,15 @@ export class Game {
     if (this.isMerchantTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
       this.openShop();
+      return;
+    }
+
+    // Altar tile
+    const altar = this.altarTiles.find(a => a.x === nx && a.y === ny);
+    if (altar) {
+      this.player.x = nx; this.player.y = ny;
+      this.altarTiles = this.altarTiles.filter(a => a !== altar);
+      this.openAltar(altar.tier);
       return;
     }
 
@@ -1462,8 +1510,7 @@ export class Game {
         `ATK ${this.player.totalAtk}  DEF ${this.player.totalDef}`,
         `Lv.${this.player.playerLevel}`,
       ];
-      if (this.player.weapon) lines.push(`⚔️ ${this.player.weapon.name}`);
-      if (this.player.armor) lines.push(`🛡️ ${this.player.armor.name}`);
+      if (this.player.boons.length > 0) lines.push(`Boons: ${this.player.boons.map(b => `${b.def.char}×${b.stacks}`).join(' ')}`);
       if (this.player.relics.length > 0) lines.push(`Relics: ${this.player.relics.map(r => r.name).join(', ')}`);
       return { icon: this.player.char, title: 'You', lines };
     }
@@ -1499,12 +1546,6 @@ export class Game {
       if (item.type === 'stat') {
         return { icon: item.char, title: item.name, lines: [`+${item.statValue} ATK`] };
       }
-      if ((item.type === 'weapon' || item.type === 'armor') && item.equipDef) {
-        const lines = [`Tier ${item.equipDef.tier}`];
-        if (item.equipDef.atkBonus) lines.push(`+${item.equipDef.atkBonus} ATK`);
-        if (item.equipDef.defBonus) lines.push(`+${item.equipDef.defBonus} DEF`);
-        return { icon: item.char, title: item.name, lines };
-      }
       if (item.type === 'relic' && item.relicDef) {
         return { icon: item.char, title: item.relicDef.name, lines: [item.relicDef.desc] };
       }
@@ -1530,6 +1571,12 @@ export class Game {
 
     if (this.isMerchantTile(x, y)) {
       return { icon: '🏪', title: 'Merchant', lines: ['Spend score on potions & gear'] };
+    }
+
+    const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
+    if (altarInfo) {
+      const tierName = altarInfo.tier === 3 ? 'Grand Altar (Tier III)' : altarInfo.tier === 2 ? 'Ruined Altar (Tier II)' : 'Minor Altar (Tier I)';
+      return { icon: '⛩️', title: tierName, lines: ['Step on to choose a stackable boon'] };
     }
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);
@@ -1561,8 +1608,7 @@ export class Game {
       xp: this.player.xp,
       xpToNext: this.player.xpToNext,
       playerLevel: this.player.playerLevel,
-      weaponName: this.player.weapon?.name ?? null,
-      armorName: this.player.armor?.name ?? null,
+      boons: this.player.boons.map(b => ({ char: b.def.char, name: b.def.name, stacks: b.stacks })),
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
       activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,

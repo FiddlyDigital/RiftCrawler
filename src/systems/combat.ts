@@ -2,6 +2,14 @@ import type { Game } from '../game';
 import type { Monster } from '../entities';
 
 export function triggerDeath(game: Game, title: string, reason: string): void {
+  // Deathward Rune: survive the killing blow once per floor per charge
+  if (game.player.deathwardCharges > 0) {
+    game.player.deathwardCharges--;
+    game.player.hp = Math.max(1, Math.floor(game.player.maxHp * 0.30));
+    game.cb.log('💀 Deathward activates — pulled back from the brink!', 'log-success');
+    game.cb.onParticle?.(game.player.x, game.player.y, '💀 REVIVED', '#b71c1c', 16);
+    return;
+  }
   game.cb.onDeath(title, reason, game.dungeonLevel, game.score, game.getRunStats());
 }
 
@@ -126,6 +134,16 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
   game.cb.onParticle(game.player.x, game.player.y, `-${actual}`, '#ef5350', 16);
   game.cb.onAudio?.('playerDamage');
 
+  // Thornweave Core: reflect damage back to attacker
+  if (game.player.thornDamage > 0 && actual > 0) {
+    m.hp -= game.player.thornDamage;
+    game.cb.onParticle(m.x, m.y, `🌵-${game.player.thornDamage}`, '#66bb6a');
+    if (m.hp <= 0) {
+      killMonster(m, game);
+      return;
+    }
+  }
+
   // Criticals always inflict status; others use normal chance
   const inflictStatus = outcome === 'critical' || (m.statusInflict != null && Math.random() < m.statusInflict.chance);
   if (inflictStatus && m.statusInflict && !game.player.statuses.some(s => s.type === m.statusInflict!.type)) {
@@ -157,6 +175,11 @@ export function killMonster(m: Monster, game: Game): void {
   }
   const killHeal = game.player.heal(game.player.killHeal);
   if (killHeal > 0) game.cb.onParticle(game.player.x, game.player.y, `+${killHeal} HP`, '#69f0ae');
+  // Cruelty Core: gain ATK per kill (tracked for reset on floor change)
+  if (game.player.killAtkBonus > 0) {
+    game.player.atk += game.player.killAtkBonus;
+    game.player.killAtkFloorBonus += game.player.killAtkBonus;
+  }
   for (const relic of game.player.relics) {
     relic.onKill?.(game.player);
   }

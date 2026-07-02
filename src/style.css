@@ -371,6 +371,28 @@ canvas {
   100% { opacity: 1; transform: scale(1); }
 }
 
+/* ── Boon panel ─────────────────────────────────────────────────────────── */
+.boon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  min-height: 16px;
+}
+.boon-chip {
+  background: #1a1230;
+  border: 1px solid #3d2b60;
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: default;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #ce93d8;
+}
+#altar-modal .modifier-btn:hover {
+  border-color: #ce93d8;
+}
+
 /* ── Relic badge in equipment card ─────────────────────────────────────── */
 .relic-badge {
   font-size: 14px; line-height: 1;

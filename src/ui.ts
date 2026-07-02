@@ -1,5 +1,5 @@
 import { NEXT_PREVIEWS } from './config';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef } from './types';
 import type { PerkDef, MerchantItem } from './content';
 import type { RunRecord } from './types';
 
@@ -13,6 +13,7 @@ export class UIManager {
   private readonly classModal: HTMLElement;
   private readonly floorEventModal: HTMLElement;
   private readonly inspectTooltip: HTMLElement;
+  private readonly altarModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
   private lastScore = -1;
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
@@ -27,6 +28,7 @@ export class UIManager {
     this.classModal        = document.getElementById('class-modal')!;
     this.floorEventModal   = document.getElementById('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
+    this.altarModal        = document.getElementById('altar-modal')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
       score:            document.getElementById('stat-score')!,
@@ -43,8 +45,7 @@ export class UIManager {
       xpBar:            document.getElementById('xp-bar')!,
       xpLabel:          document.getElementById('xp-label')!,
       playerLevel:      document.getElementById('player-level')!,
-      weaponSlot:       document.getElementById('weapon-slot')!,
-      armorSlot:        document.getElementById('armor-slot')!,
+      boonPanel:        document.getElementById('boon-panel')!,
       statusRow:        document.getElementById('status-row')!,
       runHistory:       document.getElementById('run-history')!,
       relicSlots:       document.getElementById('relic-slots')!,
@@ -122,8 +123,7 @@ export class UIManager {
     this.els['playerLevel']!.textContent = `Lv.${state.playerLevel}`;
     this.els['xpBar']!.style.width       = `${Math.min(100, (state.xp / state.xpToNext) * 100)}%`;
     this.els['xpLabel']!.textContent     = `${state.xp}/${state.xpToNext} XP`;
-    this.els['weaponSlot']!.textContent  = state.weaponName ? `⚔️ ${state.weaponName}` : '⚔️ —';
-    this.els['armorSlot']!.textContent   = state.armorName  ? `🛡️ ${state.armorName}`  : '🛡️ —';
+    this.updateBoons(state.boons);
 
     // Status effect tags
     this.els['statusRow']!.innerHTML = state.statuses
@@ -372,6 +372,37 @@ export class UIManager {
 
   updateBestScore(score: number): void {
     this.els['bestScore']!.textContent = String(score);
+  }
+
+  updateBoons(boons: Array<{ char: string; name: string; stacks: number }>): void {
+    const panel = this.els['boonPanel']!;
+    if (boons.length === 0) {
+      panel.textContent = '—';
+      return;
+    }
+    panel.innerHTML = boons
+      .map(b => `<span class="boon-chip" title="${b.name} ×${b.stacks}">${b.char}×${b.stacks}</span>`)
+      .join('');
+  }
+
+  showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void): void {
+    const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
+    const titleEl = document.getElementById('altar-title')!;
+    titleEl.textContent = `⛩️ ${tierNames[tier]} — Choose a Boon`;
+    const container = document.getElementById('altar-choices')!;
+    container.innerHTML = '';
+    for (let i = 0; i < choices.length; i++) {
+      const boon = choices[i]!;
+      const btn = document.createElement('button');
+      btn.className = 'modifier-btn';
+      btn.innerHTML = `<span class="modifier-emoji">${boon.char}</span><div class="modifier-info"><strong>${boon.name}</strong><span>${boon.desc}</span></div>`;
+      btn.addEventListener('click', () => {
+        this.altarModal.style.display = 'none';
+        onChoice(i);
+      });
+      container.appendChild(btn);
+    }
+    this.altarModal.style.display = 'flex';
   }
 
   showStart(highScore: number): void {

@@ -59,6 +59,7 @@ export const Cell = {
   TRAP_SPIKE: 16,
   TRAP_SMOKE: 17,
   TRAP_TELEPORT: 18,
+  ALTAR: 19,
 } as const;
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
@@ -72,8 +73,22 @@ export interface StatusEffect {
   power: number;
 }
 
-export type EquipSlot = 'weapon' | 'armor';
-export type ItemType = 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'weapon' | 'armor' | 'relic';
+export type ItemType = 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'relic';
+
+export interface BoonDef {
+  id: string;
+  char: string;
+  name: string;
+  desc: string;
+  tier: 1 | 2 | 3;
+  onAdd: (player: Player, newStacks: number) => void;
+}
+
+export interface AltarTile {
+  x: number;
+  y: number;
+  tier: 1 | 2 | 3;
+}
 
 export interface HazardTile {
   x: number;
@@ -145,8 +160,7 @@ export interface UIState {
   xp: number;
   xpToNext: number;
   playerLevel: number;
-  weaponName: string | null;
-  armorName: string | null;
+  boons: Array<{ char: string; name: string; stacks: number }>;
   statuses: StatusEffect[];
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
@@ -175,6 +189,7 @@ export interface GameCallbacks {
   onBlockLand?: (cells: Array<{ x: number; y: number }>) => void;
   onCombo?: (multiplier: number) => void;
   onFloorEvent?: (event: import('./types').FloorEventDef, onChoice: (index: number) => void) => void;
+  onOpenAltar?: (tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void) => void;
 }
 
 export interface RunRecord {
@@ -225,11 +240,3 @@ export interface ItemDef {
   cellState: CellValue;
 }
 
-export interface EquipmentDef {
-  char: string;
-  name: string;
-  slot: EquipSlot;
-  atkBonus: number;
-  defBonus: number;
-  tier: number;
-}
