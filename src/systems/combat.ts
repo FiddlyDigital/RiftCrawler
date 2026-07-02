@@ -145,6 +145,7 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
 export function killMonster(m: Monster, game: Game): void {
   game.cb.onAudio?.('kill');
   game.monstersKilled++;
+  game.killsThisFloor++;
   if (m.isBoss) game.bossesKilled++;
   game.score += Math.floor((m.isBoss ? 500 : 80) * game.scoreMultiplier);
   game.monsters = game.monsters.filter(x => x !== m);

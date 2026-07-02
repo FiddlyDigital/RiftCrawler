@@ -303,14 +303,14 @@ export const RELICS: RelicDef[] = [
     id: 'reflex_coil',
     char: '⚡',
     name: 'Reflex Coil',
-    desc: 'Dodging an attack restores 4 HP  (great with Rogue)',
+    desc: 'Dodging an attack restores 4 HP  (great with Rift Weaver)',
     onPickup: (p: Player) => { p.dodgeHeal += 4; },
   },
   {
     id: 'rift_shard',
     char: '💎',
     name: 'Rift Shard',
-    desc: 'Each row cleared grants +2 Max HP permanently  (great with Mage)',
+    desc: 'Each row cleared grants +2 Max HP permanently  (great with Architect)',
     onLineClear: (p: Player, count: number) => {
       p.maxHp += 2 * count;
       p.hp = Math.min(p.hp, p.maxHp);
@@ -320,7 +320,7 @@ export const RELICS: RelicDef[] = [
     id: 'divine_seal',
     char: '✨',
     name: 'Divine Seal',
-    desc: 'Triples your kill-heal (min 4 HP)  (great with Priest)',
+    desc: 'Triples your kill-heal (min 4 HP)  (great with Cascade)',
     onPickup: (p: Player) => {
       p.killHeal = Math.max(p.killHeal * 3, 4);
     },
@@ -421,61 +421,58 @@ export const NEXT_PREVIEWS: Record<ShapeKey, string> = Object.fromEntries(
 
 export const CLASSES: ClassDef[] = [
   {
-    id: 'warrior',
-    emoji: '⚔️',
-    name: 'Warrior',
-    tagline: 'Front-line fighter. Tough and straightforward.',
-    statPreview: '+20 HP  −2 ATK  +3 DEF  D8 dice',
-    apply: (p: Player) => {
-      p.maxHp += 20; p.hp += 20;
-      p.atk = Math.max(1, p.atk - 2);
-      p.damageReduction += 3;
-      p.baseCombatLevel = 3;
-    },
-  },
-  {
-    id: 'rogue',
-    emoji: '🗡️',
-    name: 'Rogue',
-    tagline: 'Strike fast, stay elusive. High risk, high reward.',
-    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th  D6 dice  5 darts',
-    apply: (p: Player) => {
-      p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
-      p.atk += 3;
-      p.dodgeChance += 0.20;
-      p.critEvery = 5;
-      p.baseCombatLevel = 2;
-      p.rangedAbility = { name: 'Dart', emoji: '🎯', range: 4, damageMult: 0.75, cooldownMax: 0 } satisfies RangedAbility;
-      p.rangedAmmo = 5;
-    },
-  },
-  {
-    id: 'mage',
-    emoji: '🔮',
-    name: 'Mage',
-    tagline: 'Harness rift energy. Line clears deal extra damage.',
-    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg  D6 dice  Magic Bolt',
+    id: 'chronomancer',
+    emoji: '⌛',
+    name: 'Chronomancer',
+    tagline: 'Bend time to your will. Slow the rift, outlast everything.',
+    statPreview: '−5 HP  gravity 20% slower  D6 dice  ⌛ Time Dilation (Q, cd 6)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
-      p.visionRadius += 2;
-      p.lineClearDamage += 5;
+      p.tickSlowPercent += 20;
       p.baseCombatLevel = 2;
-      p.rangedAbility = { name: 'Magic Bolt', emoji: '⚡', range: 6, damageMult: 1.0, cooldownMax: 3 } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Time Dilation', emoji: '⌛', range: 0, damageMult: 0, cooldownMax: 6, abilityType: 'time_dilation' } satisfies RangedAbility;
     },
   },
   {
-    id: 'priest',
-    emoji: '✨',
-    name: 'Priest',
-    tagline: 'Survive through healing. Regenerate and siphon life.',
-    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill  D8 dice  Smite',
+    id: 'rift_weaver',
+    emoji: '🌀',
+    name: 'Rift Weaver',
+    tagline: 'Command spatial forces. Pull enemies to their doom.',
+    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  🌀 Gravity Well (Q, cd 4)',
     apply: (p: Player) => {
-      p.maxHp += 10; p.hp += 10;
-      p.atk = Math.max(1, p.atk - 1);
-      p.regenPerTick += 1;
-      p.killHeal += 4;
+      p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
+      p.atk += 2;
+      p.visionRadius += 2;
+      p.teleportImmune = true;
       p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Smite', emoji: '🌟', range: 5, damageMult: 1.25, cooldownMax: 4, statusEffect: 'stun' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Gravity Well', emoji: '🌀', range: 3, damageMult: 0, cooldownMax: 4, abilityType: 'gravity_well' } satisfies RangedAbility;
+    },
+  },
+  {
+    id: 'architect',
+    emoji: '🏗️',
+    name: 'The Architect',
+    tagline: 'Master the Tetris layer. Every clear is your weapon.',
+    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  ✨ Consecrate (Q, cd 5)',
+    apply: (p: Player) => {
+      p.maxHp += 15; p.hp += 15;
+      p.atk = Math.max(1, p.atk - 2);
+      p.lineClearXpMult = 2;
+      p.baseCombatLevel = 3;
+      p.rangedAbility = { name: 'Consecrate', emoji: '✨', range: 0, damageMult: 0, cooldownMax: 5, abilityType: 'consecrate' } satisfies RangedAbility;
+    },
+  },
+  {
+    id: 'cascade',
+    emoji: '💥',
+    name: 'Cascade',
+    tagline: 'Stack kills, then unleash. Pure explosive potential.',
+    statPreview: '−20 HP  +10 ATK  line clears deal 3×rows×floor dmg  D10 dice  💥 Overload (Q, cd 8)',
+    apply: (p: Player) => {
+      p.maxHp = Math.max(10, p.maxHp - 20); p.hp = Math.min(p.hp, p.maxHp);
+      p.atk += 10;
+      p.baseCombatLevel = 4;
+      p.rangedAbility = { name: 'Overload', emoji: '💥', range: 0, damageMult: 0, cooldownMax: 8, abilityType: 'overload' } satisfies RangedAbility;
     },
   },
 ];

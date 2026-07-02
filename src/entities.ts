@@ -46,6 +46,10 @@ export class Player {
     return this.baseCombatLevel;
   }
 
+  // Class-set multipliers
+  lineClearXpMult = 1;  // Architect doubles line-clear XP
+  teleportImmune  = false;  // Rift Weaver resists teleport traps
+
   // Relic bonuses
   dodgeChance = 0;
   dodgeHeal = 0;

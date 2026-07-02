@@ -87,6 +87,8 @@ export class Game {
 
   // Class state
   public activeClassId: string | null = null;
+  public timeDilationTurns = 0;  // Chronomancer: turns remaining at +70 slow
+  public killsThisFloor    = 0;  // Cascade: kill counter for Overload
 
   // Biome state
   public biomeId = 'stone';
@@ -397,7 +399,7 @@ export class Game {
           }
         }
         this.cb.log('⬆️ Spike Field — fires every 5 ticks!', 'log-tetris');
-      } else if (this.currentType === 'O' && Math.random() < 0.40) {
+      } else if (this.currentType === 'O' && Math.random() < (this.activeClassId === 'architect' ? 0.80 : 0.40)) {
         const eligible = lockedFloorCells.filter(fc =>
           !this.getItemAt(fc.x, fc.y) && !this.getMonsterAt(fc.x, fc.y)
         );
@@ -413,7 +415,8 @@ export class Game {
           }
         }
       } else if (this.currentType === 'T' && this.player.rangedCooldown > 0) {
-        this.player.rangedCooldown = Math.max(0, this.player.rangedCooldown - 2);
+        const cdReduce = this.activeClassId === 'architect' ? 4 : 2;
+        this.player.rangedCooldown = Math.max(0, this.player.rangedCooldown - cdReduce);
         this.cb.log('💜 Arcane resonance — ranged cooldown reduced!', 'log-perk');
       }
     }
@@ -829,9 +832,9 @@ export class Game {
       }
       this.score += added;
 
-      // XP for line clears — multi-row clears give a stacked bonus
+      // XP for line clears — multi-row clears give a stacked bonus; Architect doubles it
       const LINE_CLEAR_XP = [0, 15, 40, 80, 150];
-      const xpGain = LINE_CLEAR_XP[Math.min(rowsCleared, 4)] ?? 150;
+      const xpGain = Math.round((LINE_CLEAR_XP[Math.min(rowsCleared, 4)] ?? 150) * this.player.lineClearXpMult);
       this.cb.onParticle(this.player.x, this.player.y, `+${xpGain}XP`, '#ce93d8', 14);
       const levelled = this.player.gainXP(xpGain);
       if (levelled) {
@@ -846,6 +849,18 @@ export class Game {
           if (this.visibility[m.x]?.[m.y]) {
             m.hp -= this.player.lineClearDamage;
             this.cb.onParticle(m.x, m.y, `-${this.player.lineClearDamage}🔥`, '#ff6b35');
+          }
+        }
+        this.monsters = this.monsters.filter(m => m.hp > 0);
+      }
+
+      // Cascade passive: line clears deal scaled damage to all visible monsters
+      if (this.activeClassId === 'cascade') {
+        const dmg = 3 * rowsCleared * this.dungeonLevel;
+        for (const m of this.monsters) {
+          if (this.visibility[m.x]?.[m.y]) {
+            m.hp -= dmg;
+            this.cb.onParticle(m.x, m.y, `💥-${dmg}`, '#ff6d00', 14);
           }
         }
         this.monsters = this.monsters.filter(m => m.hp > 0);
@@ -907,6 +922,7 @@ export class Game {
     this.merchantTiles = [];
     this.hazards = [];
     this.specialTiles = [];
+    this.killsThisFloor = 0;
     this.heldType = null;
     this.canHold = true;
     this.activeBossOnHalfHp = null;
@@ -948,6 +964,13 @@ export class Game {
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
+    if (this.timeDilationTurns > 0) {
+      this.timeDilationTurns--;
+      if (this.timeDilationTurns === 0) {
+        this.cb.log('⌛ Time Dilation fades.', 'log-neutral');
+        this.cb.onAction();  // reset tick interval to normal speed
+      }
+    }
   }
 
   // ── Player turn (action-driven) ──────────────────────────────────────────
@@ -964,6 +987,12 @@ export class Game {
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
+    if (this.timeDilationTurns > 0) {
+      this.timeDilationTurns--;
+      if (this.timeDilationTurns === 0) {
+        this.cb.log('⌛ Time Dilation fades.', 'log-neutral');
+      }
+    }
     this.cb.onAction();
   }
 
@@ -1193,6 +1222,17 @@ export class Game {
       this.cb.log(`${ability.emoji} ${ability.name} on cooldown (${this.player.rangedCooldown} turns).`, 'log-neutral');
       return;
     }
+
+    switch (ability.abilityType) {
+      case 'time_dilation': this.activateTimeDilation(ability); break;
+      case 'gravity_well':  this.activateGravityWell(ability);  break;
+      case 'consecrate':    this.activateConsecrate(ability);    break;
+      case 'overload':      this.activateOverload(ability);      break;
+      default:              this.activateBolt(ability);          break;
+    }
+  }
+
+  private activateBolt(ability: import('./types').RangedAbility): void {
     if (this.player.rangedAmmo === 0) {
       this.cb.log(`No ${ability.name}s left! (Replenish on next floor)`, 'log-neutral');
       return;
@@ -1204,18 +1244,14 @@ export class Game {
       return;
     }
 
-    // Visual: trail particle along line to target
     this.emitProjectileTrail(target.x, target.y, ability.emoji);
-
     playerAttackMonster(target, this, false, ability.damageMult);
 
-    // Status effect on any non-miss (hit already applied in playerAttackMonster; check target still alive)
     if (ability.statusEffect === 'stun' && target.hp > 0 && !target.isStunned) {
       target.statuses.push({ type: 'stun', duration: 1, power: 0 });
       this.cb.log(`${target.name} is smited and stunned!`, 'log-success');
     }
 
-    // Ammo / cooldown
     if (this.player.rangedAmmo > 0) this.player.rangedAmmo--;
     if (ability.cooldownMax > 0) this.player.rangedCooldown = ability.cooldownMax;
 
@@ -1228,6 +1264,71 @@ export class Game {
       }
     }
 
+    this.advanceTurn();
+  }
+
+  private activateTimeDilation(ability: import('./types').RangedAbility): void {
+    this.timeDilationTurns = 10;
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log('⌛ Time Dilation! Gravity slowed for 10 turns.', 'log-perk');
+    this.cb.onParticle(this.player.x, this.player.y, '⌛ SLOW!', '#b39ddb', 16);
+    this.cb.onAction();  // immediately restart tick interval with new slow value
+    this.advanceTurn();
+  }
+
+  private activateGravityWell(ability: import('./types').RangedAbility): void {
+    const sorted = [...this.monsters].sort((a, b) => {
+      const da = Math.abs(a.x - this.player.x) + Math.abs(a.y - this.player.y);
+      const db = Math.abs(b.x - this.player.x) + Math.abs(b.y - this.player.y);
+      return da - db;
+    });
+    let pulled = 0;
+    for (const m of sorted) {
+      const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+      if (dist > ability.range || !(this.visibility[m.x]?.[m.y])) continue;
+      const sx = Math.sign(this.player.x - m.x);
+      const sy = Math.sign(this.player.y - m.y);
+      for (const [dx, dy] of [[sx, 0], [0, sy]] as [number, number][]) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = m.x + dx, ny = m.y + dy;
+        if (this.map[nx]?.[ny] === Tile.FLOOR && !this.getMonsterAt(nx, ny)) {
+          m.x = nx; m.y = ny;
+          this.cb.onParticle(nx, ny, '🌀', '#7e57c2');
+          pulled++;
+          break;
+        }
+      }
+    }
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log(`🌀 Gravity Well! ${pulled} monster(s) pulled.`, 'log-perk');
+    this.advanceTurn();
+  }
+
+  private activateConsecrate(ability: import('./types').RangedAbility): void {
+    const { x, y } = this.player;
+    if (!this.specialTiles.some(t => t.x === x && t.y === y)) {
+      this.specialTiles.push({ x, y, type: 'sacred' });
+    }
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log('✨ Consecrated ground! Standing here restores HP.', 'log-perk');
+    this.cb.onParticle(x, y, '✨ HOLY', '#fff176', 16);
+    this.advanceTurn();
+  }
+
+  private activateOverload(ability: import('./types').RangedAbility): void {
+    const dmg = Math.max(1, 5 * this.killsThisFloor);
+    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
+    for (const m of targets) {
+      m.hp -= dmg;
+      this.cb.onParticle(m.x, m.y, `💥-${dmg}`, '#ff6d00', 16);
+    }
+    const killed = targets.filter(m => m.hp <= 0);
+    this.monsters = this.monsters.filter(m => m.hp > 0);
+    for (const m of killed) killMonster(m, this);
+    this.cb.log(`💥 Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills stacked).`, 'log-combo');
+    this.cb.onParticle(this.player.x, this.player.y, '💥 BOOM!', '#ff6d00', 18);
+    this.killsThisFloor = 0;
+    this.player.rangedCooldown = ability.cooldownMax;
     this.advanceTurn();
   }
 

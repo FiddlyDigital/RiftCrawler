@@ -129,6 +129,7 @@ export interface RangedAbility {
   damageMult: number;
   cooldownMax: number;
   statusEffect?: 'stun';
+  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
 }
 
 export interface UIState {
