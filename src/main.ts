@@ -13,10 +13,13 @@ const ui       = new UIManager();
 const canvas   = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 
-// Keep sidebar exactly as tall as the canvas (canvas height is aspect-ratio constrained)
+// Keep sidebar exactly as tall as the canvas on mobile; let CSS control it on desktop
 const sidebar = document.getElementById('sidebar-panel') as HTMLDivElement;
-const syncSidebarHeight = (): void => { sidebar.style.height = `${canvas.clientHeight}px`; };
+const syncSidebarHeight = (): void => {
+  sidebar.style.height = window.innerWidth < 640 ? `${canvas.clientHeight}px` : '';
+};
 new ResizeObserver(syncSidebarHeight).observe(canvas);
+window.addEventListener('resize', syncSidebarHeight);
 
 let game: Game;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
