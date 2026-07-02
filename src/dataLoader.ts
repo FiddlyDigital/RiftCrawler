@@ -425,12 +425,12 @@ export const CLASSES: ClassDef[] = [
     emoji: '⌛',
     name: 'Chronomancer',
     tagline: 'Bend time to your will. Slow the rift, outlast everything.',
-    statPreview: '−5 HP  gravity 20% slower  D6 dice  ⌛ Time Dilation (Q, cd 6)',
+    statPreview: '−5 HP  gravity 25% slower  D6 dice  ⌛ Time Dilation (Q, +100 slow/15t, cd 14)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
-      p.tickSlowPercent += 20;
+      p.tickSlowPercent += 25;
       p.baseCombatLevel = 2;
-      p.rangedAbility = { name: 'Time Dilation', emoji: '⌛', range: 0, damageMult: 0, cooldownMax: 6, abilityType: 'time_dilation' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Time Dilation', emoji: '⌛', range: 0, damageMult: 0, cooldownMax: 14, abilityType: 'time_dilation' } satisfies RangedAbility;
     },
   },
   {
@@ -438,14 +438,14 @@ export const CLASSES: ClassDef[] = [
     emoji: '🌀',
     name: 'Rift Weaver',
     tagline: 'Command spatial forces. Pull enemies to their doom.',
-    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  🌀 Gravity Well (Q, cd 4)',
+    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  🌀 Gravity Well (Q, 4-tile pull×2+stun, cd 8)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
       p.atk += 2;
       p.visionRadius += 2;
       p.teleportImmune = true;
       p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Gravity Well', emoji: '🌀', range: 3, damageMult: 0, cooldownMax: 4, abilityType: 'gravity_well' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Gravity Well', emoji: '🌀', range: 4, damageMult: 0, cooldownMax: 8, abilityType: 'gravity_well' } satisfies RangedAbility;
     },
   },
   {
@@ -453,13 +453,13 @@ export const CLASSES: ClassDef[] = [
     emoji: '🏗️',
     name: 'The Architect',
     tagline: 'Master the Tetris layer. Every clear is your weapon.',
-    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  ✨ Consecrate (Q, cd 5)',
+    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  ✨ Consecrate (Q, vision-wide, cd 10)',
     apply: (p: Player) => {
       p.maxHp += 15; p.hp += 15;
       p.atk = Math.max(1, p.atk - 2);
       p.lineClearXpMult = 2;
       p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Consecrate', emoji: '✨', range: 0, damageMult: 0, cooldownMax: 5, abilityType: 'consecrate' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Consecrate', emoji: '✨', range: 0, damageMult: 0, cooldownMax: 10, abilityType: 'consecrate' } satisfies RangedAbility;
     },
   },
   {
@@ -467,12 +467,12 @@ export const CLASSES: ClassDef[] = [
     emoji: '💥',
     name: 'Cascade',
     tagline: 'Stack kills, then unleash. Pure explosive potential.',
-    statPreview: '−20 HP  +10 ATK  line clears deal 3×rows×floor dmg  D10 dice  💥 Overload (Q, cd 8)',
+    statPreview: '−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  💥 Overload (Q, 8×kills min floor×5, cd 12)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 20); p.hp = Math.min(p.hp, p.maxHp);
       p.atk += 10;
       p.baseCombatLevel = 4;
-      p.rangedAbility = { name: 'Overload', emoji: '💥', range: 0, damageMult: 0, cooldownMax: 8, abilityType: 'overload' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Overload', emoji: '💥', range: 0, damageMult: 0, cooldownMax: 12, abilityType: 'overload' } satisfies RangedAbility;
     },
   },
 ];

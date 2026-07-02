@@ -87,7 +87,7 @@ export class Game {
 
   // Class state
   public activeClassId: string | null = null;
-  public timeDilationTurns = 0;  // Chronomancer: turns remaining at +70 slow
+  public timeDilationTurns = 0;  // Chronomancer: turns remaining at +100 slow
   public killsThisFloor    = 0;  // Cascade: kill counter for Overload
 
   // Biome state
@@ -856,7 +856,7 @@ export class Game {
 
       // Cascade passive: line clears deal scaled damage to all visible monsters
       if (this.activeClassId === 'cascade') {
-        const dmg = 3 * rowsCleared * this.dungeonLevel;
+        const dmg = 4 * rowsCleared * this.dungeonLevel;
         for (const m of this.monsters) {
           if (this.visibility[m.x]?.[m.y]) {
             m.hp -= dmg;
@@ -1268,55 +1268,63 @@ export class Game {
   }
 
   private activateTimeDilation(ability: import('./types').RangedAbility): void {
-    this.timeDilationTurns = 10;
+    this.timeDilationTurns = 15;
     this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log('⌛ Time Dilation! Gravity slowed for 10 turns.', 'log-perk');
+    this.cb.log('⌛ Time Dilation! Gravity slowed for 15 turns.', 'log-perk');
     this.cb.onParticle(this.player.x, this.player.y, '⌛ SLOW!', '#b39ddb', 16);
     this.cb.onAction();  // immediately restart tick interval with new slow value
     this.advanceTurn();
   }
 
   private activateGravityWell(ability: import('./types').RangedAbility): void {
-    const sorted = [...this.monsters].sort((a, b) => {
-      const da = Math.abs(a.x - this.player.x) + Math.abs(a.y - this.player.y);
-      const db = Math.abs(b.x - this.player.x) + Math.abs(b.y - this.player.y);
-      return da - db;
-    });
-    let pulled = 0;
-    for (const m of sorted) {
-      const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-      if (dist > ability.range || !(this.visibility[m.x]?.[m.y])) continue;
-      const sx = Math.sign(this.player.x - m.x);
-      const sy = Math.sign(this.player.y - m.y);
-      for (const [dx, dy] of [[sx, 0], [0, sy]] as [number, number][]) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = m.x + dx, ny = m.y + dy;
-        if (this.map[nx]?.[ny] === Tile.FLOOR && !this.getMonsterAt(nx, ny)) {
-          m.x = nx; m.y = ny;
-          this.cb.onParticle(nx, ny, '🌀', '#7e57c2');
-          pulled++;
-          break;
+    const mdist = (m: Monster) => Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+    const eligible = [...this.monsters]
+      .filter(m => mdist(m) <= ability.range && (this.visibility[m.x]?.[m.y] ?? false))
+      .sort((a, b) => mdist(a) - mdist(b));
+    const moved = new Set<Monster>();
+    for (let step = 0; step < 2; step++) {
+      for (const m of eligible) {
+        const sx = Math.sign(this.player.x - m.x);
+        const sy = Math.sign(this.player.y - m.y);
+        for (const [dx, dy] of [[sx, 0], [0, sy]] as [number, number][]) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = m.x + dx, ny = m.y + dy;
+          if (this.map[nx]?.[ny] === Tile.FLOOR && !this.getMonsterAt(nx, ny)) {
+            m.x = nx; m.y = ny; moved.add(m);
+            this.cb.onParticle(nx, ny, '🌀', '#7e57c2');
+            break;
+          }
         }
       }
     }
+    for (const m of moved) {
+      if (!m.isStunned) m.statuses.push({ type: 'stun', duration: 1, power: 0 });
+    }
     this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`🌀 Gravity Well! ${pulled} monster(s) pulled.`, 'log-perk');
+    this.cb.log(`🌀 Gravity Well! ${moved.size} monster(s) pulled & stunned.`, 'log-perk');
     this.advanceTurn();
   }
 
   private activateConsecrate(ability: import('./types').RangedAbility): void {
-    const { x, y } = this.player;
-    if (!this.specialTiles.some(t => t.x === x && t.y === y)) {
-      this.specialTiles.push({ x, y, type: 'sacred' });
+    const r = this.player.visionRadius;
+    let count = 0;
+    for (let cx = 0; cx < CONFIG.COLS; cx++) {
+      for (let cy = 0; cy < CONFIG.ROWS; cy++) {
+        if (Math.hypot(cx - this.player.x, cy - this.player.y) > r) continue;
+        if (this.map[cx]?.[cy] !== Tile.FLOOR) continue;
+        if (this.specialTiles.some(t => t.x === cx && t.y === cy)) continue;
+        this.specialTiles.push({ x: cx, y: cy, type: 'sacred' });
+        count++;
+      }
     }
     this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log('✨ Consecrated ground! Standing here restores HP.', 'log-perk');
-    this.cb.onParticle(x, y, '✨ HOLY', '#fff176', 16);
+    this.cb.log(`✨ Sacred Grounds! ${count} tiles consecrated.`, 'log-perk');
+    this.cb.onParticle(this.player.x, this.player.y, '✨ HOLY', '#fff176', 18);
     this.advanceTurn();
   }
 
   private activateOverload(ability: import('./types').RangedAbility): void {
-    const dmg = Math.max(1, 5 * this.killsThisFloor);
+    const dmg = Math.max(this.dungeonLevel * 5, 8 * this.killsThisFloor);
     const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
     for (const m of targets) {
       m.hp -= dmg;
@@ -1325,7 +1333,7 @@ export class Game {
     const killed = targets.filter(m => m.hp <= 0);
     this.monsters = this.monsters.filter(m => m.hp > 0);
     for (const m of killed) killMonster(m, this);
-    this.cb.log(`💥 Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills stacked).`, 'log-combo');
+    this.cb.log(`💥 Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills × 8, min floor×5).`, 'log-combo');
     this.cb.onParticle(this.player.x, this.player.y, '💥 BOOM!', '#ff6d00', 18);
     this.killsThisFloor = 0;
     this.player.rangedCooldown = ability.cooldownMax;

@@ -26,7 +26,7 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 function getTickMs(): number {
   return tickMsForLevel(
     game.dungeonLevel,
-    game.player.tickSlowPercent + game.biomeGravityPct + (game.timeDilationTurns > 0 ? 70 : 0),
+    game.player.tickSlowPercent + game.biomeGravityPct + (game.timeDilationTurns > 0 ? 100 : 0),
   );
 }
 
