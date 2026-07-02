@@ -829,6 +829,17 @@ export class Game {
       }
       this.score += added;
 
+      // XP for line clears — multi-row clears give a stacked bonus
+      const LINE_CLEAR_XP = [0, 15, 40, 80, 150];
+      const xpGain = LINE_CLEAR_XP[Math.min(rowsCleared, 4)] ?? 150;
+      this.cb.onParticle(this.player.x, this.player.y, `+${xpGain}XP`, '#ce93d8', 14);
+      const levelled = this.player.gainXP(xpGain);
+      if (levelled) {
+        this.cb.log(`✨ LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk');
+        this.paused = true;
+        this.cb.onLevelUp(this.player.playerLevel);
+      }
+
       // Relic: Ember Core — deal damage to visible monsters on line clear
       if (this.player.lineClearDamage > 0) {
         for (const m of this.monsters) {
