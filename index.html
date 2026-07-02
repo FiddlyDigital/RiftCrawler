@@ -26,17 +26,10 @@
       <!-- Hero status -->
       <div class="sidebar-card">
         <div class="card-title">Hero Status</div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <span style="font-weight:bold;">❤️ <span id="stat-hp">35/35</span></span>
-          <span id="player-level" style="font-size:9px;color:var(--accent-color);">Lv.1</span>
-        </div>
+        <div style="font-weight:bold;">❤️ <span id="stat-hp">35/35</span></div>
         <div class="hp-bar-container">
           <div id="hp-bar" class="hp-bar-fill"></div>
         </div>
-        <div class="xp-bar-container" style="margin-top:2px;">
-          <div id="xp-bar" class="xp-bar-fill"></div>
-        </div>
-        <div id="xp-label" style="font-size:8px;color:#666;margin-top:1px;">0/50 XP</div>
         <div style="margin-top:3px;">🪜 Floor: <span id="stat-floor">1</span></div>
         <div style="margin-top:2px;font-size:9px;color:#aaa;">Tick: <span id="stat-rate">1500ms</span></div>
       </div>
@@ -63,6 +56,18 @@
         <div class="card-title">Score</div>
         <div style="font-size:12px;font-weight:bold;color:var(--accent-color);" id="stat-score">0</div>
         <div style="font-size:9px;color:#888;margin-top:1px;">Best: <span id="best-score">0</span></div>
+      </div>
+
+      <!-- Experience -->
+      <div class="sidebar-card">
+        <div class="card-title">Experience</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span id="player-level" style="font-size:12px;font-weight:bold;color:var(--accent-color);">Lv.1</span>
+          <span id="xp-label" style="font-size:9px;color:#888;">0/50 XP</span>
+        </div>
+        <div class="xp-bar-container" style="margin-top:3px;">
+          <div id="xp-bar" class="xp-bar-fill"></div>
+        </div>
       </div>
 
       <!-- Next piece + Hold -->
