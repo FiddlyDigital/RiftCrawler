@@ -53,7 +53,9 @@ export class Renderer {
   private readonly motes: Mote[];
   private readonly revealFrames: Uint8Array;
   private lastDungeonLevel = 1;
-  private comboOverlay: { text: string; alpha: number } | null = null;
+  private comboOverlay: { text: string; alpha: number; mult: number } | null = null;
+  private floorTransitionFrames = 0;
+  private floorTransitionColor = '10,10,20';
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
@@ -130,6 +132,9 @@ export class Renderer {
     if (game.dungeonLevel !== this.lastDungeonLevel) {
       this.revealFrames.fill(0);
       this.lastDungeonLevel = game.dungeonLevel;
+      this.floorTransitionFrames = 30;
+      const biome = getBiomeForFloor(game.dungeonLevel);
+      this.floorTransitionColor = biome.tileRgb || '10,10,20';
     }
 
     // ── Screen shake ─────────────────────────────────────────────────────
@@ -333,7 +338,11 @@ export class Renderer {
         ctx.fillStyle = '#7c4dff';
         ctx.fillRect(hx, hy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
-        ctx.fillText('🌀', hx + TS / 2, hy + TS / 2);
+        ctx.save();
+        ctx.translate(hx + TS / 2, hy + TS / 2);
+        ctx.rotate(performance.now() / 600);
+        ctx.fillText('🌀', 0, 0);
+        ctx.restore();
       }
       ctx.globalAlpha = 1.0;
     }
@@ -387,16 +396,17 @@ export class Renderer {
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
 
+      const idleBob = Math.sin(performance.now() / 500) * 1.5;
       const px = game.player.x * TS + TS / 2;
-      const py = game.player.y * TS + TS / 2;
+      const py = game.player.y * TS + TS / 2 + idleBob;
       const glow = ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
       glow.addColorStop(0, 'rgba(102,187,106,0.38)');
       glow.addColorStop(1, 'rgba(102,187,106,0)');
       ctx.fillStyle = glow;
       ctx.fillRect(game.player.x * TS - TS, game.player.y * TS - TS, TS * 3, TS * 3);
 
-      if (!this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS, TS, TS)) {
-        ctx.fillText(game.player.char, game.player.x * TS + TS / 2, game.player.y * TS + TS / 2);
+      if (!this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS + idleBob, TS, TS)) {
+        ctx.fillText(game.player.char, px, py);
       }
 
       if (game.player.statuses.length > 0) {
@@ -412,16 +422,18 @@ export class Renderer {
 
     // ── Combo overlay ─────────────────────────────────────────────────────
     if (this.comboOverlay) {
-      const { text, alpha } = this.comboOverlay;
+      const { text, alpha, mult } = this.comboOverlay;
       const cw = ctx.canvas.width, ch = ctx.canvas.height;
+      const fontSize = 22 + Math.min(mult, 8) * 2;
+      const color = mult >= 5 ? '#ff1744' : '#ff9100';
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = 'bold 26px monospace';
+      ctx.font = `bold ${fontSize}px 'VT323', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillText(text, cw / 2 + 1, ch / 2 + 1);
-      ctx.fillStyle = '#ff9100';
+      ctx.fillStyle = color;
       ctx.fillText(text, cw / 2, ch / 2);
       ctx.restore();
       this.comboOverlay.alpha -= 0.028;
@@ -435,6 +447,14 @@ export class Renderer {
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     }
 
+    // ── Floor transition flash ────────────────────────────────────────────
+    if (this.floorTransitionFrames > 0) {
+      const flashAlpha = (this.floorTransitionFrames / 30) * 0.88;
+      ctx.fillStyle = `rgba(${this.floorTransitionColor},${flashAlpha})`;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      this.floorTransitionFrames--;
+    }
+
     // ── Low-HP vignette ──────────────────────────────────────────────────
     if (game.player.hp > 0 && game.player.hp / game.player.maxHp <= 0.25) {
       const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 300);
@@ -444,6 +464,22 @@ export class Renderer {
       vignette.addColorStop(1, `rgba(180,0,0,${pulse})`);
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, w, h);
+    }
+
+    // ── Pause overlay ─────────────────────────────────────────────────────
+    if (game.paused && game.player.hp > 0) {
+      const W = ctx.canvas.width, H = ctx.canvas.height;
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      ctx.font = "bold 14px var(--font-pixel, 'VT323', monospace)";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#666';
+      ctx.fillText('— PAUSED —', W / 2, H / 2);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -470,7 +506,7 @@ export class Renderer {
   }
 
   public showCombo(multiplier: number): void {
-    this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0 };
+    this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0, mult: multiplier };
   }
 
   public triggerDamageFlash(): void { this.damageFlashFrames = 8; }

@@ -159,7 +159,8 @@ export interface UIState {
 export type AudioEvent =
   | 'blockLand' | 'blockRotate' | 'blockMove'
   | 'hit' | 'playerDamage' | 'kill'
-  | 'lineClear' | 'descend' | 'poison' | 'bossWarn';
+  | 'lineClear' | 'descend' | 'poison' | 'bossWarn'
+  | 'itemPickup' | 'itemUse' | 'teleport' | 'comboMilestone';
 
 export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;

@@ -55,3 +55,11 @@ export function loadHistory(): RunRecord[] {
     return raw ? (JSON.parse(raw) as RunRecord[]) : [];
   } catch { return []; }
 }
+
+const MUTE_KEY = 'riftcrawler_mute';
+export function saveMute(on: boolean): void {
+  try { localStorage.setItem(MUTE_KEY, on ? '1' : '0'); } catch { /* quota */ }
+}
+export function loadMute(): boolean {
+  try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; }
+}

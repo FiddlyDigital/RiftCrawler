@@ -67,6 +67,7 @@ export class UIManager {
     div.innerText = text;
     this.logPanel.appendChild(div);
     this.logPanel.scrollTop = this.logPanel.scrollHeight;
+    if (this.logPanel.children.length > 50) this.logPanel.firstChild?.remove();
   }
 
   updateStats(state: UIState): void {
@@ -80,6 +81,13 @@ export class UIManager {
     hpBar.classList.remove('hp-full', 'hp-warning', 'hp-critical');
     hpBar.classList.add(hpPct > 0.6 ? 'hp-full' : hpPct >= 0.3 ? 'hp-warning' : 'hp-critical');
     hpBar.parentElement?.classList.toggle('hp-critical-glow', hpPct < 0.3);
+
+    const glowValue = hpPct > 0.6
+      ? '0 0 28px rgba(41,182,246,.15), 0 0 6px rgba(41,182,246,.06)'
+      : hpPct >= 0.3
+        ? '0 0 28px rgba(255,152,0,.3), 0 0 6px rgba(255,152,0,.14)'
+        : '0 0 28px rgba(220,20,20,.5), 0 0 8px rgba(220,20,20,.22)';
+    document.documentElement.style.setProperty('--canvas-glow', glowValue);
 
     if (state.score !== this.lastScore) {
       const scoreEl = this.els['score']!;
@@ -229,6 +237,7 @@ export class UIManager {
       `<div class="history-row${i === 0 ? ' history-latest' : ''}">
         <span>${r.date}</span><span>Fl.${r.floor}</span>
         <span>${r.score.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
+        <span>${r.cause?.split(' ').slice(0, 2).join(' ') ?? ''}</span>
        </div>`
     ).join('');
     this.els['runHistory']!.innerHTML = lines || '<div style="color:#555;font-size:9px">No runs yet.</div>';
@@ -294,6 +303,14 @@ export class UIManager {
     (document.getElementById('boss-warning-name')  as HTMLElement).textContent = boss.name.toUpperCase();
     (document.getElementById('boss-warning-flavor') as HTMLElement).textContent = boss.flavorText;
     this.bossWarningModal.style.display = 'flex';
+    const bar = document.getElementById('boss-countdown-bar') as HTMLElement | null;
+    if (bar) {
+      bar.style.transition = 'none';
+      bar.style.width = '100%';
+      void bar.offsetWidth;
+      bar.style.transition = 'width 1700ms linear';
+      bar.style.width = '0%';
+    }
     setTimeout(() => {
       this.bossWarningModal.style.display = 'none';
       onDone();
@@ -305,8 +322,11 @@ export class UIManager {
     container.innerHTML = '';
     for (const perk of perks) {
       const btn = document.createElement('button');
-      btn.className = 'perk-btn';
-      btn.innerHTML = `<strong>${perk.name}</strong><br><span>${perk.desc}</span>`;
+      const emojiMatch = perk.name.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})\s*/u);
+      const emoji = emojiMatch?.[0].trim() ?? '✨';
+      const label = emojiMatch ? perk.name.slice(emojiMatch[0].length) : perk.name;
+      btn.className = 'modifier-btn';
+      btn.innerHTML = `<span class="modifier-emoji">${emoji}</span><div class="modifier-info"><strong>${label}</strong><span>${perk.desc}</span></div>`;
       btn.addEventListener('click', () => {
         this.perkModal.style.display = 'none';
         onSelect(perk.id);

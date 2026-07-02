@@ -63,14 +63,13 @@ body {
   min-height: 0;
 }
 
-/* F · Canvas depth glow */
+/* F · Canvas depth glow — JS updates --canvas-glow to shift color with HP */
 canvas {
   border: 2px solid var(--border-color); background-color: #020205;
   width: 100%; height: auto; max-height: 100%; display: block;
   border-radius: 6px; image-rendering: pixelated;
   box-shadow:
-    0 0 28px rgba(41, 182, 246, 0.15),
-    0 0  6px rgba(41, 182, 246, 0.06),
+    var(--canvas-glow, 0 0 28px rgba(41,182,246,.15), 0 0 6px rgba(41,182,246,.06)),
     inset 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
@@ -83,11 +82,16 @@ canvas {
   overflow: hidden;
 }
 
+@keyframes titlePulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(255,213,79,.4); }
+  50%       { text-shadow: 0 0 14px rgba(255,213,79,.7); }
+}
 #sidebar-game-title {
   font-family: var(--font-pixel);
-  font-size: 15px; letter-spacing: 2px; color: var(--accent-color);
+  font-size: 17px; letter-spacing: 2px; color: var(--accent-color);
   text-align: center; padding: 3px 0 5px; flex-shrink: 0;
   border-bottom: 1px solid var(--border-color);
+  animation: titlePulse 3s ease-in-out infinite;
   text-shadow: 0 0 10px rgba(255, 213, 79, 0.4);
 }
 
@@ -183,7 +187,7 @@ canvas {
 
 /* Run history */
 .history-row {
-  display: grid; grid-template-columns: 2fr 1fr 2fr 1fr;
+  display: grid; grid-template-columns: 2fr 1fr 2fr 1fr 2fr;
   font-size: 8px; color: #666; gap: 2px; padding: 1px 0;
 }
 .history-latest { color: #999; }
@@ -349,6 +353,7 @@ canvas {
   transition: background-color .12s ease, border-color .12s ease;
 }
 .modifier-btn:hover, .modifier-btn:active { background-color: #2d2210; border-color: #ffd54f; }
+#perk-modal .modifier-btn:hover { border-color: #b39ddb; }
 .modifier-emoji { font-size: 24px; flex-shrink: 0; }
 .modifier-info { display: flex; flex-direction: column; gap: 2px; }
 .modifier-info strong { color: #ffd54f; font-size: 12px; font-family: var(--font-pixel); }
@@ -470,7 +475,7 @@ canvas {
   .card-title { font-size: 10px; }
 
   #log-panel {
-    max-height: none;
+    max-height: 240px;
     flex-grow: 1;
   }
 

@@ -177,8 +177,8 @@ export class Particle {
   fontSize = 13;
 
   reset(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
-    this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
-    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4;
+    this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2 + (Math.random() - 0.5) * CONFIG.TILE_SIZE * 0.4;
+    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4 + Math.random() * CONFIG.TILE_SIZE * 0.3;
     this.text = text;
     this.color = color;
     this.life = 1.0;

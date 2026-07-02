@@ -53,6 +53,7 @@ export function checkHazardTrigger(entity: { x: number; y: number }, game: Game,
     if (isPlayer) {
       game.cb.log('🌀 Teleport trap! You vanish in a swirl!', 'log-damage');
       game.cb.onParticle(entity.x, entity.y, '⚡', '#673ab7');
+      game.cb.onAudio?.('teleport');
     }
   }
 }

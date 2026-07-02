@@ -204,16 +204,25 @@ const PERK_RESOLVERS: Record<string, (player: Player, value: number) => void> = 
   killHealIncrease:        (p, v) => { p.killHeal += v; },
   damageReductionIncrease: (p, v) => { p.damageReduction += v; },
   tickSlowIncrease:        (p, v) => { p.tickSlowPercent += v; },
+  dodgeChanceIncrease:     (p, v) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + v); },
+  immediateHeal:           (p, v) => { p.heal(v); },
+  visionAndRegen:          (p, v) => { p.visionRadius += v; p.regenPerTick += 1; },
 };
 
-export const PERKS: PerkDef[] = (perksData as RawPerk[]).map(raw => ({
-  id:    raw.id,
-  name:  raw.name,
-  desc:  raw.desc,
-  apply: (player: Player) => {
-    PERK_RESOLVERS[raw.effectType]?.(player, raw.effectValue);
-  },
-}));
+export const PERKS: PerkDef[] = [
+  ...(perksData as RawPerk[]).map(raw => ({
+    id:    raw.id,
+    name:  raw.name,
+    desc:  raw.desc,
+    apply: (player: Player) => {
+      PERK_RESOLVERS[raw.effectType]?.(player, raw.effectValue);
+    },
+  })),
+  { id: 'dodge_master', name: '🌀 Evasion',     desc: '+12% dodge chance',            apply: (p: Player) => PERK_RESOLVERS['dodgeChanceIncrease']!(p, 0.12) },
+  { id: 'iron_skin',    name: '🪨 Iron Skin',    desc: 'Reduce all damage by 2',       apply: (p: Player) => PERK_RESOLVERS['damageReductionIncrease']!(p, 2) },
+  { id: 'vital_burst',  name: '💉 Vital Burst',  desc: 'Immediately heal 20 HP',       apply: (p: Player) => PERK_RESOLVERS['immediateHeal']!(p, 20) },
+  { id: 'runic_stride', name: '🔮 Runic Stride', desc: '+3 Vision, +1 HP regen/tick',  apply: (p: Player) => PERK_RESOLVERS['visionAndRegen']!(p, 3) },
+];
 
 // ── Merchant effect resolvers ─────────────────────────────────────────────────
 
@@ -226,15 +235,32 @@ const MERCHANT_RESOLVERS: Record<string, (player: Player, value: number, label: 
   regenBoost: (p, v, l)  => { p.regenPerTick += v; return l; },
 };
 
-export const MERCHANT_STOCK: MerchantItem[] = (merchantData as RawMerchantItem[]).map(raw => ({
-  name: raw.displayName,
-  char: vis(raw.visualAsset),
-  cost: raw.cost,
-  apply: (player: Player) => {
-    const resolve = MERCHANT_RESOLVERS[raw.effectType];
-    return resolve ? resolve(player, raw.effectValue, raw.effectLabel) : raw.effectLabel;
-  },
-}));
+const MERCHANT_POOL: MerchantItem[] = [
+  ...(merchantData as RawMerchantItem[]).map(raw => ({
+    name: raw.displayName,
+    char: vis(raw.visualAsset),
+    cost: raw.cost,
+    apply: (player: Player) => {
+      const resolve = MERCHANT_RESOLVERS[raw.effectType];
+      return resolve ? resolve(player, raw.effectValue, raw.effectLabel) : raw.effectLabel;
+    },
+  })),
+  { name: 'Strength Shard', char: '💪', cost: 250, apply: (p: Player) => { p.atk += 5; return '+5 ATK'; } },
+  { name: 'Iron Shield',    char: '🛡️', cost: 300, apply: (p: Player) => { p.damageReduction += 2; return '−2 incoming dmg'; } },
+  { name: 'Combo Catalyst', char: '⚡', cost: 200, apply: (p: Player) => { p.killHeal += 3; p.regenPerTick += 1; return '+3 kill heal, +1 regen/tick'; } },
+];
+
+/** Kept for backwards compatibility — consumers that pass a stock array still work. */
+export const MERCHANT_STOCK: MerchantItem[] = MERCHANT_POOL.slice(0, 6);
+
+export function getMerchantStock(): MerchantItem[] {
+  const pool = [...MERCHANT_POOL];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
+  return pool.slice(0, 5);
+}
 
 // ── Relics ────────────────────────────────────────────────────────────────────
 
@@ -702,6 +728,63 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     ],
   },
 ];
+
+// Additional floor events
+FLOOR_EVENTS.push(
+  {
+    id: 'cursed_armory',
+    emoji: '🗡️',
+    title: 'Cursed Armory',
+    flavor: 'Weapons of the fallen gleam with dark purpose.',
+    options: [
+      {
+        label: 'Take the cursed blade',
+        desc: '+8 ATK — but suffer 3 turns of poison.',
+        apply: (game) => {
+          game.player.atk += 8;
+          game.player.statuses.push({ type: 'poison', duration: 3, power: 4 });
+          return 'Dark power flows through you. +8 ATK, but the blade bites back.';
+        },
+      },
+      {
+        label: 'Walk away',
+        desc: 'Some power is not worth the price.',
+        apply: () => 'You leave the cursed weapons untouched.',
+      },
+    ],
+  },
+  {
+    id: 'rift_scholar',
+    emoji: '📜',
+    title: 'Rift Scholar',
+    flavor: 'A fractured echo of intelligence lingers here.',
+    options: [
+      {
+        label: 'Learn combat theory',
+        desc: '+50 XP and +1 combat level.',
+        apply: (game) => {
+          const levelled = game.player.gainXP(50);
+          game.player.baseCombatLevel += 1;
+          if (levelled) {
+            game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
+            game.paused = true;
+            game.cb.onLevelUp(game.player.playerLevel);
+          }
+          return 'Combat mastery expands. +50 XP, +1 combat level.';
+        },
+      },
+      {
+        label: 'Absorb passive wisdom',
+        desc: '+3 vision, +1 HP regen/tick permanently.',
+        apply: (game) => {
+          game.player.visionRadius += 3;
+          game.player.regenPerTick += 1;
+          return 'Ancient wisdom seeps in. +3 vision, +1 regen/tick.';
+        },
+      },
+    ],
+  },
+);
 
 export function getRandomFloorEvent(): FloorEventDef {
   return FLOOR_EVENTS[Math.floor(Math.random() * FLOOR_EVENTS.length)]!;

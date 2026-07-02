@@ -3,9 +3,9 @@ import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
-import { getHighScore, recordRunEnd, loadHistory } from './storage';
+import { getHighScore, recordRunEnd, loadHistory, saveMute, loadMute } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
-import { MERCHANT_STOCK } from './content';
+import { getMerchantStock } from './content';
 import { audio } from './audio';
 import type { AudioEvent } from './types';
 
@@ -54,13 +54,20 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); break;
     case 'blockRotate':  audio.playBlockRotate();      break;
     case 'blockMove':    audio.playBlockMove();        break;
-    case 'hit':          audio.playHit();              break;
-    case 'playerDamage': audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); break;
-    case 'kill':         audio.playKill();             break;
-    case 'lineClear':    audio.playLineClear(data ?? 1); break;
-    case 'descend':      audio.playDescend();          break;
-    case 'poison':       audio.playPoison();           break;
-    case 'bossWarn':     audio.playBossWarn();         break;
+    case 'hit':             audio.playHit();              break;
+    case 'playerDamage':    audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); break;
+    case 'kill':            audio.playKill();             break;
+    case 'lineClear':
+      audio.playLineClear(data ?? 1);
+      renderer.triggerShake(data && data >= 4 ? 5 : 3, data && data >= 4 ? 8 : 5);
+      break;
+    case 'descend':         audio.playDescend();          break;
+    case 'poison':          audio.playPoison();           break;
+    case 'bossWarn':        audio.playBossWarn();         break;
+    case 'itemPickup':      audio.playItemPickup();       break;
+    case 'itemUse':         audio.playItemUse();          break;
+    case 'teleport':        audio.playTeleport();         break;
+    case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
   }
 }
 
@@ -79,6 +86,7 @@ function startGame(startPaused = false): void {
 
     onDeath: (title, reason, floor, score, stats) => {
       stopTick();
+      audio.stopAmbient();
       audio.playDeath();
       const { highScore, history } = recordRunEnd(game, reason, stats);
       trackGameOver(score, floor);
@@ -100,10 +108,11 @@ function startGame(startPaused = false): void {
     onOpenShop: (gold) => {
       stopTick();
       audio.playShop();
+      const stock = getMerchantStock();
       ui.showShop(
         gold,
-        MERCHANT_STOCK,
-        (i) => game.buyMerchantItem(i, MERCHANT_STOCK) ?? null,
+        stock,
+        (i) => game.buyMerchantItem(i, stock) ?? null,
         ()  => { game.closeShop(); startTick(); },
       );
     },
@@ -120,6 +129,7 @@ function startGame(startPaused = false): void {
       stopTick();
       ui.showFloorEvent(event, (index) => {
         onChoice(index);
+        audio.playPerk();
         startTick();
       });
     },
@@ -173,10 +183,12 @@ ui.showStart(getHighScore());
 
 document.getElementById('start-btn')!.addEventListener('click', () => {
   audio.init(); // unlock AudioContext on first user gesture
+  if (loadMute()) audio.toggle();
   ui.hideStart();
   launchWithModifier(() => {
     game.paused = false;
     startTick();
+    audio.startAmbient();
     audio.playDescend();
     ui.log('The rift yawns open... descend!', 'log-success');
   });
@@ -190,6 +202,7 @@ document.getElementById('restart-btn')!.addEventListener('click', () => {
   launchWithModifier(() => {
     game.paused = false;
     startTick();
+    audio.startAmbient();
     ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
   });
 });
@@ -198,6 +211,7 @@ document.getElementById('restart-btn')!.addEventListener('click', () => {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') {
     const on = audio.toggle();
+    saveMute(!on);
     ui.log(`Sound ${on ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
   }
 });

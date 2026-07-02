@@ -694,7 +694,8 @@ export class Game {
       if (this.potionPouch.length < 3) {
         this.potionPouch.push(item);
         this.cb.log(`Picked up ${item.name}.`, 'log-neutral');
-        this.cb.onParticle(x, y, item.char, '#69f0ae');
+        this.cb.onParticle(x, y, item.char, '#69f0ae', 16);
+        this.cb.onAudio?.('itemPickup');
       } else {
         this.cb.log('Pouch full — drink one first (U).', 'log-neutral');
         removeFromMap = false;
@@ -703,12 +704,14 @@ export class Game {
     } else if (item.type === 'stat') {
       this.player.atk += item.statValue;
       this.cb.log(`ATK +${item.statValue}.`, 'log-success');
-      this.cb.onParticle(x, y, `+${item.statValue} ATK`, '#ffd54f');
+      this.cb.onParticle(x, y, `+${item.statValue} ATK`, '#ffd54f', 16);
+      this.cb.onAudio?.('itemPickup');
     } else if ((item.type === 'weapon' || item.type === 'armor') && item.equipDef) {
       const equip = new Equipment(item.equipDef);
       const prev = this.player.equip(equip);
       this.cb.log(`Equipped ${item.name}!${prev ? ` (replaced ${prev.name})` : ''}`, 'log-perk');
-      this.cb.onParticle(x, y, '⚔️ Equip!', '#ffd54f');
+      this.cb.onParticle(x, y, '⚔️ Equip!', '#ffd54f', 16);
+      this.cb.onAudio?.('itemPickup');
     } else if (item.type === 'relic' && item.relicDef) {
       this.pickupRelic(item.relicDef);
     }
@@ -722,6 +725,7 @@ export class Game {
       return;
     }
     const item = this.potionPouch.shift()!;
+    this.cb.onAudio?.('itemUse');
     if (item.type === 'heal') {
       const amt = Math.floor(item.statValue * this.potionHealMult);
       const healed = this.player.heal(amt);
@@ -829,6 +833,7 @@ export class Game {
         added = Math.floor(added * mult);
         this.cb.log(`🔥 COMBO x${this.comboCount + 1}! +${added} Score`, 'log-combo');
         this.cb.onCombo?.(this.comboCount + 1);
+        if (this.comboCount >= 2) this.cb.onAudio?.('comboMilestone', this.comboCount + 1);
       }
       this.score += added;
 
