@@ -73,7 +73,7 @@ export interface StatusEffect {
 }
 
 export type EquipSlot = 'weapon' | 'armor';
-export type ItemType = 'heal' | 'stat' | 'mana' | 'weapon' | 'armor' | 'relic';
+export type ItemType = 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'weapon' | 'armor' | 'relic';
 
 export interface HazardTile {
   x: number;
@@ -86,7 +86,7 @@ export interface HazardTile {
 export interface SpecialTile {
   x: number;
   y: number;
-  type: 'swamp' | 'lava' | 'sacred' | 'ice';
+  type: 'swamp' | 'sacred' | 'ice';
 }
 
 export interface RelicDef {
@@ -164,7 +164,7 @@ export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;
   updateUI: (state: UIState) => void;
   onDeath: (title: string, reason: string, floor: number, score: number, stats: RunStats) => void;
-  onParticle: (gridX: number, gridY: number, text: string, color: string) => void;
+  onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
   onLevelUp: (newLevel: number) => void;
   onOpenShop: (gold: number) => void;
   onAction: () => void;
@@ -218,7 +218,7 @@ export interface BossDef {
 export interface ItemDef {
   char: string;
   name: string;
-  type: 'heal' | 'stat' | 'mana';
+  type: 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock';
   statValue: number;
   cellState: CellValue;
 }

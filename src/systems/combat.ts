@@ -66,16 +66,16 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
 
   if (outcome === 'weak') {
     game.cb.log(`Glancing blow on ${monster.name} (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-success');
-    game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#aed581');
+    game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#aed581', 16);
   } else if (outcome === 'normal') {
     game.cb.log(`Hit ${monster.name} (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-success');
-    game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#69f0ae');
+    game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#69f0ae', 16);
   } else if (outcome === 'power') {
     game.cb.log(`Power strike on ${monster.name}! (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-success');
-    game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#ff9100');
+    game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#ff9100', 16);
   } else {
     game.cb.log(`CRITICAL on ${monster.name}! (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-combo');
-    game.cb.onParticle(monster.x, monster.y, '💥 CRIT!', '#ffd54f');
+    game.cb.onParticle(monster.x, monster.y, '💥 CRIT!', '#ffd54f', 18);
     if (!monster.isStunned) {
       monster.statuses.push({ type: 'stun', duration: 1, power: 0 });
       game.cb.log(`${monster.name} is stunned!`, 'log-success');
@@ -123,7 +123,7 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
     game.cb.log(`${m.name} CRITICAL! (${rollNote}) — ${actual} HP`, 'log-damage');
   }
 
-  game.cb.onParticle(game.player.x, game.player.y, `-${actual}`, '#ef5350');
+  game.cb.onParticle(game.player.x, game.player.y, `-${actual}`, '#ef5350', 16);
   game.cb.onAudio?.('playerDamage');
 
   // Criticals always inflict status; others use normal chance

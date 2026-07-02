@@ -15,6 +15,30 @@
     "effectType": "mana",
     "effectValue": 0
   },
+  "antidote": {
+    "id": "antidote",
+    "displayName": "Antidote",
+    "visualAsset": "sprite_antidote",
+    "cellTypeId": "ITEM_POTION",
+    "effectType": "cure",
+    "effectValue": 0
+  },
+  "shock_flask": {
+    "id": "shock_flask",
+    "displayName": "Shock Flask",
+    "visualAsset": "sprite_shock_flask",
+    "cellTypeId": "ITEM_POTION",
+    "effectType": "shock",
+    "effectValue": 2
+  },
+  "grenade": {
+    "id": "grenade",
+    "displayName": "Grenade",
+    "visualAsset": "sprite_grenade",
+    "cellTypeId": "ITEM_POTION",
+    "effectType": "grenade",
+    "effectValue": 5
+  },
   "sword": {
     "id": "sword",
     "displayName": "Steel Sword",

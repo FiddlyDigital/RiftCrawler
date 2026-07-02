@@ -156,7 +156,7 @@ export class Item {
     public y: number,
     public readonly char: string,
     public readonly name: string,
-    public readonly type: 'heal' | 'stat' | 'mana' | 'weapon' | 'armor' | 'relic',
+    public readonly type: 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'weapon' | 'armor' | 'relic',
     public readonly statValue: number,
     public readonly equipDef?: EquipmentDef,
     public readonly relicDef?: RelicDef,
@@ -170,26 +170,33 @@ export class Particle {
   text = '';
   color = '';
   life = 0;
+  fontSize = 13;
 
-  reset(gridX: number, gridY: number, text: string, color: string): void {
+  reset(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
     this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
-    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
+    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4;
     this.text = text;
     this.color = color;
     this.life = 1.0;
+    this.fontSize = fontSize;
   }
 
   update(): void {
-    this.y -= 0.5;
-    this.life -= 0.05;
+    this.y -= 0.7;
+    this.life -= 0.04;
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.globalAlpha = this.life;
+    ctx.font = `bold ${this.fontSize}px monospace`;
+    const tw = ctx.measureText(this.text).width;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(this.text, this.x - tw / 2, this.y);
     ctx.fillStyle = this.color;
-    ctx.font = 'bold 9px monospace';
-    ctx.fillText(this.text, this.x - ctx.measureText(this.text).width / 2, this.y);
+    ctx.fillText(this.text, this.x - tw / 2, this.y);
     ctx.restore();
   }
 }
@@ -202,9 +209,9 @@ export class ParticlePool {
     for (let i = 0; i < size; i++) this.pool.push(new Particle());
   }
 
-  spawn(gridX: number, gridY: number, text: string, color: string): void {
+  spawn(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
     const p = this.pool.pop() ?? new Particle();
-    p.reset(gridX, gridY, text, color);
+    p.reset(gridX, gridY, text, color, fontSize);
     this.active.push(p);
   }
 

@@ -377,12 +377,11 @@ export class Game {
 
     // Shape-based tile effects on lock
     if (lockedFloorCells.length > 0) {
-      if (this.currentType === 'S' || this.currentType === 'Z' || this.currentType === 'L' || this.currentType === 'J') {
+      if (this.currentType === 'S' || this.currentType === 'L' || this.currentType === 'J') {
         const tileType =
           this.currentType === 'S' ? 'swamp' :
-          this.currentType === 'Z' ? 'lava' :
           this.currentType === 'J' ? 'ice' : 'sacred';
-        const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', lava: '🔥 Lava — all take 2 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!', ice: '❄️ Ice — entities slide across!' };
+        const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!', ice: '❄️ Ice — entities slide across!' };
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
               !this.merchantTiles.some(t => t.x === fc.x && t.y === fc.y)) {
@@ -390,6 +389,14 @@ export class Game {
           }
         }
         this.cb.log(msgs[tileType as keyof typeof msgs]!, 'log-tetris');
+      } else if (this.currentType === 'Z') {
+        for (const fc of lockedFloorCells) {
+          if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
+              !this.merchantTiles.some(t => t.x === fc.x && t.y === fc.y)) {
+            this.hazards.push({ x: fc.x, y: fc.y, type: 'spike', timer: 5, warning: false });
+          }
+        }
+        this.cb.log('⬆️ Spike Field — fires every 5 ticks!', 'log-tetris');
       } else if (this.currentType === 'O' && Math.random() < 0.40) {
         const eligible = lockedFloorCells.filter(fc =>
           !this.getItemAt(fc.x, fc.y) && !this.getMonsterAt(fc.x, fc.y)
@@ -453,26 +460,7 @@ export class Game {
     const deadFromTerrain: Monster[] = [];
 
     for (const t of this.specialTiles) {
-      if (t.type === 'lava') {
-        if (this.player.x === t.x && this.player.y === t.y) {
-          const dmg = this.player.takeDamage(2);
-          this.damageTaken += dmg;
-          this.cb.log('🔥 Lava burns you! -2 HP', 'log-damage');
-          this.cb.onParticle(t.x, t.y, '-2🔥', '#ff5722');
-          this.cb.onAudio?.('playerDamage');
-          if (this.player.hp <= 0) {
-            triggerDeath(this, 'CONSUMED BY LAVA', 'You stood in lava too long.');
-            return;
-          }
-        }
-        for (const m of this.monsters) {
-          if (m.x === t.x && m.y === t.y && !deadFromTerrain.includes(m)) {
-            m.hp -= 2;
-            this.cb.onParticle(t.x, t.y, '-2🔥', '#ff5722');
-            if (m.hp <= 0) deadFromTerrain.push(m);
-          }
-        }
-      } else if (t.type === 'swamp') {
+      if (t.type === 'swamp') {
         for (const m of this.monsters) {
           if (m.x === t.x && m.y === t.y && !deadFromTerrain.includes(m)) {
             m.hp -= 1;
@@ -669,7 +657,12 @@ export class Game {
       this.items.push(new Item(tx, ty, def.char, def.name, 'relic', 0, undefined, def));
 
     } else if (cell === Cell.ITEM_POTION) {
-      const key = Math.random() < 0.6 ? 'potion' : 'mana_potion';
+      const r = Math.random();
+      const key = r < 0.45 ? 'potion'
+                : r < 0.70 ? 'mana_potion'
+                : r < 0.85 ? 'antidote'
+                : r < 0.95 ? 'shock_flask'
+                : 'grenade';
       const def = ITEMS[key]!;
       this.items.push(new Item(tx, ty, def.char, def.name, def.type as Item['type'], def.statValue));
 
@@ -694,7 +687,7 @@ export class Game {
   private pickupItemAt(item: Item, x: number, y: number): void {
     let removeFromMap = true;
     this.itemsPickedUp++;
-    if (item.type === 'heal' || item.type === 'mana') {
+    if (item.type === 'heal' || item.type === 'mana' || item.type === 'grenade' || item.type === 'cure' || item.type === 'shock') {
       if (this.potionPouch.length < 3) {
         this.potionPouch.push(item);
         this.cb.log(`Picked up ${item.name}.`, 'log-neutral');
@@ -719,22 +712,50 @@ export class Game {
     if (removeFromMap) this.items = this.items.filter(i => i !== item);
   }
 
-  handleUsePotion(): void {
+  handleUseItem(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (this.potionPouch.length === 0) {
-      this.cb.log('No potions in pouch!', 'log-neutral');
+      this.cb.log('Pouch is empty!', 'log-neutral');
       return;
     }
-    const potion = this.potionPouch.shift()!;
-    if (potion.type === 'heal') {
-      const amt = Math.floor(potion.statValue * this.potionHealMult);
+    const item = this.potionPouch.shift()!;
+    if (item.type === 'heal') {
+      const amt = Math.floor(item.statValue * this.potionHealMult);
       const healed = this.player.heal(amt);
-      this.cb.log(`🧪 Drank ${potion.name} — +${healed} HP.`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, `+${healed}HP`, '#69f0ae');
-    } else if (potion.type === 'mana') {
+      this.cb.log(`🧪 Drank ${item.name} — +${healed} HP.`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, `+${healed}HP`, '#69f0ae', 16);
+    } else if (item.type === 'mana') {
       this.player.rangedCooldown = 0;
-      this.cb.log(`💧 Drank ${potion.name} — ability recharged!`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, '✨ MANA', '#7986cb');
+      this.cb.log(`💧 Drank ${item.name} — ability recharged!`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, '✨ MANA', '#7986cb', 14);
+    } else if (item.type === 'cure') {
+      this.player.statuses = [];
+      this.cb.log(`💊 Used ${item.name} — all afflictions cured!`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, '💊 CURED', '#a5d6a7', 14);
+    } else if (item.type === 'grenade') {
+      const dmg = item.statValue * this.dungeonLevel;
+      const inRange = this.monsters.filter(m =>
+        Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) <= 2
+      );
+      for (const m of inRange) {
+        m.hp -= dmg;
+        this.cb.onParticle(m.x, m.y, `💣-${dmg}`, '#ff6b35', 16);
+        if (m.hp <= 0) killMonster(m, this);
+      }
+      this.cb.log(`💣 Grenade! Hit ${inRange.length} monster(s) for ${dmg} dmg.`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, '💣 BOOM!', '#ff6b35', 18);
+    } else if (item.type === 'shock') {
+      const range = 5;
+      const stunned = this.monsters.filter(m => {
+        const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
+        return dist <= range && (this.visibility[m.x]?.[m.y] ?? false);
+      });
+      for (const m of stunned) {
+        m.statuses.push({ type: 'stun', duration: item.statValue, power: 0 });
+        this.cb.onParticle(m.x, m.y, '⚡STUN', '#ffd54f', 14);
+      }
+      this.cb.log(`⚡ Shock Flask! ${stunned.length} monster(s) stunned for ${item.statValue} turns.`, 'log-success');
+      this.cb.onParticle(this.player.x, this.player.y, '⚡', '#ffd54f', 18);
     }
     this.advanceTurn();
   }
@@ -1336,10 +1357,19 @@ export class Game {
     const item = this.getItemAt(x, y);
     if (item) {
       if (item.type === 'heal') {
-        return { icon: item.char, title: item.name, lines: [`Restores ${item.statValue} HP`, 'Stored in pouch (U to drink)'] };
+        return { icon: item.char, title: item.name, lines: [`Restores ${item.statValue} HP`, 'Stored in pouch (U to use)'] };
       }
       if (item.type === 'mana') {
-        return { icon: item.char, title: item.name, lines: ['Recharges ranged ability instantly', 'Stored in pouch (U to drink)'] };
+        return { icon: item.char, title: item.name, lines: ['Recharges ranged ability instantly', 'Stored in pouch (U to use)'] };
+      }
+      if (item.type === 'cure') {
+        return { icon: item.char, title: item.name, lines: ['Clears all poison & stun', 'Stored in pouch (U to use)'] };
+      }
+      if (item.type === 'grenade') {
+        return { icon: item.char, title: item.name, lines: [`${item.statValue * this.dungeonLevel} dmg to monsters within 2 tiles`, 'Stored in pouch (U to use)'] };
+      }
+      if (item.type === 'shock') {
+        return { icon: item.char, title: item.name, lines: [`Stuns all visible monsters for ${item.statValue} turns`, 'Stored in pouch (U to use)'] };
       }
       if (item.type === 'stat') {
         return { icon: item.char, title: item.name, lines: [`+${item.statValue} ATK`] };
@@ -1379,7 +1409,6 @@ export class Game {
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);
     if (special) {
-      if (special.type === 'lava')   return { icon: '🔥', title: 'Lava',           lines: ['Burns all entities for 2 dmg/turn'] };
       if (special.type === 'swamp')  return { icon: '🌿', title: 'Swamp',           lines: ['Deals 1 dmg/turn to monsters'] };
       if (special.type === 'sacred') return { icon: '✨', title: 'Sacred Ground',   lines: ['Wait here for +2 bonus HP per rest'] };
       if (special.type === 'ice')    return { icon: '❄️', title: 'Ice',             lines: ['Slide uncontrollably in direction of travel'] };

@@ -160,10 +160,13 @@ export const BOSSES: BossDef[] = [
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 
-const ITEM_EFFECT_TO_TYPE: Record<string, 'heal' | 'stat' | 'mana'> = {
-  heal: 'heal',
-  atk:  'stat',
-  mana: 'mana',
+const ITEM_EFFECT_TO_TYPE: Record<string, 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock'> = {
+  heal:    'heal',
+  atk:     'stat',
+  mana:    'mana',
+  grenade: 'grenade',
+  cure:    'cure',
+  shock:   'shock',
 };
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(

@@ -64,8 +64,8 @@ export class Renderer {
     this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
   }
 
-  spawnParticle(gridX: number, gridY: number, text: string, color: string): void {
-    this.particles.spawn(gridX, gridY, text, color);
+  spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
+    this.particles.spawn(gridX, gridY, text, color, fontSize);
   }
 
   spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
@@ -279,18 +279,12 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
-    // ── Special tile overlays (swamp / lava / sacred) ────────────────────
+    // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
     ctx.font = `${TS * 0.55}px Arial`;
     for (const t of game.specialTiles) {
       if (!game.visibility[t.x]?.[t.y]) continue;
       const sx = t.x * TS, sy = t.y * TS;
-      if (t.type === 'lava') {
-        ctx.globalAlpha = 0.55;
-        ctx.fillStyle = '#ff5722';
-        ctx.fillRect(sx, sy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.9;
-        ctx.fillText('🔥', sx + TS / 2, sy + TS / 2);
-      } else if (t.type === 'swamp') {
+      if (t.type === 'swamp') {
         ctx.globalAlpha = 0.45;
         ctx.fillStyle = '#388e3c';
         ctx.fillRect(sx, sy, TS - 1, TS - 1);
