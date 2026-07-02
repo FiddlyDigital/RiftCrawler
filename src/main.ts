@@ -94,15 +94,14 @@ function startGame(startPaused = false): void {
       ui.updateBestScore(highScore);
     },
 
-    onLevelUp: (_newLevel) => {
+    onLevelUp: (choices, onChoice) => {
       stopTick();
       audio.playLevelUp();
-      const perks = game.getRandomPerks(3);
-      ui.showPerkSelection(perks, (perkId) => {
-        game.applyPerk(perkId);
+      ui.showAltarModal(1, choices, (index) => {
+        onChoice(index);
         audio.playPerk();
         startTick();
-      });
+      }, '⬆️ LEVEL UP — Choose a Boon');
     },
 
     onOpenShop: (gold) => {

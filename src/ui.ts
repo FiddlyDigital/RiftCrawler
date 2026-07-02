@@ -1,12 +1,11 @@
 import { NEXT_PREVIEWS } from './config';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef } from './types';
-import type { PerkDef, MerchantItem } from './content';
+import type { MerchantItem } from './content';
 import type { RunRecord } from './types';
 
 export class UIManager {
   private readonly logPanel: HTMLElement;
   private readonly modal: HTMLElement;
-  private readonly perkModal: HTMLElement;
   private readonly shopModal: HTMLElement;
   private readonly modifierModal: HTMLElement;
   private readonly bossWarningModal: HTMLElement;
@@ -21,7 +20,6 @@ export class UIManager {
   constructor() {
     this.logPanel          = document.getElementById('log-panel')!;
     this.modal             = document.getElementById('game-over-modal')!;
-    this.perkModal         = document.getElementById('perk-modal')!;
     this.shopModal         = document.getElementById('shop-modal')!;
     this.modifierModal     = document.getElementById('modifier-modal')!;
     this.bossWarningModal  = document.getElementById('boss-warning-modal')!;
@@ -317,25 +315,6 @@ export class UIManager {
     }, 1800);
   }
 
-  showPerkSelection(perks: PerkDef[], onSelect: (id: string) => void): void {
-    const container = document.getElementById('perk-choices')!;
-    container.innerHTML = '';
-    for (const perk of perks) {
-      const btn = document.createElement('button');
-      const emojiMatch = perk.name.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})\s*/u);
-      const emoji = emojiMatch?.[0].trim() ?? '✨';
-      const label = emojiMatch ? perk.name.slice(emojiMatch[0].length) : perk.name;
-      btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${emoji}</span><div class="modifier-info"><strong>${label}</strong><span>${perk.desc}</span></div>`;
-      btn.addEventListener('click', () => {
-        this.perkModal.style.display = 'none';
-        onSelect(perk.id);
-      });
-      container.appendChild(btn);
-    }
-    this.perkModal.style.display = 'flex';
-  }
-
   showShop(gold: number, stock: MerchantItem[], onBuy: (i: number) => number | null, onClose: () => void): void {
     const goldEl = document.getElementById('shop-gold')!;
     const container = document.getElementById('shop-items')!;
@@ -385,10 +364,10 @@ export class UIManager {
       .join('');
   }
 
-  showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void): void {
+  showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, titleOverride?: string): void {
     const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
     const titleEl = document.getElementById('altar-title')!;
-    titleEl.textContent = `⛩️ ${tierNames[tier]} — Choose a Boon`;
+    titleEl.textContent = titleOverride ?? `⛩️ ${tierNames[tier]} — Choose a Boon`;
     const container = document.getElementById('altar-choices')!;
     container.innerHTML = '';
     for (let i = 0; i < choices.length; i++) {

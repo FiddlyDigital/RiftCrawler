@@ -170,8 +170,7 @@ export function killMonster(m: Monster, game: Game): void {
   const levelled = game.player.gainXP(m.xpReward);
   if (levelled) {
     game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
-    game.paused = true;
-    game.cb.onLevelUp(game.player.playerLevel);
+    game.openLevelUpBoons();
   }
   const killHeal = game.player.heal(game.player.killHeal);
   if (killHeal > 0) game.cb.onParticle(game.player.x, game.player.y, `+${killHeal} HP`, '#69f0ae');

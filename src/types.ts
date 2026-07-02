@@ -181,7 +181,7 @@ export interface GameCallbacks {
   updateUI: (state: UIState) => void;
   onDeath: (title: string, reason: string, floor: number, score: number, stats: RunStats) => void;
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
-  onLevelUp: (newLevel: number) => void;
+  onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop: (gold: number) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;

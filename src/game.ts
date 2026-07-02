@@ -1,7 +1,7 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo, type AltarTile } from './types';
 import { Player, Monster, Item } from './entities';
-import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, PERKS, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type PerkDef, type ClassDef } from './content';
+import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, triggerDeath, playerAttackMonster } from './systems/combat';
@@ -853,8 +853,7 @@ export class Game {
       const levelled = this.player.gainXP(xpGain);
       if (levelled) {
         this.cb.log(`✨ LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk');
-        this.paused = true;
-        this.cb.onLevelUp(this.player.playerLevel);
+        this.openLevelUpBoons();
       }
 
       // Relic: Ember Core — deal damage to visible monsters on line clear
@@ -1043,21 +1042,19 @@ export class Game {
     };
   }
 
-  // ── Perk selection ───────────────────────────────────────────────────────
+  // ── Level-up boon pick ───────────────────────────────────────────────────
 
-  getRandomPerks(count = 3): PerkDef[] {
-    const shuffled = [...PERKS].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
-  }
-
-  applyPerk(perkId: string): void {
-    const perk = PERKS.find(p => p.id === perkId);
-    if (!perk) return;
-    perk.apply(this.player);
-    this.cb.log(`Perk gained: ${perk.name} — ${perk.desc}`, 'log-perk');
-    this.paused = false;
-    this.pushUI();
-    this.cb.onAction();
+  openLevelUpBoons(): void {
+    this.paused = true;
+    const tier = getBoonTierForFloor(this.dungeonLevel);
+    const pool = BOONS_BY_TIER[tier];
+    const choices = getThreeRandomBoons(pool);
+    this.cb.onLevelUp?.(choices, (index) => {
+      this.player.addBoon(choices[index]!);
+      this.paused = false;
+      this.pushUI();
+      this.cb.onAction?.();
+    });
   }
 
   // ── Class selection ──────────────────────────────────────────────────────

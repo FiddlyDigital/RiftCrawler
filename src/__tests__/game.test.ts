@@ -172,11 +172,11 @@ describe('Game', () => {
     expect(game.player.hp).toBeGreaterThanOrEqual(30);
   });
 
-  it('getRandomPerks returns 3 unique perks', () => {
-    const perks = game.getRandomPerks(3);
-    expect(perks).toHaveLength(3);
-    const ids = perks.map(p => p.id);
-    expect(new Set(ids).size).toBe(3);
+  it('openLevelUpBoons calls onLevelUp with 3 boon choices', () => {
+    let capturedChoices: unknown[] = [];
+    cb.onLevelUp = (choices, _onChoice) => { capturedChoices = choices; };
+    game.openLevelUpBoons();
+    expect(capturedChoices).toHaveLength(3);
   });
 
   it('paused flag blocks player actions', () => {

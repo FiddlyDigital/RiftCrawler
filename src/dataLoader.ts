@@ -2,7 +2,6 @@ import visualRegistryData from './data/visual-registry.json';
 import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
 import itemsData          from './data/items.json';
-import perksData          from './data/perks.json';
 import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
 import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef } from './types';
@@ -18,13 +17,6 @@ function vis(assetId: string): string {
 }
 
 // ── Runtime interface types (exported for consumers) ──────────────────────────
-
-export interface PerkDef {
-  id: string;
-  name: string;
-  desc: string;
-  apply: (player: Player) => void;
-}
 
 export interface MerchantItem {
   name: string;
@@ -55,10 +47,6 @@ interface RawBoss {
 interface RawItem {
   id: string; displayName: string; visualAsset: string; cellTypeId: string;
   effectType: string; effectValue: number;
-}
-
-interface RawPerk {
-  id: string; name: string; desc: string; effectType: string; effectValue: number;
 }
 
 interface RawMerchantItem {
@@ -184,6 +172,7 @@ export const BOONS: BoonDef[] = [
   { id: 'mending_drip',  char: '💧',  name: 'Mending Drip',  tier: 1, desc: '+0.5 HP regen/tick per stack',  onAdd: (p) => { p.regenPerTick += 0.5; } },
   { id: 'sight_shard',   char: '👁️',  name: 'Sight Shard',   tier: 1, desc: '+1 vision radius per stack',   onAdd: (p) => { p.visionRadius += 1; } },
   { id: 'gravity_well',  char: '⏳',  name: 'Gravity Well',  tier: 1, desc: '5% slower gravity per stack',   onAdd: (p) => { p.tickSlowPercent -= 5; } },
+  { id: 'iron_ward',     char: '🧪',  name: 'Iron Ward',     tier: 1, desc: 'Immune to poison',                onAdd: (p) => { p.poisonImmune = true; } },
   // ── Tier II — Cores ───────────────────────────────────────────────────────
   { id: 'bloodtap',  char: '🩸', name: 'Bloodtap Core',  tier: 2, desc: '+3 HP on kill per stack',           onAdd: (p) => { p.killHeal += 3; } },
   { id: 'thornweave', char: '🌵', name: 'Thornweave Core', tier: 2, desc: '+3 thorn dmg to attacker per stack', onAdd: (p) => { p.thornDamage += 3; } },
@@ -232,37 +221,6 @@ export function getThreeRandomBoons(pool: BoonDef[]): BoonDef[] {
   if (shuffled.length <= 3) return shuffled;
   return shuffled.slice(0, 3);
 }
-
-// ── Perk effect resolvers ─────────────────────────────────────────────────────
-
-const PERK_RESOLVERS: Record<string, (player: Player, value: number) => void> = {
-  maxHpIncrease:           (p, v) => { p.maxHp += v; p.hp = Math.min(p.hp + v, p.maxHp); },
-  atkIncrease:             (p, v) => { p.atk += v; },
-  visionIncrease:          (p, v) => { p.visionRadius += v; },
-  regenIncrease:           (p, v) => { p.regenPerTick += v; },
-  poisonImmune:            (p)    => { p.poisonImmune = true; },
-  killHealIncrease:        (p, v) => { p.killHeal += v; },
-  damageReductionIncrease: (p, v) => { p.damageReduction += v; },
-  tickSlowIncrease:        (p, v) => { p.tickSlowPercent += v; },
-  dodgeChanceIncrease:     (p, v) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + v); },
-  immediateHeal:           (p, v) => { p.heal(v); },
-  visionAndRegen:          (p, v) => { p.visionRadius += v; p.regenPerTick += 1; },
-};
-
-export const PERKS: PerkDef[] = [
-  ...(perksData as RawPerk[]).map(raw => ({
-    id:    raw.id,
-    name:  raw.name,
-    desc:  raw.desc,
-    apply: (player: Player) => {
-      PERK_RESOLVERS[raw.effectType]?.(player, raw.effectValue);
-    },
-  })),
-  { id: 'dodge_master', name: '🌀 Evasion',     desc: '+12% dodge chance',            apply: (p: Player) => PERK_RESOLVERS['dodgeChanceIncrease']!(p, 0.12) },
-  { id: 'iron_skin',    name: '🪨 Iron Skin',    desc: 'Reduce all damage by 2',       apply: (p: Player) => PERK_RESOLVERS['damageReductionIncrease']!(p, 2) },
-  { id: 'vital_burst',  name: '💉 Vital Burst',  desc: 'Immediately heal 20 HP',       apply: (p: Player) => PERK_RESOLVERS['immediateHeal']!(p, 20) },
-  { id: 'runic_stride', name: '🔮 Runic Stride', desc: '+3 Vision, +1 HP regen/tick',  apply: (p: Player) => PERK_RESOLVERS['visionAndRegen']!(p, 3) },
-];
 
 // ── Merchant effect resolvers ─────────────────────────────────────────────────
 
@@ -591,13 +549,14 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     options: [
       {
         label: 'Offer HP (20)',
-        desc: 'Sacrifice 20 HP for a random perk.',
+        desc: 'Sacrifice 20 HP for a random boon.',
         apply: (game) => {
           game.player.hp = Math.max(1, game.player.hp - 20);
           game.damageTaken += 20;
-          const perk = PERKS[Math.floor(Math.random() * PERKS.length)]!;
-          perk.apply(game.player);
-          return `The shrine grants: ${perk.name}! (${perk.desc})`;
+          const pool = [...BOONS_BY_TIER[1], ...BOONS_BY_TIER[2]];
+          const boon = pool[Math.floor(Math.random() * pool.length)]!;
+          game.player.addBoon(boon);
+          return `The shrine grants: ${boon.char} ${boon.name}! (${boon.desc})`;
         },
       },
       {
@@ -695,8 +654,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
           const levelled = game.player.gainXP(150);
           if (levelled) {
             game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
-            game.paused = true;
-            game.cb.onLevelUp(game.player.playerLevel);
+            game.openLevelUpBoons();
           }
           return `You absorb the battle tactics. +150 XP`;
         },
@@ -805,8 +763,7 @@ FLOOR_EVENTS.push(
           game.player.baseCombatLevel += 1;
           if (levelled) {
             game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
-            game.paused = true;
-            game.cb.onLevelUp(game.player.playerLevel);
+            game.openLevelUpBoons();
           }
           return 'Combat mastery expands. +50 XP, +1 combat level.';
         },

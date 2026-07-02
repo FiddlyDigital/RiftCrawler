@@ -353,7 +353,6 @@ canvas {
   transition: background-color .12s ease, border-color .12s ease;
 }
 .modifier-btn:hover, .modifier-btn:active { background-color: #2d2210; border-color: #ffd54f; }
-#perk-modal .modifier-btn:hover { border-color: #b39ddb; }
 .modifier-emoji { font-size: 24px; flex-shrink: 0; }
 .modifier-info { display: flex; flex-direction: column; gap: 2px; }
 .modifier-info strong { color: #ffd54f; font-size: 12px; font-family: var(--font-pixel); }
