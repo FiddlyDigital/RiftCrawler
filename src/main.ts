@@ -5,7 +5,6 @@ import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
 import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
-import type { BrandDef } from './types';
 import { audio } from './audio';
 import type { AudioEvent } from './types';
 
@@ -104,13 +103,13 @@ function startGame(startPaused = false): void {
       }, '⬆️ LEVEL UP — Choose a Boon');
     },
 
-    onOpenTattooArtist: (choices: BrandDef[], onChoice: (i: number) => void) => {
+    onOpenTattooArtist: (choices, onChoice, reroll) => {
       stopTick();
       audio.playShop();
       ui.showTattooModal(choices, (i) => {
         onChoice(i);
         startTick();
-      });
+      }, reroll);
     },
 
     onBossWarning: (boss, onDone) => {
@@ -130,13 +129,13 @@ function startGame(startPaused = false): void {
       });
     },
 
-    onOpenAltar: (tier, choices, onChoice) => {
+    onOpenAltar: (tier, choices, onChoice, reroll) => {
       stopTick();
       audio.playPerk();
       ui.showAltarModal(tier, choices, (index) => {
         onChoice(index);
         startTick();
-      });
+      }, undefined, reroll);
     },
   });
 

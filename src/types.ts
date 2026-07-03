@@ -75,12 +75,24 @@ export interface StatusEffect {
 
 export type ItemType = 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'relic';
 
+// Role used to guarantee variety in a 3-choice offer (>=2 distinct roles)
+export type OfferRole = 'offense' | 'defense' | 'utility';
+
+// Gold-reroll config handed to the choice modals; run() returns the new
+// state (choices + remaining gold + next cost) or null when unaffordable.
+export interface RerollCfg<T> {
+  gold: number;
+  cost: number;
+  run: () => { choices: T[]; gold: number; cost: number } | null;
+}
+
 export interface BoonDef {
   id: string;
   char: string;
   name: string;
   desc: string;
   tier: 1 | 2 | 3;
+  role: OfferRole;
   onAdd: (player: Player, newStacks: number) => void;
 }
 
@@ -94,6 +106,7 @@ export interface BrandDef {
   desc: string;
   setSize: 2 | 3;
   setDesc: string;
+  role: OfferRole;
   onEquip: (player: Player) => void;
   onSetComplete: (player: Player) => void;
 }
@@ -198,14 +211,14 @@ export interface GameCallbacks {
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (gold: number) => void;
-  onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void) => void;
+  onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;
   onBossWarning?: (boss: BossDef, onDone: () => void) => void;
   onBlockLand?: (cells: Array<{ x: number; y: number }>) => void;
   onCombo?: (multiplier: number) => void;
   onFloorEvent?: (event: import('./types').FloorEventDef, onChoice: (index: number) => void) => void;
-  onOpenAltar?: (tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void) => void;
+  onOpenAltar?: (tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BoonDef>) => void;
 }
 
 export interface RunRecord {

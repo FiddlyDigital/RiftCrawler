@@ -3,7 +3,7 @@ import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
 import itemsData          from './data/items.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef } from './types';
+import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole } from './types';
 import type { Player } from './entities';
 import type { MonsterDef, BossDef, ItemDef } from './types';
 
@@ -151,31 +151,31 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries(
 
 export const BOONS: BoonDef[] = [
   // ── Tier I — Shards ──────────────────────────────────────────────────────
-  { id: 'whetstone',     char: '⚔️',  name: 'Whetstone',     tier: 1, desc: '+2 ATK per stack',              onAdd: (p) => { p.atk += 2; } },
-  { id: 'vital_crystal', char: '❤️',  name: 'Vital Crystal', tier: 1, desc: '+8 Max HP per stack',           onAdd: (p) => { p.maxHp += 8; p.hp += 8; } },
-  { id: 'iron_scale',    char: '🛡️',  name: 'Iron Scale',    tier: 1, desc: '+1 damage reduction per stack', onAdd: (p) => { p.damageReduction += 1; } },
-  { id: 'mending_drip',  char: '💧',  name: 'Mending Drip',  tier: 1, desc: '+0.5 HP regen/tick per stack',  onAdd: (p) => { p.regenPerTick += 0.5; } },
-  { id: 'sight_shard',   char: '👁️',  name: 'Sight Shard',   tier: 1, desc: '+1 vision radius per stack',   onAdd: (p) => { p.visionRadius += 1; } },
-  { id: 'gravity_well',  char: '⏳',  name: 'Gravity Well',  tier: 1, desc: '5% slower gravity per stack',   onAdd: (p) => { p.tickSlowPercent -= 5; } },
-  { id: 'iron_ward',     char: '🧪',  name: 'Iron Ward',     tier: 1, desc: 'Immune to poison',                onAdd: (p) => { p.poisonImmune = true; } },
+  { id: 'whetstone',     char: '⚔️',  name: 'Whetstone',     tier: 1, role: 'offense', desc: '+2 ATK per stack',              onAdd: (p) => { p.atk += 2; } },
+  { id: 'vital_crystal', char: '❤️',  name: 'Vital Crystal', tier: 1, role: 'defense', desc: '+8 Max HP per stack',           onAdd: (p) => { p.maxHp += 8; p.hp += 8; } },
+  { id: 'iron_scale',    char: '🛡️',  name: 'Iron Scale',    tier: 1, role: 'defense', desc: '+1 damage reduction per stack', onAdd: (p) => { p.damageReduction += 1; } },
+  { id: 'mending_drip',  char: '💧',  name: 'Mending Drip',  tier: 1, role: 'defense', desc: '+0.5 HP regen/tick per stack',  onAdd: (p) => { p.regenPerTick += 0.5; } },
+  { id: 'sight_shard',   char: '👁️',  name: 'Sight Shard',   tier: 1, role: 'utility', desc: '+1 vision radius per stack',   onAdd: (p) => { p.visionRadius += 1; } },
+  { id: 'gravity_well',  char: '⏳',  name: 'Gravity Well',  tier: 1, role: 'utility', desc: '5% slower gravity per stack',   onAdd: (p) => { p.tickSlowPercent += 5; } },
+  { id: 'iron_ward',     char: '🧪',  name: 'Iron Ward',     tier: 1, role: 'defense', desc: 'Immune to poison',              onAdd: (p) => { p.poisonImmune = true; } },
   // ── Tier II — Cores ───────────────────────────────────────────────────────
-  { id: 'bloodtap',  char: '🩸', name: 'Bloodtap Core',  tier: 2, desc: '+3 HP on kill per stack',           onAdd: (p) => { p.killHeal += 3; } },
-  { id: 'thornweave', char: '🌵', name: 'Thornweave Core', tier: 2, desc: '+3 thorn dmg to attacker per stack', onAdd: (p) => { p.thornDamage += 3; } },
-  { id: 'riftblast',  char: '💥', name: 'Riftblast Core', tier: 2, desc: '+4 line-clear monster dmg per stack', onAdd: (p) => { p.lineClearDamage += 4; } },
-  { id: 'ghost_step', char: '🌀', name: 'Ghost Step',     tier: 2, desc: '+10% dodge (max 75%) per stack',   onAdd: (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.10); } },
-  { id: 'cruelty',    char: '⚡', name: 'Cruelty Core',   tier: 2, desc: '+1 ATK per kill this floor (per stack)', onAdd: (p) => { p.killAtkBonus += 1; } },
+  { id: 'bloodtap',  char: '🩸', name: 'Bloodtap Core',  tier: 2, role: 'defense', desc: '+3 HP on kill per stack',           onAdd: (p) => { p.killHeal += 3; } },
+  { id: 'thornweave', char: '🌵', name: 'Thornweave Core', tier: 2, role: 'offense', desc: '+3 thorn dmg to attacker per stack', onAdd: (p) => { p.thornDamage += 3; } },
+  { id: 'riftblast',  char: '💥', name: 'Riftblast Core', tier: 2, role: 'offense', desc: '+4 line-clear monster dmg per stack', onAdd: (p) => { p.lineClearDamage += 4; } },
+  { id: 'ghost_step', char: '🌀', name: 'Ghost Step',     tier: 2, role: 'defense', desc: '+10% dodge (max 75%) per stack',   onAdd: (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.10); } },
+  { id: 'cruelty',    char: '⚡', name: 'Cruelty Core',   tier: 2, role: 'offense', desc: '+1 ATK per kill this floor (per stack)', onAdd: (p) => { p.killAtkBonus += 1; } },
   {
-    id: 'void_loop', char: '🔮', name: 'Void Loop', tier: 2, desc: 'Every Nth attack crits (N decreases per stack)',
+    id: 'void_loop', char: '🔮', name: 'Void Loop', tier: 2, role: 'offense', desc: 'Every Nth attack crits (N decreases per stack)',
     onAdd: (p, stacks) => {
       if (stacks === 1) { p.critEvery = 6; p.critCount = 0; }
       else p.critEvery = Math.max(2, p.critEvery - 1);
     },
   },
   // ── Tier III — Runes ─────────────────────────────────────────────────────
-  { id: 'annihilation', char: '☄️', name: 'Annihilation Rune', tier: 3, desc: 'Line clears deal floor×4 dmg to ALL monsters per stack', onAdd: (p) => { p.lineClearAoeDmgMult += 4; } },
-  { id: 'deathward',    char: '💀', name: 'Deathward Rune',    tier: 3, desc: 'Survive a killing blow once per floor per stack',         onAdd: (p) => { p.deathwardCharges += 1; } },
-  { id: 'rift_tide',    char: '🌊', name: 'Rift Tide',         tier: 3, desc: '20% slower gravity, +0.3× line-clear XP per stack',      onAdd: (p) => { p.tickSlowPercent -= 20; p.lineClearXpMult += 0.3; } },
-  { id: 'void_prism',   char: '🌌', name: 'Void Prism',        tier: 3, desc: '+1 ATK & +2 HP per distinct boon per stack',              onAdd: (_p, _s) => { /* handled by recomputeVoidPrism */ } },
+  { id: 'annihilation', char: '☄️', name: 'Annihilation Rune', tier: 3, role: 'offense', desc: 'Line clears deal floor×4 dmg to ALL monsters per stack', onAdd: (p) => { p.lineClearAoeDmgMult += 4; } },
+  { id: 'deathward',    char: '💀', name: 'Deathward Rune',    tier: 3, role: 'defense', desc: 'Survive a killing blow once per floor per stack',         onAdd: (p) => { p.deathwardCharges += 1; } },
+  { id: 'rift_tide',    char: '🌊', name: 'Rift Tide',         tier: 3, role: 'utility', desc: '20% slower gravity, +0.3× line-clear XP per stack',      onAdd: (p) => { p.tickSlowPercent += 20; p.lineClearXpMult += 0.3; } },
+  { id: 'void_prism',   char: '🌌', name: 'Void Prism',        tier: 3, role: 'offense', desc: '+1 ATK & +2 HP per distinct boon per stack',              onAdd: (_p, _s) => { /* handled by recomputeVoidPrism */ } },
 ];
 
 export const BOONS_BY_TIER: Record<1 | 2 | 3, BoonDef[]> = {
@@ -201,80 +201,115 @@ export function getBoonTierForFloor(floor: number): 1 | 2 | 3 {
   return 3;
 }
 
-export function getThreeRandomBoons(pool: BoonDef[]): BoonDef[] {
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+interface OfferItem { id: string; role: OfferRole; }
+
+function shuffleInPlace<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
+}
+
+// Build a 3-choice offer that (a) nudges one pick toward a type the player
+// already owns (synergy / set completion) and (b) guarantees at least two
+// distinct roles, so no offer is three of the same flavour and every run can
+// commit to a build. Input randomness stays high; only coherence is enforced.
+function buildOffer<T extends OfferItem>(pool: T[], ownedIds: string[]): T[] {
+  const shuffled = shuffleInPlace([...pool]);
   if (shuffled.length <= 3) return shuffled;
-  return shuffled.slice(0, 3);
+
+  const chosen: T[] = [];
+  // Synergy nudge: ~55% of the time seed one owned type when it's in the pool.
+  if (ownedIds.length && Math.random() < 0.55) {
+    const owned = shuffled.find(x => ownedIds.includes(x.id));
+    if (owned) chosen.push(owned);
+  }
+  for (const x of shuffled) {
+    if (chosen.length >= 3) break;
+    if (!chosen.includes(x)) chosen.push(x);
+  }
+  // Guarantee >=2 distinct roles: swap the last pick for a different-role
+  // candidate if all three ended up sharing a role.
+  if (new Set(chosen.map(c => c.role)).size < 2) {
+    const alt = shuffled.find(x => !chosen.includes(x) && x.role !== chosen[0]!.role);
+    if (alt) chosen[chosen.length - 1] = alt;
+  }
+  return chosen.slice(0, 3);
+}
+
+export function getThreeRandomBoons(pool: BoonDef[], ownedIds: string[] = []): BoonDef[] {
+  return buildOffer(pool, ownedIds);
 }
 
 // ── Sacred Brands ─────────────────────────────────────────────────────────────
 
 export const BRANDS: BrandDef[] = [
   {
-    id: 'war', char: '⚔️', name: 'War', setSize: 3,
+    id: 'war', char: '⚔️', name: 'War', setSize: 3, role: 'offense',
     desc: '+2 ATK per brand',
     setDesc: 'Set: +10 ATK',
     onEquip:      (p) => { p.atk += 2; },
     onSetComplete:(p) => { p.atk += 10; },
   },
   {
-    id: 'cryo', char: '❄️', name: 'Cryo', setSize: 3,
+    id: 'cryo', char: '❄️', name: 'Cryo', setSize: 3, role: 'utility',
     desc: '+5% tick slow per brand',
     setDesc: 'Set: +25% more tick slow',
     onEquip:      (p) => { p.tickSlowPercent += 5; },
     onSetComplete:(p) => { p.tickSlowPercent += 25; },
   },
   {
-    id: 'sick', char: '☠️', name: 'Sick', setSize: 3,
+    id: 'sick', char: '☠️', name: 'Sick', setSize: 3, role: 'offense',
     desc: '+8% chance to poison on hit',
     setDesc: 'Set: 100% poison on hit',
     onEquip:      (p) => { p.poisonAttackChance = Math.min(1.0, p.poisonAttackChance + 0.08); },
     onSetComplete:(p) => { p.poisonAttackChance = 1.0; },
   },
   {
-    id: 'sight', char: '👁️', name: 'Sight', setSize: 2,
+    id: 'sight', char: '👁️', name: 'Sight', setSize: 2, role: 'utility',
     desc: '+1 vision radius per brand',
     setDesc: 'Set: +2 more vision radius',
     onEquip:      (p) => { p.visionRadius += 1; },
     onSetComplete:(p) => { p.visionRadius += 2; },
   },
   {
-    id: 'speed', char: '💨', name: 'Speed', setSize: 2,
+    id: 'speed', char: '💨', name: 'Speed', setSize: 2, role: 'utility',
     desc: 'Collecting the set grants extra move',
     setDesc: 'Set: move twice per turn',
     onEquip:      (_p) => { /* set bonus only */ },
     onSetComplete:(p) => { p.bonusHeroMoves += 1; },
   },
   {
-    id: 'life', char: '❤️', name: 'Life', setSize: 3,
+    id: 'life', char: '❤️', name: 'Life', setSize: 3, role: 'defense',
     desc: '+5 max HP per brand',
     setDesc: 'Set: free revive (erases all brands!)',
     onEquip:      (p) => { p.maxHp += 5; p.hp = Math.min(p.hp + 5, p.maxHp); },
     onSetComplete:(p) => { p.lifeBrandRevive = true; },
   },
   {
-    id: 'guard', char: '🛡️', name: 'Guard', setSize: 2,
+    id: 'guard', char: '🛡️', name: 'Guard', setSize: 2, role: 'defense',
     desc: '+1 damage reduction per brand',
     setDesc: 'Set: +3 more damage reduction',
     onEquip:      (p) => { p.damageReduction += 1; },
     onSetComplete:(p) => { p.damageReduction += 3; },
   },
   {
-    id: 'leech', char: '🩸', name: 'Leech', setSize: 2,
+    id: 'leech', char: '🩸', name: 'Leech', setSize: 2, role: 'defense',
     desc: '+2 HP on kill per brand',
     setDesc: 'Set: +5 more HP on kill',
     onEquip:      (p) => { p.killHeal += 2; },
     onSetComplete:(p) => { p.killHeal += 5; },
   },
   {
-    id: 'forge', char: '🔥', name: 'Forge', setSize: 3,
+    id: 'forge', char: '🔥', name: 'Forge', setSize: 3, role: 'offense',
     desc: '+2 line-clear damage per brand',
     setDesc: 'Set: +8 more line-clear damage',
     onEquip:      (p) => { p.lineClearDamage += 2; },
     onSetComplete:(p) => { p.lineClearDamage += 8; },
   },
   {
-    id: 'ghost', char: '👻', name: 'Ghost', setSize: 2,
+    id: 'ghost', char: '👻', name: 'Ghost', setSize: 2, role: 'defense',
     desc: '+5% dodge chance per brand',
     setDesc: 'Set: +20% more dodge',
     onEquip:      (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.05); },
@@ -282,13 +317,8 @@ export const BRANDS: BrandDef[] = [
   },
 ];
 
-export function getThreeRandomBrands(): BrandDef[] {
-  const pool = [...BRANDS];
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
-  }
-  return pool.slice(0, 3);
+export function getThreeRandomBrands(ownedIds: string[] = []): BrandDef[] {
+  return buildOffer([...BRANDS], ownedIds);
 }
 
 // ── Relics ────────────────────────────────────────────────────────────────────

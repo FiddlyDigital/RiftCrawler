@@ -4,7 +4,7 @@ import { Player, Monster, Item } from './entities';
 import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
-import { killMonster, triggerDeath, playerAttackMonster } from './systems/combat';
+import { killMonster, triggerDeath, playerAttackMonster, estimateHitChance } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
@@ -30,6 +30,9 @@ export function scoreForLines(count: number, level: number): number {
   const base = [0, 100, 300, 600, 1000];
   return (base[count] ?? 1200) * level;
 }
+
+// Gold cost of the first reroll at an altar / tattoo artist; escalates ×1.6 per reroll this visit.
+const REROLL_BASE_COST = 120;
 
 // ── Game class ───────────────────────────────────────────────────────────────
 
@@ -219,6 +222,7 @@ export class Game {
     let trapInjected = false;
     let relicInjected = false;
     let luckyItemInjected = false;
+    let monsterInjected = false;
 
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
@@ -269,10 +273,14 @@ export class Game {
           if (r < 0.06) { trapInjected = true; return Cell.TRAP_TELEPORT; }
         }
 
-        // Monster spawn (haunted = double rate)
-        const monsterChance = this.haunted ? 0.18 : 0.09;
+        // Monster spawn — at most one per block (no random dumps), and the rate
+        // ramps gently with depth instead of a flat spike. Haunted doubles it.
+        const baseMonsterChance = Math.min(0.16, 0.06 + this.dungeonLevel * 0.005);
+        const monsterChance = this.haunted ? baseMonsterChance * 2 : baseMonsterChance;
         const rand = Math.random();
         if (rand < monsterChance) {
+          if (monsterInjected) return Cell.FLOOR;  // cap: one monster per block
+          monsterInjected = true;
           const r = Math.random();
           if (r < 0.25) return Cell.MONSTER_RAT;
           if (r < 0.50) return Cell.MONSTER_SKEL;
@@ -1052,7 +1060,7 @@ export class Game {
     this.paused = true;
     const tier = getBoonTierForFloor(this.dungeonLevel);
     const pool = BOONS_BY_TIER[tier];
-    const choices = getThreeRandomBoons(pool);
+    const choices = getThreeRandomBoons(pool, this.player.boons.map(b => b.id));
     this.cb.onLevelUp?.(choices, (index) => {
       this.player.addBoon(choices[index]!);
       this.paused = false;
@@ -1096,8 +1104,10 @@ export class Game {
 
   openTattooArtist(): void {
     this.paused = true;
-    const choices = getThreeRandomBrands();
-    this.cb.onOpenTattooArtist?.(choices, (index) => {
+    const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
+    let cost = REROLL_BASE_COST;
+    let choices = getThreeRandomBrands(ownedIds());
+    const commit = (index: number): void => {
       const slot = this.player.brands.length < 5
         ? (['body', 'left_arm', 'right_arm', 'legs', 'head'] as const)[this.player.brands.length]!
         : 'body' as const;
@@ -1106,18 +1116,44 @@ export class Game {
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
+    };
+    this.cb.onOpenTattooArtist?.(choices, commit, {
+      gold: this.gold,
+      cost,
+      run: () => {
+        if (this.gold < cost) return null;
+        this.gold -= cost;
+        cost = Math.floor(cost * 1.6);
+        choices = getThreeRandomBrands(ownedIds());
+        this.pushUI();
+        return { choices, gold: this.gold, cost };
+      },
     });
   }
 
   openAltar(tier: 1 | 2 | 3): void {
     this.paused = true;
     const pool = BOONS_BY_TIER[tier];
-    const choices = getThreeRandomBoons(pool);
-    this.cb.onOpenAltar?.(tier, choices, (index) => {
+    const ownedIds = (): string[] => this.player.boons.map(b => b.id);
+    let cost = REROLL_BASE_COST;
+    let choices = getThreeRandomBoons(pool, ownedIds());
+    const commit = (index: number): void => {
       this.player.addBoon(choices[index]!);
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
+    };
+    this.cb.onOpenAltar?.(tier, choices, commit, {
+      gold: this.gold,
+      cost,
+      run: () => {
+        if (this.gold < cost) return null;
+        this.gold -= cost;
+        cost = Math.floor(cost * 1.6);
+        choices = getThreeRandomBoons(pool, ownedIds());
+        this.pushUI();
+        return { choices, gold: this.gold, cost };
+      },
     });
   }
 
@@ -1511,9 +1547,11 @@ export class Game {
 
     const monster = this.getMonsterAt(x, y);
     if (monster) {
+      const hitPct = Math.round(estimateHitChance(this.player.combatLevel, monster.combatLevel) * 100);
       const lines = [
         `HP ${Math.max(0, monster.hp)}/${monster.maxHp}`,
         `ATK ${monster.atk}`,
+        `Your hit chance: ${hitPct}%`,
         `Type: ${monster.behaviorType}`,
       ];
       if (monster.statuses.length > 0) lines.push(`Status: ${monster.statuses.map(s => s.type).join(', ')}`);

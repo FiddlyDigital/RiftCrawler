@@ -3,8 +3,8 @@ import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
 import { Cell, Tile } from '../types';
 import type { GameCallbacks } from '../types';
 import { Monster, Item } from '../entities';
-import { killMonster } from '../systems/combat';
-import { BRANDS } from '../content';
+import { killMonster, playerAttackMonster, estimateHitChance } from '../systems/combat';
+import { BRANDS, BOONS, getThreeRandomBoons } from '../content';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -314,5 +314,109 @@ describe('Monster clearing & Sacred Brands', () => {
     expect(game.player.atk).toBe(atk0 + 4);
     game.player.addBrand('right_arm', war); // +2 plus +10 set bonus (setSize 3)
     expect(game.player.atk).toBe(atk0 + 16);
+  });
+});
+
+// ── Balance levers: pity, coherent offers, ramp, legibility ───────────────────
+
+describe('Balance levers', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  // Phase 0
+  it('gravity boons slow the tick (raise tickSlowPercent)', () => {
+    for (const id of ['gravity_well', 'rift_tide']) {
+      const boon = BOONS.find(b => b.id === id)!;
+      const before = game.player.tickSlowPercent;
+      boon.onAdd(game.player, 1);
+      expect(game.player.tickSlowPercent).toBeGreaterThan(before);
+      expect(tickMsForLevel(1, game.player.tickSlowPercent)).toBeGreaterThan(tickMsForLevel(1, before));
+    }
+  });
+
+  // Phase 1
+  it('miss-pity upgrades the third consecutive whiff to a landing hit', () => {
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0); // aRoll=dRoll=1 → forced miss
+    const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
+    game.monsters.push(m);
+    const d1 = playerAttackMonster(m, game);
+    const d2 = playerAttackMonster(m, game);
+    const d3 = playerAttackMonster(m, game);
+    spy.mockRestore();
+    expect(d1).toBe(0);
+    expect(d2).toBe(0);
+    expect(d3).toBeGreaterThan(0);
+  });
+
+  it('a landed hit resets the miss-pity streak', () => {
+    game.player.missStreak = 2;
+    const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
+    game.monsters.push(m);
+    const spyHit = vi.spyOn(Math, 'random').mockReturnValue(0.99); // high aRoll → land
+    playerAttackMonster(m, game);
+    spyHit.mockRestore();
+    expect(game.player.missStreak).toBe(0);
+  });
+
+  // Phase 2
+  it('every boon offer spans at least two distinct roles', () => {
+    for (let i = 0; i < 40; i++) {
+      const roles = new Set(getThreeRandomBoons(BOONS).map(b => b.role));
+      expect(roles.size).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('tattoo reroll spends gold and returns three fresh choices', () => {
+    let reroll: (() => { choices: unknown[]; gold: number; cost: number } | null) | undefined;
+    cb.onOpenTattooArtist = (_choices, _onChoice, cfg) => { reroll = cfg?.run; };
+    game.gold = 500;
+    (game as unknown as { tattooTiles: Array<{ x: number; y: number }> }).tattooTiles.push({ x: 4, y: 22 });
+    game.handleHeroMove(0, -1);
+    expect(reroll).toBeTypeOf('function');
+    const res = reroll!();
+    expect(res).not.toBeNull();
+    expect(game.gold).toBe(500 - 120);
+    expect(res!.choices).toHaveLength(3);
+  });
+
+  it('reroll is refused when gold is insufficient', () => {
+    let reroll: (() => unknown | null) | undefined;
+    cb.onOpenTattooArtist = (_choices, _onChoice, cfg) => { reroll = cfg?.run; };
+    game.gold = 10;
+    (game as unknown as { tattooTiles: Array<{ x: number; y: number }> }).tattooTiles.push({ x: 4, y: 22 });
+    game.handleHeroMove(0, -1);
+    expect(reroll!()).toBeNull();
+    expect(game.gold).toBe(10);
+  });
+
+  // Phase 3
+  it('a spawned block never contains more than one monster', () => {
+    const monsterCells = [Cell.MONSTER_RAT, Cell.MONSTER_SKEL, Cell.MONSTER_ARCHER, Cell.MONSTER_SLIME, Cell.MONSTER_ORC, Cell.MONSTER_BAT] as number[];
+    for (let i = 0; i < 200; i++) {
+      (game as unknown as { spawnBlock(): void }).spawnBlock();
+      const count = game.blockMatrix.flat().filter(c => monsterCells.includes(c)).length;
+      expect(count).toBeLessThanOrEqual(1);
+    }
+  });
+
+  // Phase 4
+  it('estimateHitChance is a valid probability and rises vs weaker defenders', () => {
+    const even = estimateHitChance(2, 2);
+    const favoured = estimateHitChance(6, 1);
+    expect(even).toBeGreaterThan(0);
+    expect(even).toBeLessThanOrEqual(1);
+    expect(favoured).toBeGreaterThan(even);
+  });
+
+  it('monster inspect reports the player hit chance', () => {
+    const m = new Monster(4, 22, '👹', 'Goblin', 10, 10, 3, 5);
+    game.monsters.push(m);
+    const info = game.getInspectInfo(4, 22);
+    expect(info!.lines.some(l => l.toLowerCase().includes('hit chance'))).toBe(true);
   });
 });

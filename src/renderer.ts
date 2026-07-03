@@ -373,6 +373,18 @@ export class Renderer {
 
       if (m.isElite) this.drawPulseGlow(m.x, m.y, '255,215,0');
 
+      // Telegraph: a monster that can strike the player next turn pulses red and
+      // shows a ‼ marker, so incoming damage is a read rather than a surprise.
+      const threatening = game.player.hp > 0 && !m.isStunned &&
+        (Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y)) <= m.attackRange;
+      if (threatening) {
+        this.drawPulseGlow(m.x, m.y, '244,67,54');
+        ctx.font = '9px Arial';
+        ctx.fillStyle = '#ff5252';
+        ctx.fillText('‼', m.x * TS + 5, m.y * TS + 5);
+        ctx.font = `${TS * 0.7}px Arial`;
+      }
+
       if (!this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS)) {
         ctx.fillText(m.char, m.x * TS + TS / 2, m.y * TS + TS / 2);
       }

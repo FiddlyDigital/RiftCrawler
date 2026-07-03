@@ -60,14 +60,42 @@ function resolveCombatRoll(
   return { outcome: 'power', aRoll, dRoll };
 }
 
+// Base per-swing chance the player lands a hit (any non-miss) vs a defender.
+// Ignores miss-pity (which only rescues streaks) — this is the honest single-roll odds.
+export function estimateHitChance(attackerLevel: number, defenderLevel: number): number {
+  const sa = dieSides(attackerLevel);
+  const sd = dieSides(defenderLevel);
+  let hits = 0;
+  for (let a = 1; a <= sa; a++) {
+    for (let d = 1; d <= sd; d++) {
+      if (a === sa || a > d) hits++;  // natural-max crit, or beat the defender roll
+    }
+  }
+  return hits / (sa * sd);
+}
+
 // ── Player attacks monster ────────────────────────────────────────────────────
 
 export function playerAttackMonster(monster: Monster, game: Game, forceCrit = false, damageMult = 1.0): number {
-  const { outcome, aRoll, dRoll } = resolveCombatRoll(
-    game.player.combatLevel,
-    monster.combatLevel,
-    forceCrit,
-  );
+  const roll = resolveCombatRoll(game.player.combatLevel, monster.combatLevel, forceCrit);
+  let { outcome } = roll;
+  const { aRoll, dRoll } = roll;
+
+  // Miss-pity: never whiff three times running. Two consecutive misses arm the
+  // pity; the next miss is upgraded to a guaranteed glancing (weak) hit so a cold
+  // dice streak can't stall you to death. Any landed hit disarms it.
+  let pityHit = false;
+  if (outcome === 'miss') {
+    if (game.player.missStreak >= 2) {
+      outcome = 'weak';
+      pityHit = true;
+      game.player.missStreak = 0;
+    } else {
+      game.player.missStreak++;
+    }
+  } else {
+    game.player.missStreak = 0;
+  }
 
   if (outcome === 'miss') {
     game.cb.log(`${monster.name} parries! (${aRoll} vs ${dRoll})`, 'log-neutral');
@@ -83,7 +111,8 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
   const bossTag = monster.isBoss ? ' (BOSS)' : '';
 
   if (outcome === 'weak') {
-    game.cb.log(`Glancing blow on ${monster.name} (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-success');
+    const note = pityHit ? `${rollNote}, pity` : rollNote;
+    game.cb.log(`Glancing blow on ${monster.name} (${note}) — ${dmg} dmg${bossTag}`, 'log-success');
     game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#aed581', 16);
   } else if (outcome === 'normal') {
     game.cb.log(`Hit ${monster.name} (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-success');

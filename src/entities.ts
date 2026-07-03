@@ -26,6 +26,9 @@ export class Player {
   // Combat dice level (1=D4 … 6=D20); overridden by class, scales with playerLevel
   baseCombatLevel = 2;
 
+  // Miss-pity: consecutive whiffs; the 3rd is upgraded to a guaranteed weak hit
+  missStreak = 0;
+
   get combatLevel(): number {
     const lvl = this.playerLevel;
     if (lvl >= 9) return 6;

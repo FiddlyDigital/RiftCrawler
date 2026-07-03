@@ -1,5 +1,5 @@
 import { NEXT_PREVIEWS } from './config';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, RerollCfg } from './types';
 import type { RunRecord } from './types';
 
 export class UIManager {
@@ -348,47 +348,70 @@ export class UIManager {
       .join('');
   }
 
-  showTattooModal(choices: BrandDef[], onChoice: (i: number) => void): void {
+  // Shared renderer for the 3-choice altar/tattoo modal. Supports an optional
+  // gold reroll that redraws the choices in place without closing the modal.
+  private renderOfferModal<T extends { char: string; name: string }>(opts: {
+    title: string;
+    subtitle: string;
+    choices: T[];
+    buttonInner: (c: T) => string;
+    onChoice: (index: number) => void;
+    reroll?: RerollCfg<T>;
+  }): void {
     const titleEl = document.getElementById('altar-title')!;
-    titleEl.textContent = '🔱 Occult Tattoo Artist — Choose a Brand';
+    titleEl.textContent = opts.title;
     const subEl = document.getElementById('altar-subtitle');
-    if (subEl) subEl.textContent = 'Brands are permanent. Collect a set for a powerful bonus.';
+    if (subEl) subEl.textContent = opts.subtitle;
     const container = document.getElementById('altar-choices')!;
-    container.innerHTML = '';
-    for (let i = 0; i < choices.length; i++) {
-      const brand = choices[i]!;
-      const btn = document.createElement('button');
-      btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${brand.char}</span><div class="modifier-info"><strong>${brand.name}</strong><span>${brand.desc}</span><span style="font-size:9px;color:#a78bfa;">${brand.setDesc} (need ${brand.setSize})</span></div>`;
-      btn.addEventListener('click', () => {
-        this.altarModal.style.display = 'none';
-        onChoice(i);
+
+    const render = (choices: T[], gold: number, cost: number): void => {
+      container.innerHTML = '';
+      choices.forEach((c, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'modifier-btn';
+        btn.innerHTML = opts.buttonInner(c);
+        btn.addEventListener('click', () => {
+          this.altarModal.style.display = 'none';
+          opts.onChoice(i);
+        });
+        container.appendChild(btn);
       });
-      container.appendChild(btn);
-    }
+      if (opts.reroll) {
+        const rb = document.createElement('button');
+        rb.className = 'reroll-btn';
+        rb.disabled = gold < cost;
+        rb.textContent = gold >= cost
+          ? `🎲 Reroll — ${cost}g (you have ${gold}g)`
+          : `🎲 Reroll — need ${cost - gold} more gold`;
+        rb.addEventListener('click', () => {
+          const next = opts.reroll!.run();
+          if (next) render(next.choices, next.gold, next.cost);
+        });
+        container.appendChild(rb);
+      }
+    };
+
+    render(opts.choices, opts.reroll?.gold ?? 0, opts.reroll?.cost ?? 0);
     this.altarModal.style.display = 'flex';
   }
 
-  showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, titleOverride?: string): void {
+  showTattooModal(choices: BrandDef[], onChoice: (i: number) => void, reroll?: RerollCfg<BrandDef>): void {
+    this.renderOfferModal({
+      title: '🔱 Occult Tattoo Artist — Choose a Brand',
+      subtitle: 'Brands are permanent. Collect a set for a powerful bonus.',
+      choices, onChoice, reroll,
+      buttonInner: (b) => `<span class="modifier-emoji">${b.char}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
+    });
+  }
+
+  showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, titleOverride?: string, reroll?: RerollCfg<BoonDef>): void {
     const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
-    const titleEl = document.getElementById('altar-title')!;
-    titleEl.textContent = titleOverride ?? `⛩️ ${tierNames[tier]} — Choose a Boon`;
-    const subEl = document.getElementById('altar-subtitle');
-    if (subEl) subEl.textContent = 'Boons stack — pick the same one again to amplify its effect.';
-    const container = document.getElementById('altar-choices')!;
-    container.innerHTML = '';
-    for (let i = 0; i < choices.length; i++) {
-      const boon = choices[i]!;
-      const btn = document.createElement('button');
-      btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${boon.char}</span><div class="modifier-info"><strong>${boon.name}</strong><span>${boon.desc}</span></div>`;
-      btn.addEventListener('click', () => {
-        this.altarModal.style.display = 'none';
-        onChoice(i);
-      });
-      container.appendChild(btn);
-    }
-    this.altarModal.style.display = 'flex';
+    this.renderOfferModal({
+      title: titleOverride ?? `⛩️ ${tierNames[tier]} — Choose a Boon`,
+      subtitle: 'Boons stack — pick the same one again to amplify its effect.',
+      choices, onChoice, reroll,
+      buttonInner: (b) => `<span class="modifier-emoji">${b.char}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
+    });
   }
 
   showStart(highScore: number): void {
