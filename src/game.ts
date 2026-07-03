@@ -1,7 +1,7 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo, type AltarTile } from './types';
 import { Player, Monster, Item } from './entities';
-import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, type ClassDef } from './content';
+import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, triggerDeath, playerAttackMonster } from './systems/combat';
@@ -22,7 +22,7 @@ export function rotateMatrix(matrix: CellValue[][]): CellValue[][] {
 }
 
 export function tickMsForLevel(level: number, slowPercent: number): number {
-  const base = Math.max(400, 1500 - (level - 1) * 100);
+  const base = Math.max(400, 3000 - (level - 1) * 100);
   return Math.floor(base * (1 + slowPercent / 100));
 }
 
@@ -109,7 +109,7 @@ export class Game {
   private pendingBossFloor = false;
   public comboCount = 0;
   private lastLineClearMs = 0;
-  private merchantTiles: Array<{ x: number; y: number }> = [];
+  private tattooTiles: Array<{ x: number; y: number }> = [];
   public altarTiles: AltarTile[] = [];
   private luckyBlockCount = 0;
 
@@ -317,11 +317,11 @@ export class Game {
 
   isValidMove(x: number, y: number): boolean {
     if (x < 0 || x >= CONFIG.COLS || y < 0 || y >= CONFIG.ROWS) return false;
-    return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isMerchantTile(x, y) || this.isAltarTile(x, y);
+    return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isTattooTile(x, y) || this.isAltarTile(x, y);
   }
 
-  private isMerchantTile(x: number, y: number): boolean {
-    return this.merchantTiles.some(t => t.x === x && t.y === y);
+  private isTattooTile(x: number, y: number): boolean {
+    return this.tattooTiles.some(t => t.x === x && t.y === y);
   }
 
   private isAltarTile(x: number, y: number): boolean {
@@ -358,8 +358,8 @@ export class Game {
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.MERCHANT) {
           this.map[tx]![ty] = Tile.FLOOR;
-          this.colors[tx]![ty] = '#1a4a1a';
-          this.merchantTiles.push({ x: tx, y: ty });
+          this.colors[tx]![ty] = '#2a0a3a';
+          this.tattooTiles.push({ x: tx, y: ty });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.ALTAR) {
           const tier = getBoonTierForFloor(this.dungeonLevel);
@@ -942,7 +942,7 @@ export class Game {
     this.explored = this.emptyBoolGrid(false);
     this.monsters = [];
     this.items = [];
-    this.merchantTiles = [];
+    this.tattooTiles = [];
     this.altarTiles = [];
     this.hazards = [];
     this.specialTiles = [];
@@ -965,6 +965,10 @@ export class Game {
     this.player.deathwardCharges = this.player.boons
       .filter(b => b.id === 'deathward')
       .reduce((sum, b) => sum + b.stacks, 0);
+    // Life Brand: replenish revive flag each floor if set was completed
+    if (this.player.brands.filter(b => b.brand.id === 'life').length >= 3) {
+      this.player.lifeBrandRevive = true;
+    }
     this.generateStartPlatform();
     this.maybeSpawnDungeonRoom();
     this.spawnBlock();
@@ -992,6 +996,20 @@ export class Game {
     this.processSpecialTiles();
     this.moveGravity();
     processMonsterTurns(this);
+    // Sick brand: tick poison on monsters
+    for (const m of this.monsters) {
+      const poison = m.statuses.find(s => s.type === 'poison');
+      if (poison) {
+        m.hp -= poison.power;
+        poison.duration--;
+        this.cb.onParticle?.(m.x, m.y, `☠-${poison.power}`, '#66bb6a');
+      }
+      m.statuses = m.statuses.filter(s => s.duration > 0);
+    }
+    this.monsters = this.monsters.filter(m => {
+      if (m.hp <= 0) { killMonster(m, this); return false; }
+      return true;
+    });
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
@@ -1088,29 +1106,21 @@ export class Game {
     this.pushUI();
   }
 
-  // ── Shop ─────────────────────────────────────────────────────────────────
+  // ── Tattoo Artist ─────────────────────────────────────────────────────────
 
-  openShop(): void {
+  openTattooArtist(): void {
     this.paused = true;
-    this.cb.onOpenShop(this.gold);
-  }
-
-  buyMerchantItem(index: number, stock: typeof import('./content').MERCHANT_STOCK): number | null {
-    const item = stock[index];
-    if (!item || this.gold < item.cost) {
-      this.cb.log('Not enough gold to purchase!', 'log-damage');
-      return null;
-    }
-    this.gold -= item.cost;
-    const result = item.apply(this.player);
-    this.cb.log(`Bought ${item.name}: ${result}`, 'log-success');
-    this.pushUI();
-    return this.gold;
-  }
-
-  closeShop(): void {
-    this.paused = false;
-    this.cb.onAction();
+    const choices = getThreeRandomBrands();
+    this.cb.onOpenTattooArtist?.(choices, (index) => {
+      const slot = this.player.brands.length < 5
+        ? (['body', 'left_arm', 'right_arm', 'legs', 'head'] as const)[this.player.brands.length]!
+        : 'body' as const;
+      this.player.addBrand(slot, choices[index]!);
+      this.cb.log(`🔱 ${choices[index]!.name} Brand tattooed on ${slot.replace('_', ' ')}!`, 'log-perk');
+      this.paused = false;
+      this.pushUI();
+      this.cb.onAction?.();
+    });
   }
 
   openAltar(tier: 1 | 2 | 3): void {
@@ -1143,10 +1153,10 @@ export class Game {
       return;
     }
 
-    // Merchant tile
-    if (this.isMerchantTile(nx, ny)) {
+    // Tattoo Artist tile
+    if (this.isTattooTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
-      this.openShop();
+      this.openTattooArtist();
       return;
     }
 
@@ -1201,7 +1211,7 @@ export class Game {
     // Ice sliding — continue in same direction until hitting wall, monster, or non-ice
     while (this.isIceTile(this.player.x, this.player.y)) {
       const sx = this.player.x + dx, sy = this.player.y + dy;
-      if (!this.isValidMove(sx, sy) || this.getMonsterAt(sx, sy) || this.isMerchantTile(sx, sy)) break;
+      if (!this.isValidMove(sx, sy) || this.getMonsterAt(sx, sy) || this.isTattooTile(sx, sy)) break;
       this.player.x = sx; this.player.y = sy;
       const slideItem = this.getItemAt(sx, sy);
       if (slideItem) this.pickupItemAt(slideItem, sx, sy);
@@ -1566,8 +1576,8 @@ export class Game {
       return { icon: '🪜', title: 'Stairs', lines: ['Descend to the next floor'] };
     }
 
-    if (this.isMerchantTile(x, y)) {
-      return { icon: '🏪', title: 'Merchant', lines: ['Spend gold on potions & gear'] };
+    if (this.isTattooTile(x, y)) {
+      return { icon: '🎭', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Sacred Brand'] };
     }
 
     const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
@@ -1606,6 +1616,10 @@ export class Game {
       xpToNext: this.player.xpToNext,
       playerLevel: this.player.playerLevel,
       boons: this.player.boons.map(b => ({ char: b.def.char, name: b.def.name, stacks: b.stacks })),
+      brands: this.player.brands.map(b => {
+        const count = this.player.brands.filter(x => x.brand.id === b.brand.id).length;
+        return { slot: b.slot, char: b.brand.char, name: b.brand.name, setActive: count >= b.brand.setSize };
+      }),
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
       activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,

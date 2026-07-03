@@ -84,6 +84,20 @@ export interface BoonDef {
   onAdd: (player: Player, newStacks: number) => void;
 }
 
+export type BodyPart = 'head' | 'body' | 'left_arm' | 'right_arm' | 'legs';
+export const BODY_PARTS: BodyPart[] = ['body', 'left_arm', 'right_arm', 'legs', 'head'];
+
+export interface BrandDef {
+  id: string;
+  char: string;
+  name: string;
+  desc: string;
+  setSize: 2 | 3;
+  setDesc: string;
+  onEquip: (player: Player) => void;
+  onSetComplete: (player: Player) => void;
+}
+
 export interface AltarTile {
   x: number;
   y: number;
@@ -161,6 +175,7 @@ export interface UIState {
   xpToNext: number;
   playerLevel: number;
   boons: Array<{ char: string; name: string; stacks: number }>;
+  brands: Array<{ slot: BodyPart; char: string; name: string; setActive: boolean }>;
   statuses: StatusEffect[];
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
@@ -182,7 +197,8 @@ export interface GameCallbacks {
   onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats) => void;
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
-  onOpenShop: (gold: number) => void;
+  onOpenShop?: (gold: number) => void;
+  onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;
   onBossWarning?: (boss: BossDef, onDone: () => void) => void;

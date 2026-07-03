@@ -1,12 +1,10 @@
 import { NEXT_PREVIEWS } from './config';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef } from './types';
-import type { MerchantItem } from './content';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef } from './types';
 import type { RunRecord } from './types';
 
 export class UIManager {
   private readonly logPanel: HTMLElement;
   private readonly modal: HTMLElement;
-  private readonly shopModal: HTMLElement;
   private readonly modifierModal: HTMLElement;
   private readonly bossWarningModal: HTMLElement;
   private readonly classModal: HTMLElement;
@@ -20,7 +18,6 @@ export class UIManager {
   constructor() {
     this.logPanel          = document.getElementById('log-panel')!;
     this.modal             = document.getElementById('game-over-modal')!;
-    this.shopModal         = document.getElementById('shop-modal')!;
     this.modifierModal     = document.getElementById('modifier-modal')!;
     this.bossWarningModal  = document.getElementById('boss-warning-modal')!;
     this.classModal        = document.getElementById('class-modal')!;
@@ -44,6 +41,7 @@ export class UIManager {
       xpLabel:          document.getElementById('xp-label')!,
       playerLevel:      document.getElementById('player-level')!,
       boonPanel:        document.getElementById('boon-panel')!,
+      brandPanel:       document.getElementById('brand-panel')!,
       statusRow:        document.getElementById('status-row')!,
       runHistory:       document.getElementById('run-history')!,
       relicSlots:       document.getElementById('relic-slots')!,
@@ -122,6 +120,7 @@ export class UIManager {
     this.els['xpBar']!.style.width       = `${Math.min(100, (state.xp / state.xpToNext) * 100)}%`;
     this.els['xpLabel']!.textContent     = `${state.xp}/${state.xpToNext} XP`;
     this.updateBoons(state.boons);
+    this.updateBrands(state.brands);
 
     // Status effect tags
     this.els['statusRow']!.innerHTML = state.statuses
@@ -315,40 +314,6 @@ export class UIManager {
     }, 1800);
   }
 
-  showShop(gold: number, stock: MerchantItem[], onBuy: (i: number) => number | null, onClose: () => void): void {
-    const goldEl = document.getElementById('shop-gold')!;
-    const container = document.getElementById('shop-items')!;
-    const buttons: HTMLButtonElement[] = [];
-
-    const refreshAffordability = (currentScore: number): void => {
-      goldEl.textContent = currentScore.toLocaleString();
-      for (let j = 0; j < buttons.length; j++) {
-        (buttons[j] as HTMLButtonElement).disabled = currentScore < stock[j]!.cost;
-      }
-    };
-
-    goldEl.textContent = gold.toLocaleString();
-    container.innerHTML = '';
-    for (let i = 0; i < stock.length; i++) {
-      const item = stock[i]!;
-      const btn = document.createElement('button');
-      btn.className = 'shop-item-btn';
-      btn.innerHTML = `<span>${item.char} ${item.name}</span><span class="shop-cost">${item.cost} gold</span>`;
-      btn.disabled = gold < item.cost;
-      btn.addEventListener('click', () => {
-        const newScore = onBuy(i);
-        if (newScore !== null) refreshAffordability(newScore);
-      });
-      buttons.push(btn);
-      container.appendChild(btn);
-    }
-    document.getElementById('shop-close')!.onclick = () => {
-      this.shopModal.style.display = 'none';
-      onClose();
-    };
-    this.shopModal.style.display = 'flex';
-  }
-
   updateBestScore(score: number): void {
     this.els['bestScore']!.textContent = String(score);
   }
@@ -364,10 +329,52 @@ export class UIManager {
       .join('');
   }
 
+  updateBrands(brands: UIState['brands']): void {
+    const panel = this.els['brandPanel']!;
+    if (brands.length === 0) {
+      panel.textContent = '—';
+      return;
+    }
+    // Group by brand name for display
+    const grouped = new Map<string, { char: string; name: string; count: number; setActive: boolean }>();
+    for (const b of brands) {
+      const key = b.name;
+      const existing = grouped.get(key);
+      if (existing) { existing.count++; existing.setActive = b.setActive; }
+      else grouped.set(key, { char: b.char, name: b.name, count: 1, setActive: b.setActive });
+    }
+    panel.innerHTML = Array.from(grouped.values())
+      .map(b => `<span class="brand-chip${b.setActive ? ' brand-set-active' : ''}" title="${b.name}${b.setActive ? ' ✓ SET ACTIVE' : ''}">${b.char}×${b.count}</span>`)
+      .join('');
+  }
+
+  showTattooModal(choices: BrandDef[], onChoice: (i: number) => void): void {
+    const titleEl = document.getElementById('altar-title')!;
+    titleEl.textContent = '🔱 Occult Tattoo Artist — Choose a Brand';
+    const subEl = document.getElementById('altar-subtitle');
+    if (subEl) subEl.textContent = 'Brands are permanent. Collect a set for a powerful bonus.';
+    const container = document.getElementById('altar-choices')!;
+    container.innerHTML = '';
+    for (let i = 0; i < choices.length; i++) {
+      const brand = choices[i]!;
+      const btn = document.createElement('button');
+      btn.className = 'modifier-btn';
+      btn.innerHTML = `<span class="modifier-emoji">${brand.char}</span><div class="modifier-info"><strong>${brand.name}</strong><span>${brand.desc}</span><span style="font-size:9px;color:#a78bfa;">${brand.setDesc} (need ${brand.setSize})</span></div>`;
+      btn.addEventListener('click', () => {
+        this.altarModal.style.display = 'none';
+        onChoice(i);
+      });
+      container.appendChild(btn);
+    }
+    this.altarModal.style.display = 'flex';
+  }
+
   showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, titleOverride?: string): void {
     const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
     const titleEl = document.getElementById('altar-title')!;
     titleEl.textContent = titleOverride ?? `⛩️ ${tierNames[tier]} — Choose a Boon`;
+    const subEl = document.getElementById('altar-subtitle');
+    if (subEl) subEl.textContent = 'Boons stack — pick the same one again to amplify its effect.';
     const container = document.getElementById('altar-choices')!;
     container.innerHTML = '';
     for (let i = 0; i < choices.length; i++) {

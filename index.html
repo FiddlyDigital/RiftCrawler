@@ -33,6 +33,12 @@
         <div style="margin-top:2px;font-size:9px;color:#aaa;">Tick: <span id="stat-rate">1500ms</span></div>
       </div>
 
+      <!-- Sacred Brands -->
+      <div class="sidebar-card">
+        <div class="card-title">Sacred Brands</div>
+        <div id="brand-panel" class="boon-grid">—</div>
+      </div>
+
       <!-- Boons & Relics -->
       <div class="sidebar-card">
         <div class="card-title">Boons</div>
@@ -222,16 +228,6 @@
   </div>
 </div>
 
-<!-- Merchant shop modal -->
-<div id="shop-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-title">
-  <div class="modal-card">
-    <div class="modal-title" id="shop-title" style="font-size:18px;color:var(--hero-accent);">🏪 Merchant</div>
-    <p style="color:#888;margin:4px 0 10px 0;font-size:12px;">Gold: <b id="shop-gold" style="color:var(--accent-color);">0</b></p>
-    <div id="shop-items" style="display:flex;flex-direction:column;gap:6px;"></div>
-    <button class="restart-btn" id="shop-close" style="background-color:#333;color:#ccc;margin-top:12px;">Leave Shop</button>
-  </div>
-</div>
-
 <!-- Class selection modal -->
 <div id="class-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="class-title">
   <div class="modal-card" style="max-width:340px;">
@@ -241,11 +237,11 @@
   </div>
 </div>
 
-<!-- Altar boon selection modal -->
+<!-- Altar / Tattoo Artist modal (reused) -->
 <div id="altar-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="altar-title">
   <div class="modal-card">
     <div class="modal-title" id="altar-title" style="font-size:18px;color:#ce93d8;">⛩️ Minor Altar — Choose a Boon</div>
-    <p style="color:#888;margin:4px 0 12px 0;font-size:12px;">Boons stack — pick the same one again to amplify its effect.</p>
+    <p id="altar-subtitle" style="color:#888;margin:4px 0 12px 0;font-size:12px;">Boons stack — pick the same one again to amplify its effect.</p>
     <div id="altar-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>

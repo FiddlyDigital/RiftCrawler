@@ -4,16 +4,23 @@ import { CONFIG } from './config';
 type GameGetter = () => Game;
 type InspectCallback = (gx: number, gy: number, clientX: number, clientY: number) => void;
 
+function heroMove(game: ReturnType<GameGetter>, dx: number, dy: number): void {
+  game.handleHeroMove(dx, dy);
+  if (game.player.bonusHeroMoves > 0 && !game.paused && game.player.hp > 0) {
+    game.handleHeroMove(dx, dy);
+  }
+}
+
 export function bindKeyboard(getGame: GameGetter): void {
   window.addEventListener('keydown', (e) => {
     const game = getGame();
     if (game.player.hp <= 0) return;
 
     switch (e.key) {
-      case 'w': case 'ArrowUp':    game.handleHeroMove(0, -1);  break;
-      case 's': case 'ArrowDown':  game.handleHeroMove(0, 1);   break;
-      case 'a': case 'ArrowLeft':  game.handleHeroMove(-1, 0);  break;
-      case 'd': case 'ArrowRight': game.handleHeroMove(1, 0);   break;
+      case 'w': case 'ArrowUp':    heroMove(game, 0, -1);  break;
+      case 's': case 'ArrowDown':  heroMove(game, 0, 1);   break;
+      case 'a': case 'ArrowLeft':  heroMove(game, -1, 0);  break;
+      case 'd': case 'ArrowRight': heroMove(game, 1, 0);   break;
       case ' ':                    game.handleHeroWait();        break;
       case 'q': case 'Q':          game.handleRangedAttack();    break;
       case 'j':                    game.handleBlockLeft();       break;
@@ -115,10 +122,10 @@ export function bindGamepad(getGame: GameGetter): void {
   function fireAction(action: string): void {
     const game = getGame();
     switch (action) {
-      case 'hero-up':        game.handleHeroMove(0, -1);  break;
-      case 'hero-down':      game.handleHeroMove(0,  1);  break;
-      case 'hero-left':      game.handleHeroMove(-1, 0);  break;
-      case 'hero-right':     game.handleHeroMove( 1, 0);  break;
+      case 'hero-up':        heroMove(game, 0, -1);  break;
+      case 'hero-down':      heroMove(game, 0,  1);  break;
+      case 'hero-left':      heroMove(game, -1, 0);  break;
+      case 'hero-right':     heroMove(game,  1, 0);  break;
       case 'hero-wait':      game.handleHeroWait();        break;
       case 'hero-ranged':    game.handleRangedAttack();    break;
       case 'block-left':     game.handleBlockLeft();       break;
@@ -207,7 +214,7 @@ export function bindButtons(getGame: GameGetter): void {
       case 'hero-move': {
         const dx = Number(btn.dataset['dx'] ?? 0);
         const dy = Number(btn.dataset['dy'] ?? 0);
-        game.handleHeroMove(dx, dy);
+        heroMove(game, dx, dy);
         break;
       }
     }

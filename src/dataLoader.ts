@@ -2,9 +2,8 @@ import visualRegistryData from './data/visual-registry.json';
 import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
 import itemsData          from './data/items.json';
-import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef } from './types';
+import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef } from './types';
 import type { Player } from './entities';
 import type { MonsterDef, BossDef, ItemDef } from './types';
 
@@ -14,15 +13,6 @@ export const VISUAL_REGISTRY: Record<string, string> = visualRegistryData as Rec
 
 function vis(assetId: string): string {
   return VISUAL_REGISTRY[assetId] ?? '❓';
-}
-
-// ── Runtime interface types (exported for consumers) ──────────────────────────
-
-export interface MerchantItem {
-  name: string;
-  char: string;
-  cost: number;
-  apply: (player: Player) => string;
 }
 
 // ── Raw JSON shapes (local — not exposed) ─────────────────────────────────────
@@ -47,11 +37,6 @@ interface RawBoss {
 interface RawItem {
   id: string; displayName: string; visualAsset: string; cellTypeId: string;
   effectType: string; effectValue: number;
-}
-
-interface RawMerchantItem {
-  id: string; displayName: string; visualAsset: string;
-  cost: number; effectType: string; effectValue: number; effectLabel: string;
 }
 
 interface RawShape {
@@ -222,42 +207,88 @@ export function getThreeRandomBoons(pool: BoonDef[]): BoonDef[] {
   return shuffled.slice(0, 3);
 }
 
-// ── Merchant effect resolvers ─────────────────────────────────────────────────
+// ── Sacred Brands ─────────────────────────────────────────────────────────────
 
-const MERCHANT_RESOLVERS: Record<string, (player: Player, value: number, label: string) => string> = {
-  heal:       (p, v, l) => { const h = p.heal(v); return l.replace('{value}', String(h)); },
-  atkBoost:   (p, v, l) => { p.atk += v; return l; },
-  maxHpBoost: (p, v, l) => { p.maxHp += v; p.hp = Math.min(p.hp + v, p.maxHp); return l; },
-  visionBoost:(p, v, l) => { p.visionRadius += v; return l; },
-  curePoison: (p, _v, l) => { p.statuses = p.statuses.filter(s => s.type !== 'poison'); return l; },
-  regenBoost: (p, v, l)  => { p.regenPerTick += v; return l; },
-};
-
-const MERCHANT_POOL: MerchantItem[] = [
-  ...(merchantData as RawMerchantItem[]).map(raw => ({
-    name: raw.displayName,
-    char: vis(raw.visualAsset),
-    cost: raw.cost,
-    apply: (player: Player) => {
-      const resolve = MERCHANT_RESOLVERS[raw.effectType];
-      return resolve ? resolve(player, raw.effectValue, raw.effectLabel) : raw.effectLabel;
-    },
-  })),
-  { name: 'Strength Shard', char: '💪', cost: 250, apply: (p: Player) => { p.atk += 5; return '+5 ATK'; } },
-  { name: 'Iron Shield',    char: '🛡️', cost: 300, apply: (p: Player) => { p.damageReduction += 2; return '−2 incoming dmg'; } },
-  { name: 'Combo Catalyst', char: '⚡', cost: 200, apply: (p: Player) => { p.killHeal += 3; p.regenPerTick += 1; return '+3 kill heal, +1 regen/tick'; } },
+export const BRANDS: BrandDef[] = [
+  {
+    id: 'war', char: '⚔️', name: 'War', setSize: 3,
+    desc: '+2 ATK per brand',
+    setDesc: 'Set: +10 ATK',
+    onEquip:      (p) => { p.atk += 2; },
+    onSetComplete:(p) => { p.atk += 10; },
+  },
+  {
+    id: 'cryo', char: '❄️', name: 'Cryo', setSize: 3,
+    desc: '+5% tick slow per brand',
+    setDesc: 'Set: +25% more tick slow',
+    onEquip:      (p) => { p.tickSlowPercent += 5; },
+    onSetComplete:(p) => { p.tickSlowPercent += 25; },
+  },
+  {
+    id: 'sick', char: '☠️', name: 'Sick', setSize: 3,
+    desc: '+8% chance to poison on hit',
+    setDesc: 'Set: 100% poison on hit',
+    onEquip:      (p) => { p.poisonAttackChance = Math.min(1.0, p.poisonAttackChance + 0.08); },
+    onSetComplete:(p) => { p.poisonAttackChance = 1.0; },
+  },
+  {
+    id: 'sight', char: '👁️', name: 'Sight', setSize: 2,
+    desc: '+1 vision radius per brand',
+    setDesc: 'Set: +2 more vision radius',
+    onEquip:      (p) => { p.visionRadius += 1; },
+    onSetComplete:(p) => { p.visionRadius += 2; },
+  },
+  {
+    id: 'speed', char: '💨', name: 'Speed', setSize: 2,
+    desc: 'Collecting the set grants extra move',
+    setDesc: 'Set: move twice per turn',
+    onEquip:      (_p) => { /* set bonus only */ },
+    onSetComplete:(p) => { p.bonusHeroMoves += 1; },
+  },
+  {
+    id: 'life', char: '❤️', name: 'Life', setSize: 3,
+    desc: '+5 max HP per brand',
+    setDesc: 'Set: free revive (erases all brands!)',
+    onEquip:      (p) => { p.maxHp += 5; p.hp = Math.min(p.hp + 5, p.maxHp); },
+    onSetComplete:(p) => { p.lifeBrandRevive = true; },
+  },
+  {
+    id: 'guard', char: '🛡️', name: 'Guard', setSize: 2,
+    desc: '+1 damage reduction per brand',
+    setDesc: 'Set: +3 more damage reduction',
+    onEquip:      (p) => { p.damageReduction += 1; },
+    onSetComplete:(p) => { p.damageReduction += 3; },
+  },
+  {
+    id: 'leech', char: '🩸', name: 'Leech', setSize: 2,
+    desc: '+2 HP on kill per brand',
+    setDesc: 'Set: +5 more HP on kill',
+    onEquip:      (p) => { p.killHeal += 2; },
+    onSetComplete:(p) => { p.killHeal += 5; },
+  },
+  {
+    id: 'forge', char: '🔥', name: 'Forge', setSize: 3,
+    desc: '+2 line-clear damage per brand',
+    setDesc: 'Set: +8 more line-clear damage',
+    onEquip:      (p) => { p.lineClearDamage += 2; },
+    onSetComplete:(p) => { p.lineClearDamage += 8; },
+  },
+  {
+    id: 'ghost', char: '👻', name: 'Ghost', setSize: 2,
+    desc: '+5% dodge chance per brand',
+    setDesc: 'Set: +20% more dodge',
+    onEquip:      (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.05); },
+    onSetComplete:(p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.20); },
+  },
 ];
 
-/** Kept for backwards compatibility — consumers that pass a stock array still work. */
-export const MERCHANT_STOCK: MerchantItem[] = MERCHANT_POOL.slice(0, 6);
-
-export function getMerchantStock(): MerchantItem[] {
-  const pool = [...MERCHANT_POOL];
+export function getThreeRandomBrands(): BrandDef[] {
+  const pool = [...BRANDS];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return pool.slice(0, 5);
+  return pool.slice(0, 3);
 }
 
 // ── Relics ────────────────────────────────────────────────────────────────────

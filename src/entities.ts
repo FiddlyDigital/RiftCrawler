@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, MonsterDef, RelicDef, RangedAbility, BoonDef } from './types';
+import type { StatusEffect, MonsterDef, RelicDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
 export class Player {
   x: number;
@@ -65,6 +65,12 @@ export class Player {
   // Boons
   boons: Array<{ id: string; stacks: number; def: BoonDef }> = [];
   thornDamage = 0;
+
+  // Brands (Sacred Tattoos)
+  brands: Array<{ slot: BodyPart; brand: BrandDef }> = [];
+  poisonAttackChance = 0;
+  bonusHeroMoves = 0;
+  lifeBrandRevive = false;
   killAtkBonus = 0;
   killAtkFloorBonus = 0;
   lineClearAoeDmgMult = 0;
@@ -121,6 +127,13 @@ export class Player {
     if (!entry) this.boons.push({ id: def.id, stacks: newStacks, def });
     def.onAdd(this, newStacks);
     this.recomputeVoidPrism();
+  }
+
+  addBrand(slot: BodyPart, def: BrandDef): void {
+    this.brands.push({ slot, brand: def });
+    def.onEquip(this);
+    const count = this.brands.filter(b => b.brand.id === def.id).length;
+    if (count % def.setSize === 0) def.onSetComplete(this);
   }
 
   private recomputeVoidPrism(): void {

@@ -10,6 +10,16 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
     game.cb.onParticle?.(game.player.x, game.player.y, '💀 REVIVED', '#b71c1c', 16);
     return;
   }
+  // Life Brand: free revive but erases all brands
+  if (game.player.lifeBrandRevive) {
+    game.player.lifeBrandRevive = false;
+    const brandCount = game.player.brands.length;
+    game.player.brands = [];
+    game.player.hp = Math.max(1, Math.floor(game.player.maxHp * 0.30));
+    game.cb.log(`❤️ Life Brand activates — ${brandCount} brands consumed, death averted!`, 'log-perk');
+    game.cb.onParticle?.(game.player.x, game.player.y, '❤️ REVIVED', '#e53935', 16);
+    return;
+  }
   game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats());
 }
 
@@ -87,6 +97,14 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     if (!monster.isStunned) {
       monster.statuses.push({ type: 'stun', duration: 1, power: 0 });
       game.cb.log(`${monster.name} is stunned!`, 'log-success');
+    }
+  }
+
+  // Sick brand: chance to inflict poison on hit
+  if (dmg > 0 && game.player.poisonAttackChance > 0 && Math.random() < game.player.poisonAttackChance) {
+    if (!monster.statuses.some(s => s.type === 'poison')) {
+      monster.statuses.push({ type: 'poison', duration: 3, power: 3 });
+      game.cb.log(`☠️ Poisoned ${monster.name}!`, 'log-success');
     }
   }
 

@@ -207,11 +207,11 @@ export class Renderer {
               ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
             }
           } else if (isMerchant) {
-            if (visible) this.drawPulseGlow(x, y, '102,187,106');
-            if (!this.drawSprite('🏪', x * TS, y * TS, TS, TS)) {
+            if (visible) this.drawPulseGlow(x, y, '148,0,211');
+            if (!this.drawSprite('🎭', x * TS, y * TS, TS, TS)) {
               ctx.font = `${TS * 0.7}px Arial`;
               ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-              ctx.fillText('🏪', x * TS + TS / 2, y * TS + TS / 2);
+              ctx.fillText('🎭', x * TS + TS / 2, y * TS + TS / 2);
             }
           } else {
             const altar = this.getAltarAt(game, x, y);
@@ -251,7 +251,7 @@ export class Renderer {
         const tx = game.blockX + c, ty = game.blockY + r;
         if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
 
-        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b5e20' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
+        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         if (cell === Cell.BOSS) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
@@ -526,8 +526,8 @@ export class Renderer {
   }
 
   private isMerchantTile(game: Game, x: number, y: number): boolean {
-    return (game as unknown as { merchantTiles: Array<{ x: number; y: number }> })
-      .merchantTiles.some((t: { x: number; y: number }) => t.x === x && t.y === y);
+    return (game as unknown as { tattooTiles: Array<{ x: number; y: number }> })
+      .tattooTiles.some((t: { x: number; y: number }) => t.x === x && t.y === y);
   }
 
   private getAltarAt(game: Game, x: number, y: number): { tier: 1 | 2 | 3 } | undefined {
@@ -547,7 +547,7 @@ const CELL_EMOJI: Partial<Record<number, string>> = {
   [Cell.ITEM_SWORD]:     '🗡️',
   [Cell.STAIRS]:         '🪜',
   [Cell.BOMB]:           '💣',
-  [Cell.MERCHANT]:       '🏪',
+  [Cell.MERCHANT]:       '🎭',
   [Cell.BOSS]:           '⚠️',
   [Cell.RELIC]:          '🔮',
   [Cell.ALTAR]:          '⛩️',

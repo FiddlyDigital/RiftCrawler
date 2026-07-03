@@ -35,10 +35,10 @@ describe('rotateMatrix', () => {
 
 // Formula: Math.max(400, 1500 - (level-1)*100), then scaled by slowPercent
 describe('tickMsForLevel', () => {
-  it('returns 1500ms on floor 1 with no slow', () => expect(tickMsForLevel(1, 0)).toBe(1500));
-  it('returns 1400ms on floor 2', () => expect(tickMsForLevel(2, 0)).toBe(1400));
+  it('returns 3000ms on floor 1 with no slow', () => expect(tickMsForLevel(1, 0)).toBe(3000));
+  it('returns 2900ms on floor 2', () => expect(tickMsForLevel(2, 0)).toBe(2900));
   it('returns 400ms minimum', () => expect(tickMsForLevel(999, 0)).toBe(400));
-  it('applies slow perk percentage', () => expect(tickMsForLevel(1, 15)).toBe(Math.floor(1500 * 1.15)));
+  it('applies slow perk percentage', () => expect(tickMsForLevel(1, 15)).toBe(Math.floor(3000 * 1.15)));
 });
 
 describe('scoreForLines', () => {

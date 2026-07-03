@@ -388,6 +388,22 @@ canvas {
   font-size: 11px;
   color: #ce93d8;
 }
+
+.brand-chip {
+  background: #1a0a20;
+  border: 1px solid #6a0dad;
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: default;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #c084fc;
+}
+
+.brand-chip.brand-set-active {
+  border-color: #ffd54f;
+  color: #ffd54f;
+}
 #altar-modal .modifier-btn:hover {
   border-color: #ce93d8;
 }

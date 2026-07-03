@@ -5,7 +5,7 @@ import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
 import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
-import { getMerchantStock } from './content';
+import type { BrandDef } from './types';
 import { audio } from './audio';
 import type { AudioEvent } from './types';
 
@@ -104,16 +104,13 @@ function startGame(startPaused = false): void {
       }, '⬆️ LEVEL UP — Choose a Boon');
     },
 
-    onOpenShop: (gold) => {
+    onOpenTattooArtist: (choices: BrandDef[], onChoice: (i: number) => void) => {
       stopTick();
       audio.playShop();
-      const stock = getMerchantStock();
-      ui.showShop(
-        gold,
-        stock,
-        (i) => game.buyMerchantItem(i, stock) ?? null,
-        ()  => { game.closeShop(); startTick(); },
-      );
+      ui.showTattooModal(choices, (i) => {
+        onChoice(i);
+        startTick();
+      });
     },
 
     onBossWarning: (boss, onDone) => {
