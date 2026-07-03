@@ -340,7 +340,7 @@ describe('Balance levers', () => {
   });
 
   // Phase 1
-  it('miss-pity upgrades the third consecutive whiff to a landing hit', () => {
+  it('misses chip for graze damage and the pity whiff upgrades to a stronger hit', () => {
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0); // aRoll=dRoll=1 → forced miss
     const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
@@ -348,9 +348,9 @@ describe('Balance levers', () => {
     const d2 = playerAttackMonster(m, game);
     const d3 = playerAttackMonster(m, game);
     spy.mockRestore();
-    expect(d1).toBe(0);
-    expect(d2).toBe(0);
-    expect(d3).toBeGreaterThan(0);
+    expect(d1).toBeGreaterThan(0);   // graze floor — no wasted swing
+    expect(d2).toBe(d1);             // consistent graze chip
+    expect(d3).toBeGreaterThan(d1);  // 3rd whiff upgraded to a weak hit
   });
 
   it('a landed hit resets the miss-pity streak', () => {

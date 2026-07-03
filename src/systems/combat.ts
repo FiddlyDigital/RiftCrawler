@@ -98,10 +98,15 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
   }
 
   if (outcome === 'miss') {
-    game.cb.log(`${monster.name} parries! (${aRoll} vs ${dRoll})`, 'log-neutral');
-    game.cb.onParticle(monster.x, monster.y, 'MISS', '#90a4ae');
+    // Graze floor: even a whiff chips for a little damage so no swing is wasted
+    // while a block is bearing down on you. The miss-pity above still escalates a
+    // cold streak from graze → weak hit, so poor rolls sting but never stall you.
+    const graze = Math.max(1, Math.round(game.player.totalAtk * 0.25 * damageMult));
+    monster.hp -= graze;
+    game.cb.log(`Graze on ${monster.name} (${aRoll} vs ${dRoll}) — ${graze} dmg`, 'log-neutral');
+    game.cb.onParticle(monster.x, monster.y, `-${graze}`, '#b0bec5', 14);
     game.cb.onAudio?.('hit');
-    return 0;
+    return graze;
   }
 
   const dmg = Math.max(1, Math.round(game.player.totalAtk * OUTCOME_MULT[outcome] * damageMult));
