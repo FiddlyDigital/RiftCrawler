@@ -49,22 +49,19 @@
         <div id="ranged-ability-badge"  style="display:none;margin-top:4px;"></div>
       </div>
 
-      <!-- XP Earned -->
-      <div class="sidebar-card">
-        <div class="card-title">XP EARNED</div>
-        <div style="font-size:12px;font-weight:bold;color:var(--accent-color);" id="stat-xp-total">0</div>
-        <div style="font-size:9px;color:#888;margin-top:1px;">Best: <span id="best-score">0</span></div>
-      </div>
-
-      <!-- Experience -->
+      <!-- Experience + XP Earned -->
       <div class="sidebar-card">
         <div class="card-title">Experience</div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
           <span id="player-level" style="font-size:12px;font-weight:bold;color:var(--accent-color);">Lv.1</span>
-          <span id="xp-label" style="font-size:9px;color:#888;">0/50 XP</span>
+          <span id="stat-xp-total" style="font-size:12px;font-weight:bold;color:var(--accent-color);">0</span>
         </div>
         <div class="xp-bar-container" style="margin-top:3px;">
           <div id="xp-bar" class="xp-bar-fill"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:2px;">
+          <span id="xp-label" style="font-size:9px;color:#888;">0/50 XP</span>
+          <span style="font-size:9px;color:#888;">Best: <span id="best-score">0</span></span>
         </div>
       </div>
 
