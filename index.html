@@ -49,10 +49,10 @@
         <div id="ranged-ability-badge"  style="display:none;margin-top:4px;"></div>
       </div>
 
-      <!-- Score -->
+      <!-- XP Earned -->
       <div class="sidebar-card">
-        <div class="card-title">Score</div>
-        <div style="font-size:12px;font-weight:bold;color:var(--accent-color);" id="stat-score">0</div>
+        <div class="card-title">XP EARNED</div>
+        <div style="font-size:12px;font-weight:bold;color:var(--accent-color);" id="stat-xp-total">0</div>
         <div style="font-size:9px;color:#888;margin-top:1px;">Best: <span id="best-score">0</span></div>
       </div>
 
@@ -185,7 +185,7 @@
     <p style="color:#888;margin:5px 0 10px 0;" id="death-reason">Dungeon ceiling collapsed.</p>
     <div style="text-align:left;padding:10px;background-color:#0c0c12;border-radius:4px;font-size:12px;">
       <p style="margin:3px 0;">🪜 Floor: <b id="final-floor" style="color:var(--accent-color);">1</b></p>
-      <p style="margin:3px 0;">🏆 Score: <b id="final-score" style="color:var(--accent-color);">0</b></p>
+      <p style="margin:3px 0;">✨ XP Earned: <b id="final-score" style="color:var(--accent-color);">0</b></p>
       <p style="margin:3px 0;">⭐ Best:  <b id="high-score"  style="color:var(--accent-color);">0</b></p>
     </div>
     <!-- Run stats grid -->
@@ -229,7 +229,7 @@
 <div id="shop-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-title">
   <div class="modal-card">
     <div class="modal-title" id="shop-title" style="font-size:18px;color:var(--hero-accent);">🏪 Merchant</div>
-    <p style="color:#888;margin:4px 0 10px 0;font-size:12px;">Score: <b id="shop-gold" style="color:var(--accent-color);">0</b> pts</p>
+    <p style="color:#888;margin:4px 0 10px 0;font-size:12px;">Gold: <b id="shop-gold" style="color:var(--accent-color);">0</b></p>
     <div id="shop-items" style="display:flex;flex-direction:column;gap:6px;"></div>
     <button class="restart-btn" id="shop-close" style="background-color:#333;color:#ccc;margin-top:12px;">Leave Shop</button>
   </div>

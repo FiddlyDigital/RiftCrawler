@@ -59,13 +59,15 @@ export class Player {
   // Relics (max 2)
   relics: RelicDef[] = [];
 
+  // Run total XP (display metric — accumulates every gainXP call)
+  totalXpEarned = 0;
+
   // Boons
   boons: Array<{ id: string; stacks: number; def: BoonDef }> = [];
   thornDamage = 0;
   killAtkBonus = 0;
   killAtkFloorBonus = 0;
   lineClearAoeDmgMult = 0;
-  lineClearScoreMult = 1;
   deathwardCharges = 0;
   voidPrismBonus = { atk: 0, hp: 0 };
 
@@ -102,6 +104,7 @@ export class Player {
   }
 
   gainXP(amount: number): boolean {
+    this.totalXpEarned += amount;
     this.xp += amount;
     if (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;

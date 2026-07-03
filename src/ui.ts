@@ -14,7 +14,7 @@ export class UIManager {
   private readonly inspectTooltip: HTMLElement;
   private readonly altarModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
-  private lastScore = -1;
+  private lastXpEarned = -1;
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -29,7 +29,7 @@ export class UIManager {
     this.altarModal        = document.getElementById('altar-modal')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
-      score:            document.getElementById('stat-score')!,
+      xpTotal:          document.getElementById('stat-xp-total')!,
       hp:               document.getElementById('stat-hp')!,
       rate:             document.getElementById('stat-rate')!,
       hpBar:            document.getElementById('hp-bar')!,
@@ -71,7 +71,7 @@ export class UIManager {
 
   updateStats(state: UIState): void {
     this.els['floor']!.textContent       = String(state.floor);
-    this.els['score']!.textContent       = String(state.score);
+    this.els['xpTotal']!.textContent     = String(state.totalXpEarned);
     this.els['hp']!.textContent          = `${state.hp}/${state.maxHp}`;
     this.els['rate']!.textContent        = `${state.gravityRate}ms`;
     const hpBar = this.els['hpBar']!;
@@ -88,13 +88,13 @@ export class UIManager {
         : '0 0 28px rgba(220,20,20,.5), 0 0 8px rgba(220,20,20,.22)';
     document.documentElement.style.setProperty('--canvas-glow', glowValue);
 
-    if (state.score !== this.lastScore) {
-      const scoreEl = this.els['score']!;
-      scoreEl.classList.remove('score-pop');
-      void scoreEl.offsetWidth;
-      scoreEl.classList.add('score-pop');
-      setTimeout(() => scoreEl.classList.remove('score-pop'), 320);
-      this.lastScore = state.score;
+    if (state.totalXpEarned !== this.lastXpEarned) {
+      const xpEl = this.els['xpTotal']!;
+      xpEl.classList.remove('score-pop');
+      void xpEl.offsetWidth;
+      xpEl.classList.add('score-pop');
+      setTimeout(() => xpEl.classList.remove('score-pop'), 320);
+      this.lastXpEarned = state.totalXpEarned;
     }
 
     this.els['nextPreview']!.innerHTML = NEXT_PREVIEWS[state.nextType] ?? '';
@@ -193,12 +193,12 @@ export class UIManager {
     }
   }
 
-  showDeath(title: string, reason: string, floor: number, score: number, highScore: number, history: RunRecord[], stats?: RunStats): void {
+  showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
     this.els['deathTitle']!.textContent  = title;
     this.els['deathReason']!.textContent = reason;
     this.els['finalFloor']!.textContent  = String(floor);
-    this.els['finalScore']!.textContent  = String(score);
-    this.els['highScore']!.textContent   = String(highScore);
+    this.els['finalScore']!.textContent  = String(totalXpEarned);
+    this.els['highScore']!.textContent   = String(highXp);
 
     // Run stats grid
     if (stats) {
@@ -211,7 +211,7 @@ export class UIManager {
           <div class="stat-cell">💔 <b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
           <div class="stat-cell">🎒 <b>${stats.itemsPickedUp}</b><br><span>Items</span></div>
         </div>`;
-      const shareStr = `🗡️ Fl.${floor} · ☠️ ${stats.monstersKilled} kills · 🧱 ${stats.linesCleared} lines · 💥 Best combo ×${stats.biggestCombo + 1} · 🏆 ${score.toLocaleString()} pts`;
+      const shareStr = `🗡️ Fl.${floor} · ☠️ ${stats.monstersKilled} kills · 🧱 ${stats.linesCleared} lines · 💥 Best combo ×${stats.biggestCombo + 1} · ✨ ${totalXpEarned.toLocaleString()} XP`;
       (this.els['shareText'] as HTMLTextAreaElement).value = shareStr;
       this.els['shareContainer']!.style.display = '';
       const copyBtn = document.getElementById('copy-share-btn');
@@ -234,7 +234,7 @@ export class UIManager {
     const lines = history.map((r, i) =>
       `<div class="history-row${i === 0 ? ' history-latest' : ''}">
         <span>${r.date}</span><span>Fl.${r.floor}</span>
-        <span>${r.score.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
+        <span>${r.totalXpEarned.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
         <span>${r.cause?.split(' ').slice(0, 2).join(' ') ?? ''}</span>
        </div>`
     ).join('');
@@ -333,7 +333,7 @@ export class UIManager {
       const item = stock[i]!;
       const btn = document.createElement('button');
       btn.className = 'shop-item-btn';
-      btn.innerHTML = `<span>${item.char} ${item.name}</span><span class="shop-cost">${item.cost} pts</span>`;
+      btn.innerHTML = `<span>${item.char} ${item.name}</span><span class="shop-cost">${item.cost} gold</span>`;
       btn.disabled = gold < item.cost;
       btn.addEventListener('click', () => {
         const newScore = onBuy(i);
@@ -386,7 +386,7 @@ export class UIManager {
 
   showStart(highScore: number): void {
     const el = document.getElementById('start-best');
-    if (el) el.textContent = highScore > 0 ? `Best run: ${highScore.toLocaleString()} pts` : '';
+    if (el) el.textContent = highScore > 0 ? `Best run: ${highScore.toLocaleString()} XP` : '';
     document.getElementById('start-modal')!.style.display = 'flex';
   }
 

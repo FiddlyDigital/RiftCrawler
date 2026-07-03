@@ -10,7 +10,7 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
     game.cb.onParticle?.(game.player.x, game.player.y, '💀 REVIVED', '#b71c1c', 16);
     return;
   }
-  game.cb.onDeath(title, reason, game.dungeonLevel, game.score, game.getRunStats());
+  game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats());
 }
 
 // ── Dice engine ───────────────────────────────────────────────────────────────
@@ -165,9 +165,9 @@ export function killMonster(m: Monster, game: Game): void {
   game.monstersKilled++;
   game.killsThisFloor++;
   if (m.isBoss) game.bossesKilled++;
-  game.score += Math.floor((m.isBoss ? 500 : 80) * game.scoreMultiplier);
+  game.gold += m.isBoss ? 500 : 80;
   game.monsters = game.monsters.filter(x => x !== m);
-  const levelled = game.player.gainXP(m.xpReward);
+  const levelled = game.player.gainXP(Math.floor(m.xpReward * game.xpMultiplier));
   if (levelled) {
     game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
     game.openLevelUpBoons();

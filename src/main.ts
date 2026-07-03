@@ -3,7 +3,7 @@ import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
-import { getHighScore, recordRunEnd, loadHistory, saveMute, loadMute } from './storage';
+import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
 import { getMerchantStock } from './content';
 import { audio } from './audio';
@@ -84,14 +84,14 @@ function startGame(startPaused = false): void {
     onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
     onCombo:     (mult)            => renderer.showCombo(mult),
 
-    onDeath: (title, reason, floor, score, stats) => {
+    onDeath: (title, reason, floor, totalXpEarned, stats) => {
       stopTick();
       audio.stopAmbient();
       audio.playDeath();
-      const { highScore, history } = recordRunEnd(game, reason, stats);
-      trackGameOver(score, floor);
-      ui.showDeath(title, reason, floor, score, highScore, history, stats);
-      ui.updateBestScore(highScore);
+      const { highXp, history } = recordRunEnd(game, reason, stats);
+      trackGameOver(totalXpEarned, floor);
+      ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, stats);
+      ui.updateBestScore(highXp);
     },
 
     onLevelUp: (choices, onChoice) => {
@@ -187,7 +187,7 @@ bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
   }
 });
 
-ui.showStart(getHighScore());
+ui.showStart(getHighXp());
 
 document.getElementById('start-btn')!.addEventListener('click', () => {
   audio.init(); // unlock AudioContext on first user gesture
@@ -225,14 +225,14 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Initial high score / history display
-ui.updateBestScore(getHighScore());
+ui.updateBestScore(getHighXp());
 const initialHistory = loadHistory();
 if (initialHistory.length > 0) {
   (document.getElementById('run-history') as HTMLElement).innerHTML =
     initialHistory.map((r, i) =>
       `<div class="history-row${i === 0 ? ' history-latest' : ''}">
         <span>${r.date}</span><span>Fl.${r.floor}</span>
-        <span>${r.score.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
+        <span>${r.totalXpEarned.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
        </div>`,
     ).join('');
 }

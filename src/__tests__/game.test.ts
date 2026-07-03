@@ -80,9 +80,9 @@ describe('Game', () => {
     expect(game.player.hp).toBe(45);
   });
 
-  it('starts on dungeon level 1 with score 0', () => {
+  it('starts on dungeon level 1 with gold 0', () => {
     expect(game.dungeonLevel).toBe(1);
-    expect(game.score).toBe(0);
+    expect(game.gold).toBe(0);
   });
 
   it('player starts at level 1 with 0 XP', () => {
@@ -155,6 +155,12 @@ describe('Game', () => {
   it('XP threshold increases each level', () => {
     game.player.gainXP(50);
     expect(game.player.xpToNext).toBe(75);
+  });
+
+  it('totalXpEarned accumulates across gainXP calls', () => {
+    game.player.gainXP(30);
+    game.player.gainXP(20);
+    expect(game.player.totalXpEarned).toBe(50);
   });
 
   it('poison status inflicts damage per tick', () => {

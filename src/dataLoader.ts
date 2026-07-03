@@ -189,7 +189,7 @@ export const BOONS: BoonDef[] = [
   // ── Tier III — Runes ─────────────────────────────────────────────────────
   { id: 'annihilation', char: '☄️', name: 'Annihilation Rune', tier: 3, desc: 'Line clears deal floor×4 dmg to ALL monsters per stack', onAdd: (p) => { p.lineClearAoeDmgMult += 4; } },
   { id: 'deathward',    char: '💀', name: 'Deathward Rune',    tier: 3, desc: 'Survive a killing blow once per floor per stack',         onAdd: (p) => { p.deathwardCharges += 1; } },
-  { id: 'rift_tide',    char: '🌊', name: 'Rift Tide',         tier: 3, desc: '20% slower gravity, +0.3× line-clear score per stack',    onAdd: (p) => { p.tickSlowPercent -= 20; p.lineClearScoreMult += 0.3; } },
+  { id: 'rift_tide',    char: '🌊', name: 'Rift Tide',         tier: 3, desc: '20% slower gravity, +0.3× line-clear XP per stack',      onAdd: (p) => { p.tickSlowPercent -= 20; p.lineClearXpMult += 0.3; } },
   { id: 'void_prism',   char: '🌌', name: 'Void Prism',        tier: 3, desc: '+1 ATK & +2 HP per distinct boon per stack',              onAdd: (_p, _s) => { /* handled by recomputeVoidPrism */ } },
 ];
 
@@ -372,15 +372,15 @@ export const MODIFIERS: ModifierDef[] = [
     id: 'overclock',
     emoji: '⚡',
     name: 'Overclock',
-    desc: 'Gravity 20% faster, score ×1.5',
-    apply: (g) => { g.player.tickSlowPercent -= 20; g.scoreMultiplier = 1.5; },
+    desc: 'Gravity 20% faster, XP ×1.5',
+    apply: (g) => { g.player.tickSlowPercent -= 20; g.xpMultiplier = 1.5; },
   },
   {
     id: 'cursed',
     emoji: '💀',
     name: 'Cursed',
-    desc: 'Score ×2 — but line clears don\'t heal',
-    apply: (g) => { g.scoreMultiplier = 2.0; g.noLineHeal = true; },
+    desc: 'XP ×2 — but line clears don\'t heal',
+    apply: (g) => { g.xpMultiplier = 2.0; g.noLineHeal = true; },
   },
   {
     id: 'blind_run',
@@ -677,19 +677,19 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     options: [
       {
         label: 'Search carefully',
-        desc: 'Gain 800 score.',
+        desc: 'Gain 800 gold.',
         apply: (game) => {
-          game.score += 800;
-          return 'You find 800 pts worth of loot!';
+          game.gold += 800;
+          return 'You find 800 gold worth of loot!';
         },
       },
       {
         label: 'Grab quickly',
-        desc: '50/50: gain 2000 score OR trigger a trap (−30 HP).',
+        desc: '50/50: gain 2000 gold OR trigger a trap (−30 HP).',
         apply: (game) => {
           if (Math.random() < 0.5) {
-            game.score += 2000;
-            return '🎉 Jackpot! +2000 score!';
+            game.gold += 2000;
+            return '🎉 Jackpot! +2000 gold!';
           }
           const dmg = game.player.takeDamage(30);
           game.damageTaken += dmg;

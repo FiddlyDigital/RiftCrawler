@@ -56,7 +56,7 @@ export class Game {
   // Game state
   active = true;
   paused = false;
-  score = 0;
+  gold = 0;
   dungeonLevel = 1;
 
   // Hazard tiles (persist per floor)
@@ -78,7 +78,7 @@ export class Game {
 
   // Modifier state (active for the whole run)
   public activeModifierId: string | null = null;
-  public scoreMultiplier = 1.0;
+  public xpMultiplier = 1.0;
   public potionHealMult = 1.0;
   public noLineHeal = false;
   public haunted = false;
@@ -640,7 +640,7 @@ export class Game {
         this.cb.onParticle(x, y, '💥', '#ff6b35');
       }
     }
-    this.score += Math.floor(50 * this.dungeonLevel * this.scoreMultiplier);
+    this.gold += Math.floor(50 * this.dungeonLevel);
   }
 
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
@@ -836,21 +836,21 @@ export class Game {
       this.lastLineClearMs = now;
       if (this.comboCount > this.biggestCombo) this.biggestCombo = this.comboCount;
 
-      let added = Math.floor(scoreForLines(rowsCleared, this.dungeonLevel) * this.scoreMultiplier * this.player.lineClearScoreMult);
+      let goldAdded = Math.floor(scoreForLines(rowsCleared, this.dungeonLevel));
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
-        added = Math.floor(added * mult);
-        this.cb.log(`🔥 COMBO x${this.comboCount + 1}! +${added} Score`, 'log-combo');
+        goldAdded = Math.floor(goldAdded * mult);
+        this.cb.log(`🔥 COMBO x${this.comboCount + 1}! +${goldAdded} Gold`, 'log-combo');
         this.cb.onCombo?.(this.comboCount + 1);
         if (this.comboCount >= 2) this.cb.onAudio?.('comboMilestone', this.comboCount + 1);
       }
-      this.score += added;
+      this.gold += goldAdded;
 
-      // XP for line clears — multi-row clears give a stacked bonus; Architect doubles it
+      // XP for line clears — multi-row clears give a stacked bonus; Architect doubles it; Rift Tide stacks on top
       const LINE_CLEAR_XP = [0, 15, 40, 80, 150];
       const xpGain = Math.round((LINE_CLEAR_XP[Math.min(rowsCleared, 4)] ?? 150) * this.player.lineClearXpMult);
       this.cb.onParticle(this.player.x, this.player.y, `+${xpGain}XP`, '#ce93d8', 14);
-      const levelled = this.player.gainXP(xpGain);
+      const levelled = this.player.gainXP(Math.floor(xpGain * this.xpMultiplier));
       if (levelled) {
         this.cb.log(`✨ LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk');
         this.openLevelUpBoons();
@@ -1092,20 +1092,20 @@ export class Game {
 
   openShop(): void {
     this.paused = true;
-    this.cb.onOpenShop(this.score);
+    this.cb.onOpenShop(this.gold);
   }
 
   buyMerchantItem(index: number, stock: typeof import('./content').MERCHANT_STOCK): number | null {
     const item = stock[index];
-    if (!item || this.score < item.cost) {
-      this.cb.log('Not enough score to purchase!', 'log-damage');
+    if (!item || this.gold < item.cost) {
+      this.cb.log('Not enough gold to purchase!', 'log-damage');
       return null;
     }
-    this.score -= item.cost;
+    this.gold -= item.cost;
     const result = item.apply(this.player);
     this.cb.log(`Bought ${item.name}: ${result}`, 'log-success');
     this.pushUI();
-    return this.score;
+    return this.gold;
   }
 
   closeShop(): void {
@@ -1567,7 +1567,7 @@ export class Game {
     }
 
     if (this.isMerchantTile(x, y)) {
-      return { icon: '🏪', title: 'Merchant', lines: ['Spend score on potions & gear'] };
+      return { icon: '🏪', title: 'Merchant', lines: ['Spend gold on potions & gear'] };
     }
 
     const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
@@ -1596,7 +1596,7 @@ export class Game {
       hp: this.player.hp,
       maxHp: this.player.maxHp,
       floor: this.dungeonLevel,
-      score: this.score,
+      totalXpEarned: this.player.totalXpEarned,
       gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
       nextType: this.nextType,
       heldType: this.heldType,
