@@ -1640,10 +1640,14 @@ export class Game {
       xp: this.player.xp,
       xpToNext: this.player.xpToNext,
       playerLevel: this.player.playerLevel,
-      boons: this.player.boons.map(b => ({ char: b.def.char, name: b.def.name, stacks: b.stacks })),
+      boons: this.player.boons.map(b => ({ char: b.def.char, name: b.def.name, stacks: b.stacks, desc: b.def.desc })),
       brands: this.player.brands.map(b => {
         const count = this.player.brands.filter(x => x.brand.id === b.brand.id).length;
-        return { slot: b.slot, char: b.brand.char, name: b.brand.name, setActive: count >= b.brand.setSize };
+        return {
+          slot: b.slot, char: b.brand.char, name: b.brand.name,
+          setActive: count >= b.brand.setSize,
+          desc: b.brand.desc, setDesc: b.brand.setDesc, setSize: b.brand.setSize,
+        };
       }),
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,

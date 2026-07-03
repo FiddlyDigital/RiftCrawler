@@ -318,34 +318,69 @@ export class UIManager {
     this.els['bestScore']!.textContent = String(score);
   }
 
-  updateBoons(boons: Array<{ char: string; name: string; stacks: number }>): void {
+  // Make a sidebar chip tap/click to show its details in the shared inspect
+  // tooltip (works on touch, unlike the native `title` hover).
+  private bindChipInspect(chip: HTMLElement, buildInfo: () => InspectInfo): void {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const rect = chip.getBoundingClientRect();
+      this.showInspectTooltip(buildInfo(), rect.left + rect.width / 2, rect.bottom);
+    });
+  }
+
+  updateBoons(boons: UIState['boons']): void {
     const panel = this.els['boonPanel']!;
-    if (boons.length === 0) {
-      panel.textContent = '—';
-      return;
+    panel.innerHTML = '';
+    if (boons.length === 0) { panel.textContent = '—'; return; }
+    for (const b of boons) {
+      const chip = document.createElement('span');
+      chip.className = 'boon-chip';
+      chip.textContent = `${b.char}×${b.stacks}`;
+      chip.title = `${b.name} ×${b.stacks}`;
+      this.bindChipInspect(chip, () => ({
+        icon: b.char,
+        title: `${b.name} ×${b.stacks}`,
+        lines: [b.desc],
+      }));
+      panel.appendChild(chip);
     }
-    panel.innerHTML = boons
-      .map(b => `<span class="boon-chip" title="${b.name} ×${b.stacks}">${b.char}×${b.stacks}</span>`)
-      .join('');
   }
 
   updateBrands(brands: UIState['brands']): void {
     const panel = this.els['brandPanel']!;
-    if (brands.length === 0) {
-      panel.textContent = '—';
-      return;
-    }
-    // Group by brand name for display
-    const grouped = new Map<string, { char: string; name: string; count: number; setActive: boolean }>();
+    panel.innerHTML = '';
+    if (brands.length === 0) { panel.textContent = '—'; return; }
+    // Group by brand name; collect the slots each occupies for the tooltip.
+    const grouped = new Map<string, {
+      char: string; name: string; count: number; setActive: boolean;
+      desc: string; setDesc: string; setSize: number; slots: string[];
+    }>();
     for (const b of brands) {
-      const key = b.name;
-      const existing = grouped.get(key);
-      if (existing) { existing.count++; existing.setActive = b.setActive; }
-      else grouped.set(key, { char: b.char, name: b.name, count: 1, setActive: b.setActive });
+      const slotLabel = b.slot.replace('_', ' ');
+      const existing = grouped.get(b.name);
+      if (existing) { existing.count++; existing.setActive = b.setActive; existing.slots.push(slotLabel); }
+      else grouped.set(b.name, {
+        char: b.char, name: b.name, count: 1, setActive: b.setActive,
+        desc: b.desc, setDesc: b.setDesc, setSize: b.setSize, slots: [slotLabel],
+      });
     }
-    panel.innerHTML = Array.from(grouped.values())
-      .map(b => `<span class="brand-chip${b.setActive ? ' brand-set-active' : ''}" title="${b.name}${b.setActive ? ' ✓ SET ACTIVE' : ''}">${b.char}×${b.count}</span>`)
-      .join('');
+    for (const b of grouped.values()) {
+      const chip = document.createElement('span');
+      chip.className = 'brand-chip' + (b.setActive ? ' brand-set-active' : '');
+      chip.textContent = `${b.char}×${b.count}`;
+      chip.title = `${b.name}${b.setActive ? ' ✓ SET ACTIVE' : ''}`;
+      this.bindChipInspect(chip, () => ({
+        icon: b.char,
+        title: b.name,
+        lines: [
+          b.desc,
+          `Set ${Math.min(b.count, b.setSize)}/${b.setSize}: ${b.setDesc}`,
+          b.setActive ? '✓ Set bonus active' : `${b.setSize - b.count} more to complete the set`,
+          `Worn on: ${b.slots.join(', ')}`,
+        ],
+      }));
+      panel.appendChild(chip);
+    }
   }
 
   // Shared renderer for the 3-choice altar/tattoo modal. Supports an optional

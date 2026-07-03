@@ -393,7 +393,7 @@ canvas {
   border: 1px solid #3d2b60;
   border-radius: 4px;
   padding: 2px 5px;
-  cursor: default;
+  cursor: pointer;
   white-space: nowrap;
   font-size: 11px;
   color: #ce93d8;
@@ -404,7 +404,7 @@ canvas {
   border: 1px solid #6a0dad;
   border-radius: 4px;
   padding: 2px 5px;
-  cursor: default;
+  cursor: pointer;
   white-space: nowrap;
   font-size: 11px;
   color: #c084fc;

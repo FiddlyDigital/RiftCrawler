@@ -187,8 +187,8 @@ export interface UIState {
   xp: number;
   xpToNext: number;
   playerLevel: number;
-  boons: Array<{ char: string; name: string; stacks: number }>;
-  brands: Array<{ slot: BodyPart; char: string; name: string; setActive: boolean }>;
+  boons: Array<{ char: string; name: string; stacks: number; desc: string }>;
+  brands: Array<{ slot: BodyPart; char: string; name: string; setActive: boolean; desc: string; setDesc: string; setSize: number }>;
   statuses: StatusEffect[];
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
