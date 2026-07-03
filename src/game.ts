@@ -402,7 +402,7 @@ export class Game {
         const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!', ice: '❄️ Ice — entities slide across!' };
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
-              !this.merchantTiles.some(t => t.x === fc.x && t.y === fc.y)) {
+              !this.tattooTiles.some(t => t.x === fc.x && t.y === fc.y)) {
             this.specialTiles.push({ x: fc.x, y: fc.y, type: tileType as SpecialTile['type'] });
           }
         }
@@ -410,7 +410,7 @@ export class Game {
       } else if (this.currentType === 'Z') {
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
-              !this.merchantTiles.some(t => t.x === fc.x && t.y === fc.y)) {
+              !this.tattooTiles.some(t => t.x === fc.x && t.y === fc.y)) {
             this.hazards.push({ x: fc.x, y: fc.y, type: 'spike', timer: 5, warning: false });
           }
         }
@@ -633,7 +633,7 @@ export class Game {
         this.colors[x]![y] = null;
         this.monsters = this.monsters.filter(m => !(m.x === x && m.y === y));
         this.items = this.items.filter(i => !(i.x === x && i.y === y));
-        this.merchantTiles = this.merchantTiles.filter(t => !(t.x === x && t.y === y));
+        this.tattooTiles = this.tattooTiles.filter(t => !(t.x === x && t.y === y));
         this.altarTiles = this.altarTiles.filter(a => !(a.x === x && a.y === y));
         this.hazards = this.hazards.filter(h => !(h.x === x && h.y === y));
         this.specialTiles = this.specialTiles.filter(t => !(t.x === x && t.y === y));
@@ -812,7 +812,7 @@ export class Game {
       }
       for (let x = 0; x < CONFIG.COLS; x++) { this.map[x]![0] = Tile.VOID; this.colors[x]![0] = null; }
       this.shiftEntitiesDown(y);
-      this.merchantTiles = this.merchantTiles
+      this.tattooTiles = this.tattooTiles
         .filter(t => t.y !== y)
         .map(t => t.y < y ? { x: t.x, y: t.y + 1 } : t);
       this.altarTiles = this.altarTiles
@@ -900,10 +900,10 @@ export class Game {
           this.cb.onParticle(this.player.x, this.player.y, `+${lineHeal} HP`, '#69f0ae');
           if (this.comboCount === 0) this.cb.log(`Row cleared! +${lineHeal} HP.`, 'log-tetris');
         } else if (this.comboCount === 0) {
-          this.cb.log(`Dungeon Row Cleared! +${added} Score.`, 'log-tetris');
+          this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold.`, 'log-tetris');
         }
       } else if (this.comboCount === 0) {
-        this.cb.log(`Dungeon Row Cleared! +${added} Score. (Cursed — no heal)`, 'log-tetris');
+        this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold. (Cursed — no heal)`, 'log-tetris');
       }
     }
   }
@@ -996,20 +996,6 @@ export class Game {
     this.processSpecialTiles();
     this.moveGravity();
     processMonsterTurns(this);
-    // Sick brand: tick poison on monsters
-    for (const m of this.monsters) {
-      const poison = m.statuses.find(s => s.type === 'poison');
-      if (poison) {
-        m.hp -= poison.power;
-        poison.duration--;
-        this.cb.onParticle?.(m.x, m.y, `☠-${poison.power}`, '#66bb6a');
-      }
-      m.statuses = m.statuses.filter(s => s.duration > 0);
-    }
-    this.monsters = this.monsters.filter(m => {
-      if (m.hp <= 0) { killMonster(m, this); return false; }
-      return true;
-    });
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
@@ -1153,9 +1139,10 @@ export class Game {
       return;
     }
 
-    // Tattoo Artist tile
+    // Tattoo Artist tile — consumed on use (like an altar)
     if (this.isTattooTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
+      this.tattooTiles = this.tattooTiles.filter(t => !(t.x === nx && t.y === ny));
       this.openTattooArtist();
       return;
     }

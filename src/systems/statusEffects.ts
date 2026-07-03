@@ -1,5 +1,5 @@
 import type { Game } from '../game';
-import { triggerDeath } from './combat';
+import { triggerDeath, killMonster } from './combat';
 
 export function applyStatusEffects(game: Game): void {
   const next: typeof game.player.statuses = [];
@@ -21,6 +21,7 @@ export function applyStatusEffects(game: Game): void {
   }
   game.player.statuses = next;
 
+  const poisonKilled: typeof game.monsters = [];
   for (const m of game.monsters) {
     const nextM: typeof m.statuses = [];
     for (const s of m.statuses) {
@@ -32,8 +33,11 @@ export function applyStatusEffects(game: Game): void {
       if (s.duration > 1) nextM.push({ ...s, duration: s.duration - 1 });
     }
     m.statuses = nextM;
+    if (m.hp <= 0) poisonKilled.push(m);
   }
+  // Remove dead monsters first, then award kills (XP/gold/level-up)
   game.monsters = game.monsters.filter(m => m.hp > 0);
+  for (const m of poisonKilled) killMonster(m, game);
 }
 
 export function applyRegen(game: Game): void {

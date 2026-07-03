@@ -3,6 +3,8 @@ import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
 import { Cell, Tile } from '../types';
 import type { GameCallbacks } from '../types';
 import { Monster, Item } from '../entities';
+import { killMonster } from '../systems/combat';
+import { BRANDS } from '../content';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -61,6 +63,7 @@ function makeCallbacks(): GameCallbacks & { logs: string[] } {
     onParticle: vi.fn(),
     onLevelUp: vi.fn(),
     onOpenShop: vi.fn(),
+    onOpenTattooArtist: vi.fn(),
     onAction: vi.fn(),
   };
 }
@@ -241,5 +244,75 @@ describe('Game.getInspectInfo', () => {
     const info = game.getInspectInfo(4, 22);
     expect(info).not.toBeNull();
     expect(info!.title).toBe('Stairs');
+  });
+});
+
+// ── Regression: monster clearing, tattoo tiles, block locking ─────────────────
+
+describe('Monster clearing & Sacred Brands', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('killMonster removes only the target from the monster list', () => {
+    const a = new Monster(4, 21, '👹', 'A', 1, 1, 1, 5);
+    const b = new Monster(5, 21, '👹', 'B', 5, 5, 1, 5);
+    game.monsters.push(a, b);
+    killMonster(a, game);
+    expect(game.monsters).not.toContain(a);
+    expect(game.monsters).toContain(b);
+  });
+
+  it('poison kills a monster on tick, clears it, and awards XP', () => {
+    const m = new Monster(4, 21, '👹', 'Goblin', 3, 3, 2, 20);
+    m.statuses = [{ type: 'poison', duration: 3, power: 5 }];
+    game.monsters.push(m);
+    const xpBefore = game.player.totalXpEarned;
+    game.autoTick();
+    expect(game.monsters).not.toContain(m);
+    expect(game.player.totalXpEarned).toBe(xpBefore + 20);
+  });
+
+  it('monster poison applies exactly once per tick (no double-application)', () => {
+    const m = new Monster(4, 21, '👹', 'Tank', 20, 20, 1, 5);
+    m.statuses = [{ type: 'poison', duration: 5, power: 5 }];
+    game.monsters.push(m);
+    game.autoTick();
+    expect(m.hp).toBe(15);
+  });
+
+  it('locking an S-piece does not throw (terrain special-tile path)', () => {
+    game.currentType = 'S';
+    expect(() => game.handleBlockDrop()).not.toThrow();
+  });
+
+  it('clearing a full line does not throw (row-shift + gold log path)', () => {
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    expect(() =>
+      (game as unknown as { checkLineClears(): void }).checkLineClears(),
+    ).not.toThrow();
+  });
+
+  it('tattoo tile is consumed after receiving a brand', () => {
+    cb.onOpenTattooArtist = (_choices, onChoice) => onChoice(0);
+    const gameTiles = game as unknown as { tattooTiles: Array<{ x: number; y: number }> };
+    gameTiles.tattooTiles.push({ x: 4, y: 22 });
+    game.handleHeroMove(0, -1); // step up onto the tattoo tile
+    expect(gameTiles.tattooTiles).toHaveLength(0); // read fresh: handleHeroMove reassigns the array
+    expect(game.player.brands).toHaveLength(1);
+  });
+
+  it('addBrand applies per-brand bonus and fires the set bonus at setSize', () => {
+    const war = BRANDS.find(b => b.id === 'war')!;
+    const atk0 = game.player.atk;
+    game.player.addBrand('body', war);      // +2
+    game.player.addBrand('left_arm', war);  // +2
+    expect(game.player.atk).toBe(atk0 + 4);
+    game.player.addBrand('right_arm', war); // +2 plus +10 set bonus (setSize 3)
+    expect(game.player.atk).toBe(atk0 + 16);
   });
 });
