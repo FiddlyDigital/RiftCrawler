@@ -521,6 +521,13 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(game.blockMatrix.flat()).toHaveLength(0);
   });
 
+  it('computeGhostBlockY does not spin on an empty matrix (renderer freeze guard)', () => {
+    game.summonGorgoth();
+    expect(game.blockMatrix.flat()).toHaveLength(0);
+    // Would infinite-loop before the guard; a returned value proves it terminates.
+    expect(game.computeGhostBlockY()).toBe(game.blockY);
+  });
+
   it('defeating Gorgoth wins the run (via any kill path)', () => {
     game.summonGorgoth();
     const boss = game.monsters.find(m => m.isGorgoth)!;

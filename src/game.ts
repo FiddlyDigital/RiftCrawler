@@ -351,6 +351,9 @@ export class Game {
   }
 
   computeGhostBlockY(): number {
+    // No active piece (e.g. during the Gorgoth duel): an empty matrix never
+    // collides, so the loop below would spin forever and freeze the renderer.
+    if (this.blockMatrix.length === 0) return this.blockY;
     let ghostY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, ghostY + 1, this.blockMatrix)) ghostY++;
     return ghostY;
