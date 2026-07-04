@@ -44,18 +44,14 @@ export const Cell = {
   FLOOR: 1,
   MONSTER_RAT: 2,
   MONSTER_SKEL: 3,
-  ITEM_POTION: 4,
-  ITEM_SWORD: 5,
   STAIRS: 6,
   BOMB: 7,
   MERCHANT: 8,
   BOSS: 9,
-  ITEM_EQUIPMENT: 10,
   MONSTER_ARCHER: 11,
   MONSTER_SLIME: 12,
   MONSTER_ORC: 13,
   MONSTER_BAT: 14,
-  RELIC: 15,
   TRAP_SPIKE: 16,
   TRAP_SMOKE: 17,
   TRAP_TELEPORT: 18,
@@ -72,8 +68,6 @@ export interface StatusEffect {
   duration: number;
   power: number;
 }
-
-export type ItemType = 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'relic';
 
 // Role used to guarantee variety in a 3-choice offer (>=2 distinct roles)
 export type OfferRole = 'offense' | 'defense' | 'utility';
@@ -144,16 +138,6 @@ export interface SpecialTile {
   type: 'swamp' | 'sacred' | 'ice';
 }
 
-export interface RelicDef {
-  id: string;
-  char: string;
-  name: string;
-  desc: string;
-  onPickup?: (player: Player) => void;
-  onKill?: (player: Player) => void;
-  onLineClear?: (player: Player, count: number) => void;
-}
-
 export interface ModifierDef {
   id: string;
   emoji: string;
@@ -174,7 +158,6 @@ export interface RunStats {
   linesCleared: number;
   biggestCombo: number;
   damageTaken: number;
-  itemsPickedUp: number;
 }
 
 export interface RangedAbility {
@@ -206,16 +189,14 @@ export interface UIState {
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
-  relics: RelicDef[];
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null } | null;
-  potionPouch: Array<{ char: string; name: string; type: string }>;
 }
 
 export type AudioEvent =
   | 'blockLand' | 'blockRotate' | 'blockMove'
   | 'hit' | 'playerDamage' | 'kill'
   | 'lineClear' | 'descend' | 'poison' | 'bossWarn'
-  | 'itemPickup' | 'itemUse' | 'teleport' | 'comboMilestone';
+  | 'teleport' | 'comboMilestone';
 
 export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;
@@ -275,11 +256,4 @@ export interface BossDef {
   onDeath?:  (game: import('./game').Game, x: number, y: number) => void;
 }
 
-export interface ItemDef {
-  char: string;
-  name: string;
-  type: 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock';
-  statValue: number;
-  cellState: CellValue;
-}
 

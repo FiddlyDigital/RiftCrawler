@@ -241,17 +241,15 @@ export function killMonster(m: Monster, game: Game): void {
     game.player.atk += game.player.killAtkBonus;
     game.player.killAtkFloorBonus += game.player.killAtkBonus;
   }
-  for (const relic of game.player.relics) {
-    relic.onKill?.(game.player);
-  }
   if (m.isBoss) {
     game.cb.log(`⚔️ BOSS SLAIN: ${m.name}!`, 'log-boss');
     game.cb.onParticle(m.x, m.y, '🏆 BOSS!', '#ffd54f');
   } else {
     if (m.isElite) {
-      game.dropRelicAt(m.x, m.y);
-      game.cb.onParticle(m.x, m.y, '🏆 RELIC!', '#ffd700');
-      game.cb.log(`⭐ Elite vanquished! A relic drops...`, 'log-perk');
+      const bonus = 150 * game.dungeonLevel;
+      game.gold += bonus;
+      game.cb.onParticle(m.x, m.y, `+${bonus}💰`, '#ffd700');
+      game.cb.log(`⭐ Elite vanquished! +${bonus} gold.`, 'log-perk');
     }
     const healBonus = game.player.heal(3);
     if (healBonus > 0) {

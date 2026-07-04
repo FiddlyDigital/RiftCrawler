@@ -22,9 +22,9 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 
 ## The game
 
-**The loop.** Blocks fall on a gravity timer (and every hero/block action also advances a turn). When a block locks, its cells become dungeon floor — and some cells carry *riders*: monsters, items, altars, the tattoo artist, stairs, bombs, relics, and traps. Your hero can only walk on floor you've built. So you're constantly deciding where to drop pieces to shape a path, reach loot, and corner enemies.
+**The loop.** Blocks fall on a gravity timer (and every hero/block action also advances a turn). When a block locks, its cells become dungeon floor — and some cells carry *riders*: monsters, altars, the tattoo artist, stairs, bombs, and traps. Your hero can only walk on floor you've built. So you're constantly deciding where to drop pieces to shape a path, reach altars, and corner enemies.
 
-**Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons**, **brands**, **curses**, a starting **class**, and **relics**.
+**Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons**, **brands**, **curses**, and a starting **class**.
 
 **Winning.** There is one win condition: let the tetromino stack reach the ceiling. Instead of dying, the Rift stops producing blocks and summons **Gorgoth the Returned**, a colossal fixed-stat boss who descends slowly from the top of the board. Defeat him and you win. This is a deliberate choice — you gather strength across floors, then commit when ready. (Flee down a ladder mid-fight and his remaining HP is banked, so you can chip him down over multiple attempts.)
 
@@ -46,7 +46,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 | **Combat legibility** | `renderer.ts`, `game.ts` | Tap any tile to inspect it (incl. your hit-chance vs a monster). Monsters that can strike next turn are telegraphed. |
 | **Gorgoth endgame** | `src/game.ts`, `monsterAI.ts` | Fixed stats (1400 HP, ATK 48, D20). Descends one tile every ~2 turns, phasing through terrain. HP persists across ladder escapes. |
 
-**Controls.** Two virtual D-pads (Block / Hero) plus keyboard and gamepad. Keyboard: `WASD`/arrows move the hero, `Space` waits/heals, `Q` uses a ranged ability, `J`/`L`/`I`/`K`/`X` drive the block, `H` holds, `U` uses an item, `M` mutes, `Esc`/`P` pause. Movement and attacks are strictly **orthogonal** for hero and monsters alike.
+**Controls.** Two virtual D-pads (Block / Hero) plus keyboard and gamepad. Keyboard: `WASD`/arrows move the hero, `Space` waits/heals, `Q` uses a ranged ability, `J`/`L`/`I`/`K`/`X` drive the block, `H` holds, `M` mutes, `Esc`/`P` pause. Movement and attacks are strictly **orthogonal** for hero and monsters alike.
 
 ---
 
@@ -84,7 +84,7 @@ src/
   main.ts          Boot, wiring, the tick loop, pause/settings, PWA install
   game.ts          The Game class — board state, rules, spawning, locking,
                    gravity, combat orchestration, Gorgoth, win/lose
-  entities.ts      Player, Monster, Item, ParticlePool
+  entities.ts      Player, Monster, ParticlePool
   renderer.ts      Canvas drawing (tiles, block, hero, particles, telegraphs)
   ui.ts            DOM UI manager (modals, sidebar, tooltips, pause menu)
   input.ts         Keyboard, on-screen buttons, gamepad
@@ -133,9 +133,6 @@ Keyed by monster id. `dataLoader` scales HP/ATK by floor and biome at spawn.
 The generic boss pool (one appears every 5th floor). Fields: `id`, `displayName`, `visualAsset`, `hpMult`, `atkMult`, `xpValue`, `flavorText`. Base HP/ATK are computed from floor and multiplied.
 *Note:* biome-specific bosses (Crystal Golem, Rift Tyrant) and **Gorgoth** are defined in code because they carry behaviour callbacks (`onHalfHp`, `onDeath`) that data can't express.
 
-### `items.json`
-Keyed by item id. Fields: `id`, `displayName`, `visualAsset`, `cellTypeId` (`ITEM_POTION` / `ITEM_SWORD`), `effectType` (`heal`/`mana`/`cure`/`shock`/`grenade`/`atk`), `effectValue`.
-
 ### `boons.json`, `brands.json`, `modifiers.json` — the effect system
 
 These three describe their effects **declaratively** using a shared `EffectSpec` (defined in `types.ts`). A small resolver in `dataLoader.ts` applies them:
@@ -173,7 +170,6 @@ To add a new special: put a one-liner in `BOON_SPECIALS` / `MODIFIER_SPECIALS` a
 - **`shapes.json`** — the 7 tetromino shapes: `{ matrix, color, preview }` keyed by letter (`I O T S Z J L`).
 - **`visual-registry.json`** — `visualAsset` → emoji, used as a fallback glyph when a sprite isn't available.
 - **`sprite-map.json`** — sprite-atlas coordinates for the optional pixel-art sheets.
-- **`merchant.json`** — **legacy/orphaned.** The old gold shop was replaced by the Tattoo Artist + Brands; this file is no longer imported and can be deleted.
 
 ---
 
@@ -181,8 +177,7 @@ To add a new special: put a one-liner in `BOON_SPECIALS` / `MODIFIER_SPECIALS` a
 
 - **New boon / brand / curse:** edit the relevant JSON with `EffectSpec` entries. No code unless you need a `special` handler.
 - **New monster:** add an entry to `monsters.json`, make sure its `cellTypeId` is in `CELL_MAP`, give it a `visualAsset` in `visual-registry.json`, and (if it should spawn from blocks) wire its cell into the spawn table in `game.ts`.
-- **New item:** add to `items.json` + `CELL_MAP` + `visual-registry.json`.
-- **Classes & relics** are still code (`dataLoader.ts`) because they use per-event callbacks (`onKill`, `onLineClear`, ranged abilities) that don't fit the add/set/mul model.
+- **Classes** are still code (`dataLoader.ts`) because they use per-event callbacks (ranged abilities, class passives) that don't fit the add/set/mul model.
 
 After any content change: `npm run lint && npm test && npm run build`.
 
@@ -199,4 +194,3 @@ Unit tests live in `src/__tests__/` and run on **Vitest** (`npm test`). They cov
 - **`npm run build` does not type-check** (esbuild). Run `npm run lint` (`tsc --noEmit`) before trusting a build.
 - **Movement is orthogonal only** for everyone — a diagonally-adjacent enemy must step to a cardinal tile before it can attack.
 - **The Gorgoth fight has no line clears** (blocks stop), so line-clear-oriented builds don't contribute during it — combat/dodge/crit/sustain/ranged builds carry the finale.
-- `merchant.json` is dead content (see above).

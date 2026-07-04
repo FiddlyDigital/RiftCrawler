@@ -29,7 +29,6 @@ export function bindKeyboard(getGame: GameGetter): void {
       case 'k':                    game.handleBlockDrop();       break;
       case 'x':                    game.handleBlockSoftDrop();   break;
       case 'h': case 'H':          game.handleBlockHold();       break;
-      case 'u': case 'U':          game.handleUseItem();       break;
     }
   });
 }
@@ -210,7 +209,6 @@ export function bindButtons(getGame: GameGetter): void {
       case 'block-hold':     game.handleBlockHold();     break;
       case 'hero-wait':      game.handleHeroWait();      break;
       case 'hero-ranged':    game.handleRangedAttack();  break;
-      case 'hero-use':       game.handleUseItem();     break;
       case 'hero-move': {
         const dx = Number(btn.dataset['dx'] ?? 0);
         const dy = Number(btn.dataset['dy'] ?? 0);

@@ -449,20 +449,6 @@ canvas {
   border-color: #ce93d8;
 }
 
-/* ── Relic badge in equipment card ─────────────────────────────────────── */
-.relic-badge {
-  font-size: 14px; line-height: 1;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: 4px;
-  background-color: #1a0a30; border: 1px solid #7c4dff;
-  cursor: default;
-  animation: relicGlow 2s ease-in-out infinite;
-}
-@keyframes relicGlow {
-  0%, 100% { box-shadow: 0 0 4px rgba(124,77,255,.4); }
-  50%       { box-shadow: 0 0 10px rgba(124,77,255,.8); }
-}
-
 /* ── Active modifier badge ─────────────────────────────────────────────── */
 #active-modifier-badge {
   font-size: 9px; color: var(--accent-color);

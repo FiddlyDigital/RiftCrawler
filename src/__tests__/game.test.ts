@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
 import { Cell, Tile } from '../types';
 import type { GameCallbacks } from '../types';
-import { Monster, Item } from '../entities';
+import { Monster } from '../entities';
 import { killMonster, playerAttackMonster, estimateHitChance } from '../systems/combat';
 import { processMonsterTurns } from '../systems/monsterAI';
 import { BRANDS, BOONS, MODIFIERS, getThreeRandomBoons } from '../content';
@@ -231,15 +231,6 @@ describe('Game.getInspectInfo', () => {
     expect(info!.title).toBe('Goblin');
     expect(info!.lines.some(l => l.startsWith('HP'))).toBe(true);
     expect(info!.lines.some(l => l.includes('ATK'))).toBe(true);
-  });
-
-  it('describes a heal item on a tile', () => {
-    const item = new Item(4, 22, '🧪', 'Potion', 'heal', 15);
-    game.items.push(item);
-    const info = game.getInspectInfo(4, 22);
-    expect(info).not.toBeNull();
-    expect(info!.title).toBe('Potion');
-    expect(info!.lines[0]).toContain('15 HP');
   });
 
   it('describes the stairs tile', () => {

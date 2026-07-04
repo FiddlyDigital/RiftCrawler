@@ -130,8 +130,6 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'descend':         audio.playDescend();          break;
     case 'poison':          audio.playPoison();           break;
     case 'bossWarn':        audio.playBossWarn();         break;
-    case 'itemPickup':      audio.playItemPickup();       break;
-    case 'itemUse':         audio.playItemUse();          break;
     case 'teleport':        audio.playTeleport();         break;
     case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
   }

@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, MonsterDef, RelicDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
+import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
 export class Player {
   x: number;
@@ -42,7 +42,7 @@ export class Player {
   lineClearXpMult = 1;  // Architect doubles line-clear XP
   teleportImmune  = false;  // Rift Weaver resists teleport traps
 
-  // Relic bonuses
+  // Perk-granted bonuses (boons & brands)
   dodgeChance = 0;
   dodgeHeal = 0;
   lineClearDamage = 0;
@@ -58,9 +58,6 @@ export class Player {
 
   // Status effects
   statuses: StatusEffect[] = [];
-
-  // Relics (max 2)
-  relics: RelicDef[] = [];
 
   // Run total XP (display metric — accumulates every gainXP call)
   totalXpEarned = 0;
@@ -181,18 +178,6 @@ export class Monster {
   get isStunned(): boolean {
     return this.statuses.some(s => s.type === 'stun');
   }
-}
-
-export class Item {
-  constructor(
-    public x: number,
-    public y: number,
-    public readonly char: string,
-    public readonly name: string,
-    public readonly type: 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' | 'relic',
-    public readonly statValue: number,
-    public readonly relicDef?: RelicDef,
-  ) {}
 }
 
 // Poolable particle — reset() replaces new() to avoid GC pressure

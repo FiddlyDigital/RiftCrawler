@@ -1,7 +1,7 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type RelicDef, type InspectInfo, type AltarTile } from './types';
-import { Player, Monster, Item } from './entities';
-import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile } from './types';
+import { Player, Monster } from './entities';
+import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance } from './systems/combat';
@@ -50,7 +50,6 @@ export class Game {
   // Entities
   player: Player;
   monsters: Monster[];
-  items: Item[];
 
   // Active block
   blockMatrix: CellValue[][] = [];
@@ -80,17 +79,12 @@ export class Game {
   public heldType: ShapeKey | null = null;
   public canHold = true;
 
-  // Potion pouch (manually consumed via U key, max 3)
-  public potionPouch: Item[] = [];
-
   // Modifier state (active for the whole run)
   public activeModifierId: string | null = null;
   public xpMultiplier = 1.0;
-  public potionHealMult = 1.0;
   public noLineHeal = false;
   public haunted = false;
   public frozenRift = false;
-  public luckyEvery = -1;  // -1 = disabled; 0+ = counter
 
   // Class state
   public activeClassId: string | null = null;
@@ -108,7 +102,6 @@ export class Game {
   public linesCleared = 0;
   public biggestCombo = 0;
   public damageTaken = 0;
-  public itemsPickedUp = 0;
 
   // Internal counters
   private floorsDescended = 0;
@@ -118,7 +111,6 @@ export class Game {
   private lastLineClearMs = 0;
   private tattooTiles: Array<{ x: number; y: number }> = [];
   public altarTiles: AltarTile[] = [];
-  private luckyBlockCount = 0;
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
@@ -143,7 +135,6 @@ export class Game {
     this.explored = this.emptyBoolGrid(false);
     this.player = new Player(4, 23);
     this.monsters = [];
-    this.items = [];
     this.generateStartPlatform();
     this.currentType = this.randomShapeKey();
     this.nextType = this.randomShapeKey();
@@ -222,21 +213,12 @@ export class Game {
     this.currentCursed  = pieceRoll < 0.08;
     this.currentBlessed = !this.currentCursed && pieceRoll < 0.12;
 
-    // Lucky modifier: every 5th block guarantees an item
-    if (this.luckyEvery >= 0) {
-      this.luckyBlockCount++;
-    }
-    const luckyItemThisBlock = this.luckyEvery >= 0 && this.luckyBlockCount >= 5;
-    if (luckyItemThisBlock) this.luckyBlockCount = 0;
-
     let stairsInjected = false;
     let bossInjected = false;
     let bombInjected = false;
     let merchantInjected = false;
     let altarInjected = false;
     let trapInjected = false;
-    let relicInjected = false;
-    let luckyItemInjected = false;
     let monsterInjected = false;
 
     this.blockMatrix = shape.matrix.map(row =>
@@ -257,12 +239,6 @@ export class Game {
           return Cell.STAIRS;
         }
 
-        // Lucky guaranteed item
-        if (luckyItemThisBlock && !luckyItemInjected) {
-          luckyItemInjected = true;
-          return Math.random() < 0.6 ? Cell.ITEM_POTION : Cell.ITEM_SWORD;
-        }
-
         // Special blocks
         if (!bombInjected && Math.random() < 0.03) {
           bombInjected = true;
@@ -275,10 +251,6 @@ export class Game {
         if (!altarInjected && Math.random() < 0.035) {
           altarInjected = true;
           return Cell.ALTAR;
-        }
-        if (!relicInjected && Math.random() < 0.03) {
-          relicInjected = true;
-          return Cell.RELIC;
         }
         // Hazard traps — one type per block, ~2% each
         if (!trapInjected) {
@@ -304,7 +276,6 @@ export class Game {
           if (r < 0.89) return Cell.MONSTER_ORC;
           return Cell.MONSTER_BAT;
         }
-        if (rand < monsterChance + 0.09) return Math.random() < 0.6 ? Cell.ITEM_POTION : Cell.ITEM_SWORD;
         return Cell.FLOOR;
       }),
     );
@@ -575,11 +546,6 @@ export class Game {
     }
   }
 
-  dropRelicAt(x: number, y: number): void {
-    const def = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-    this.items.push(new Item(x, y, def.char, def.name, 'relic', 0, def));
-  }
-
   // Called by Crystal Golem onDeath
   spawnCrystalShards(bx: number, by: number): void {
     const shardHp  = 8 + this.dungeonLevel * 2;
@@ -612,10 +578,7 @@ export class Game {
 
   private maybeSpawnDungeonRoom(): void {
     if (Math.random() > 0.25) return;
-    const roll = Math.random();
-    if (roll < 0.33)      this.spawnRoom('vault');
-    else if (roll < 0.66) this.spawnRoom('den');
-    else                  this.spawnRoom('shrine');
+    this.spawnRoom(Math.random() < 0.5 ? 'vault' : 'den');
   }
 
   private getRandomMonsterKey(): string {
@@ -624,11 +587,11 @@ export class Game {
     return all[Math.floor(Math.random() * (maxIdx + 1))]!;
   }
 
-  private spawnRoom(type: 'vault' | 'den' | 'shrine'): void {
+  private spawnRoom(type: 'vault' | 'den'): void {
     // Rooms are lateral 2×3 extensions of the starting platform (x=2..7, y=23..24).
     // Left side: x=0..1. Right side: x=8..9. y=22..24 (one row above platform top).
     // This keeps the centre columns clear so falling blocks are never intercepted.
-    const colors = { vault: '#3d2b00', den: '#2d0000', shrine: '#002d30' } as const;
+    const colors = { vault: '#3d2b00', den: '#2d0000' } as const;
     const side = Math.random() < 0.5 ? 'left' : 'right';
     const roomX = side === 'left' ? 0 : CONFIG.COLS - 2;  // 0 or 8
     const roomY = CONFIG.ROWS - 3;                         // 22 (rows 22..24)
@@ -646,9 +609,7 @@ export class Game {
     const midY   = roomY + 1;                           // middle row of the room
 
     if (type === 'vault') {
-      const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(innerX, midY, relicDef.char, relicDef.name, 'relic', 0, relicDef));
-      // Place a bonus altar in the vault
+      // Place a bonus altar in the vault, guarded by a monster.
       const altarX = roomX + (side === 'left' ? 0 : 1);
       const altarTier: 1 | 2 | 3 = this.dungeonLevel >= 8 ? 3 : this.dungeonLevel >= 4 ? 2 : 1;
       const altarColor = altarTier === 3 ? '#2a1a00' : altarTier === 2 ? '#001a2a' : '#1a0a2a';
@@ -656,18 +617,12 @@ export class Game {
       this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
       this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
       this.cb.log(`💰 A Treasure Vault lies to the ${side} — guarded.`, 'log-perk');
-    } else if (type === 'den') {
+    } else {
       const positions: Array<[number, number]> = [[0, 0], [1, 0], [0, 1]];
       for (const [pdx, pdy] of positions) {
         this.spawnMonster(this.getRandomMonsterKey(), roomX + pdx, roomY + pdy);
       }
       this.cb.log(`☠️ A Monster Den lurks to the ${side}...`, 'log-damage');
-    } else {
-      const relicDef = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(roomX, midY, relicDef.char, relicDef.name, 'relic', 0, relicDef));
-      const potionDef = ITEMS['potion']!;
-      this.items.push(new Item(innerX, midY, potionDef.char, potionDef.name, potionDef.type, potionDef.statValue));
-      this.cb.log(`✨ An Ancient Shrine whispers to the ${side}...`, 'log-perk');
     }
   }
 
@@ -680,7 +635,6 @@ export class Game {
         this.map[x]![y] = Tile.VOID;
         this.colors[x]![y] = null;
         this.monsters = this.monsters.filter(m => !(m.x === x && m.y === y));
-        this.items = this.items.filter(i => !(i.x === x && i.y === y));
         this.tattooTiles = this.tattooTiles.filter(t => !(t.x === x && t.y === y));
         this.altarTiles = this.altarTiles.filter(a => !(a.x === x && a.y === y));
         this.hazards = this.hazards.filter(h => !(h.x === x && h.y === y));
@@ -720,119 +674,11 @@ export class Game {
       // Boss cinematic pause
       this.paused = true;
       this.cb.onBossWarning?.(bossDef, () => { this.paused = false; });
-
-    } else if (cell === Cell.RELIC) {
-      const def = RELICS[Math.floor(Math.random() * RELICS.length)]!;
-      this.items.push(new Item(tx, ty, def.char, def.name, 'relic', 0, def));
-
-    } else if (cell === Cell.ITEM_POTION) {
-      const r = Math.random();
-      const key = r < 0.45 ? 'potion'
-                : r < 0.70 ? 'mana_potion'
-                : r < 0.85 ? 'antidote'
-                : r < 0.95 ? 'shock_flask'
-                : 'grenade';
-      const def = ITEMS[key]!;
-      this.items.push(new Item(tx, ty, def.char, def.name, def.type as Item['type'], def.statValue));
-
-    } else if (cell === Cell.ITEM_SWORD) {
-      const def = ITEMS['sword']!;
-      this.items.push(new Item(tx, ty, def.char, def.name, def.type, def.statValue));
     }
   }
-
-  // ── Item pickup & potion use ──────────────────────────────────────────────
 
   public isIceTile(x: number, y: number): boolean {
     return this.specialTiles.some(t => t.type === 'ice' && t.x === x && t.y === y);
-  }
-
-  private pickupItemAt(item: Item, x: number, y: number): void {
-    let removeFromMap = true;
-    this.itemsPickedUp++;
-    if (item.type === 'heal' || item.type === 'mana' || item.type === 'grenade' || item.type === 'cure' || item.type === 'shock') {
-      if (this.potionPouch.length < 3) {
-        this.potionPouch.push(item);
-        this.cb.log(`Picked up ${item.name}.`, 'log-neutral');
-        this.cb.onParticle(x, y, item.char, '#69f0ae', 16);
-        this.cb.onAudio?.('itemPickup');
-      } else {
-        this.cb.log('Pouch full — drink one first (U).', 'log-neutral');
-        removeFromMap = false;
-        this.itemsPickedUp--;
-      }
-    } else if (item.type === 'stat') {
-      this.player.atk += item.statValue;
-      this.cb.log(`ATK +${item.statValue}.`, 'log-success');
-      this.cb.onParticle(x, y, `+${item.statValue} ATK`, '#ffd54f', 16);
-      this.cb.onAudio?.('itemPickup');
-    } else if (item.type === 'relic' && item.relicDef) {
-      this.pickupRelic(item.relicDef);
-    }
-    if (removeFromMap) this.items = this.items.filter(i => i !== item);
-  }
-
-  handleUseItem(): void {
-    if (this.player.hp <= 0 || this.paused) return;
-    if (this.potionPouch.length === 0) {
-      this.cb.log('Pouch is empty!', 'log-neutral');
-      return;
-    }
-    const item = this.potionPouch.shift()!;
-    this.cb.onAudio?.('itemUse');
-    if (item.type === 'heal') {
-      const amt = Math.floor(item.statValue * this.potionHealMult);
-      const healed = this.player.heal(amt);
-      this.cb.log(`🧪 Drank ${item.name} — +${healed} HP.`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, `+${healed}HP`, '#69f0ae', 16);
-    } else if (item.type === 'mana') {
-      this.player.rangedCooldown = 0;
-      this.cb.log(`💧 Drank ${item.name} — ability recharged!`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, '✨ MANA', '#7986cb', 14);
-    } else if (item.type === 'cure') {
-      this.player.statuses = [];
-      this.cb.log(`💊 Used ${item.name} — all afflictions cured!`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, '💊 CURED', '#a5d6a7', 14);
-    } else if (item.type === 'grenade') {
-      const dmg = item.statValue * this.dungeonLevel;
-      const inRange = this.monsters.filter(m =>
-        Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) <= 2
-      );
-      for (const m of inRange) {
-        m.hp -= dmg;
-        this.cb.onParticle(m.x, m.y, `💣-${dmg}`, '#ff6b35', 16);
-        if (m.hp <= 0) killMonster(m, this);
-      }
-      this.cb.log(`💣 Grenade! Hit ${inRange.length} monster(s) for ${dmg} dmg.`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, '💣 BOOM!', '#ff6b35', 18);
-    } else if (item.type === 'shock') {
-      const range = 5;
-      const stunned = this.monsters.filter(m => {
-        const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-        return dist <= range && (this.visibility[m.x]?.[m.y] ?? false);
-      });
-      for (const m of stunned) {
-        m.statuses.push({ type: 'stun', duration: item.statValue, power: 0 });
-        this.cb.onParticle(m.x, m.y, '⚡STUN', '#ffd54f', 14);
-      }
-      this.cb.log(`⚡ Shock Flask! ${stunned.length} monster(s) stunned for ${item.statValue} turns.`, 'log-success');
-      this.cb.onParticle(this.player.x, this.player.y, '⚡', '#ffd54f', 18);
-    }
-    this.advanceTurn();
-  }
-
-  // ── Relic helpers ─────────────────────────────────────────────────────────
-
-  private pickupRelic(def: RelicDef): void {
-    if (this.player.relics.length >= 2) {
-      const dropped = this.player.relics.shift()!;
-      this.cb.log(`Dropped ${dropped.name} (relic cap reached).`, 'log-neutral');
-    }
-    this.player.relics.push(def);
-    def.onPickup?.(this.player);
-    this.cb.log(`✨ Relic found: ${def.name} — ${def.desc}`, 'log-perk');
-    this.cb.onParticle(this.player.x, this.player.y, '🔮 RELIC!', '#9c27b0');
-    this.pushUI();
   }
 
   // ── Line clears ──────────────────────────────────────────────────────────
@@ -904,7 +750,7 @@ export class Game {
         this.openLevelUpBoons();
       }
 
-      // Relic: Ember Core — deal damage to visible monsters on line clear
+      // Perk: line clears deal damage to all visible monsters
       if (this.player.lineClearDamage > 0) {
         for (const m of this.monsters) {
           if (this.visibility[m.x]?.[m.y]) {
@@ -937,11 +783,6 @@ export class Game {
         this.monsters = this.monsters.filter(m => m.hp > 0);
       }
 
-      // Relic onLineClear hooks
-      for (const relic of this.player.relics) {
-        relic.onLineClear?.(this.player, rowsCleared);
-      }
-
       if (!this.noLineHeal) {
         const lineHeal = this.player.heal(10);
         if (lineHeal > 0) {
@@ -958,7 +799,6 @@ export class Game {
 
   private shiftEntitiesDown(thresholdY: number): void {
     for (const m of this.monsters) { if (m.y < thresholdY) m.y++; }
-    for (const i of this.items)    { if (i.y < thresholdY) i.y++; }
     if (this.player.y < thresholdY) {
       this.player.y++;
       if (this.player.y >= CONFIG.ROWS) this.transitionToNextFloor();
@@ -989,7 +829,6 @@ export class Game {
     this.visibility = this.emptyBoolGrid(false);
     this.explored = this.emptyBoolGrid(false);
     this.monsters = [];
-    this.items = [];
     this.tattooTiles = [];
     this.altarTiles = [];
     this.hazards = [];
@@ -1090,7 +929,6 @@ export class Game {
       linesCleared:   this.linesCleared,
       biggestCombo:   this.biggestCombo,
       damageTaken:    this.damageTaken,
-      itemsPickedUp:  this.itemsPickedUp,
     };
   }
 
@@ -1264,10 +1102,6 @@ export class Game {
       return;
     }
 
-    // Pick up item
-    const item = this.getItemAt(nx, ny);
-    if (item) this.pickupItemAt(item, nx, ny);
-
     this.player.x = nx; this.player.y = ny;
 
     // Check hazard triggers on new tile
@@ -1278,8 +1112,6 @@ export class Game {
       const sx = this.player.x + dx, sy = this.player.y + dy;
       if (!this.isValidMove(sx, sy) || this.getMonsterAt(sx, sy) || this.isTattooTile(sx, sy)) break;
       this.player.x = sx; this.player.y = sy;
-      const slideItem = this.getItemAt(sx, sy);
-      if (slideItem) this.pickupItemAt(slideItem, sx, sy);
       checkHazardTrigger(this.player, this, true);
       if (this.map[sx]?.[sy] === Tile.STAIRS) break;
     }
@@ -1640,10 +1472,6 @@ export class Game {
     return this.monsters.find(m => m.x === x && m.y === y);
   }
 
-  getItemAt(x: number, y: number): Item | undefined {
-    return this.items.find(i => i.x === x && i.y === y);
-  }
-
   // ── Tap-to-inspect ───────────────────────────────────────────────────────
 
   getInspectInfo(x: number, y: number): InspectInfo | null {
@@ -1656,7 +1484,6 @@ export class Game {
         `Lv.${this.player.playerLevel}`,
       ];
       if (this.player.boons.length > 0) lines.push(`Boons: ${this.player.boons.map(b => `${b.def.char}×${b.stacks}`).join(' ')}`);
-      if (this.player.relics.length > 0) lines.push(`Relics: ${this.player.relics.map(r => r.name).join(', ')}`);
       return { icon: this.player.char, title: 'You', lines };
     }
 
@@ -1671,31 +1498,6 @@ export class Game {
       ];
       if (monster.statuses.length > 0) lines.push(`Status: ${monster.statuses.map(s => s.type).join(', ')}`);
       return { icon: monster.char, title: monster.isBoss ? `👑 ${monster.name}` : monster.name, lines };
-    }
-
-    const item = this.getItemAt(x, y);
-    if (item) {
-      if (item.type === 'heal') {
-        return { icon: item.char, title: item.name, lines: [`Restores ${item.statValue} HP`, 'Stored in pouch (U to use)'] };
-      }
-      if (item.type === 'mana') {
-        return { icon: item.char, title: item.name, lines: ['Recharges ranged ability instantly', 'Stored in pouch (U to use)'] };
-      }
-      if (item.type === 'cure') {
-        return { icon: item.char, title: item.name, lines: ['Clears all poison & stun', 'Stored in pouch (U to use)'] };
-      }
-      if (item.type === 'grenade') {
-        return { icon: item.char, title: item.name, lines: [`${item.statValue * this.dungeonLevel} dmg to monsters within 2 tiles`, 'Stored in pouch (U to use)'] };
-      }
-      if (item.type === 'shock') {
-        return { icon: item.char, title: item.name, lines: [`Stuns all visible monsters for ${item.statValue} turns`, 'Stored in pouch (U to use)'] };
-      }
-      if (item.type === 'stat') {
-        return { icon: item.char, title: item.name, lines: [`+${item.statValue} ATK`] };
-      }
-      if (item.type === 'relic' && item.relicDef) {
-        return { icon: item.char, title: item.relicDef.name, lines: [item.relicDef.desc] };
-      }
     }
 
     const hazard = this.getHazardAt(x, y);
@@ -1768,8 +1570,6 @@ export class Game {
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
       activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,
       biomeName: biome.name,
-      relics: this.player.relics,
-      potionPouch: this.potionPouch.map(p => ({ char: p.char, name: p.name, type: p.type })),
       rangedAbility: this.player.rangedAbility
         ? {
             name:        this.player.rangedAbility.name,

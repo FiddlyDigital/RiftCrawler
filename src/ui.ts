@@ -44,14 +44,12 @@ export class UIManager {
       brandPanel:       document.getElementById('brand-panel')!,
       statusRow:        document.getElementById('status-row')!,
       runHistory:       document.getElementById('run-history')!,
-      relicSlots:       document.getElementById('relic-slots')!,
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
       heldPreview:      document.getElementById('held-preview-box')!,
       pieceStateBadge:  document.getElementById('piece-state-badge')!,
-      potionPouch:      document.getElementById('potion-pouch')!,
       runStatsGrid:     document.getElementById('run-stats-grid')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
@@ -127,11 +125,6 @@ export class UIManager {
       .map(s => `<span class="status-tag status-${s.type}">${s.type === 'poison' ? '☠️' : '💫'} ${s.type} ${s.duration}</span>`)
       .join('');
 
-    // Relic slots
-    this.els['relicSlots']!.innerHTML = state.relics
-      .map(r => `<span class="relic-badge" title="${r.name}: ${r.desc}">${r.char}</span>`)
-      .join('');
-
     // Active modifier badge
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
@@ -176,20 +169,6 @@ export class UIManager {
       this.els['rangedAbility']!.style.display = 'none';
       if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Q — No ability'; }
     }
-
-    // Potion pouch display
-    const pouchEl = this.els['potionPouch']!;
-    if (state.potionPouch.length === 0) {
-      pouchEl.textContent = '—';
-    } else {
-      pouchEl.innerHTML = '';
-      for (const p of state.potionPouch) {
-        const span = document.createElement('span');
-        span.textContent = p.char;
-        span.title = p.name;
-        pouchEl.appendChild(span);
-      }
-    }
   }
 
   showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
@@ -220,7 +199,6 @@ export class UIManager {
           <div class="stat-cell">🧱 <b>${stats.linesCleared}</b><br><span>Lines</span></div>
           <div class="stat-cell">💥 <b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
           <div class="stat-cell">💔 <b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
-          <div class="stat-cell">🎒 <b>${stats.itemsPickedUp}</b><br><span>Items</span></div>
         </div>`;
       const shareStr = `🗡️ Fl.${floor} · ☠️ ${stats.monstersKilled} kills · 🧱 ${stats.linesCleared} lines · 💥 Best combo ×${stats.biggestCombo + 1} · ✨ ${totalXpEarned.toLocaleString()} XP`;
       (this.els['shareText'] as HTMLTextAreaElement).value = shareStr;

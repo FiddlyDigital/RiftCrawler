@@ -174,7 +174,7 @@ export class Renderer {
         const visible = game.visibility[x]![y]!;
         const seen = game.explored[x]![y]!;
         const type = game.map[x]![y]!;
-        const isMerchant = game.items.length >= 0 && this.isMerchantTile(game, x, y);
+        const isMerchant = this.isMerchantTile(game, x, y);
 
         if (!seen && !visible) {
           ctx.fillStyle = '#020204';
@@ -382,15 +382,6 @@ export class Renderer {
     }
     ctx.font = `${TS * 0.7}px Arial`;
 
-    // ── Items (only if visible) ───────────────────────────────────────────
-    for (const item of game.items) {
-      if (!game.visibility[item.x]?.[item.y]) continue;
-      if (item.type === 'relic') this.drawPulseGlow(item.x, item.y, '156,39,176');
-      if (!this.drawSprite(item.char, item.x * TS, item.y * TS, TS, TS)) {
-        ctx.fillText(item.char, item.x * TS + TS / 2, item.y * TS + TS / 2);
-      }
-    }
-
     // ── Monsters (only if visible) ────────────────────────────────────────
     for (const m of game.monsters) {
       if (!game.visibility[m.x]?.[m.y]) continue;
@@ -584,13 +575,10 @@ const CELL_EMOJI: Partial<Record<number, string>> = {
   [Cell.MONSTER_SLIME]:  '🫧',
   [Cell.MONSTER_ORC]:    '👹',
   [Cell.MONSTER_BAT]:    '🦠',
-  [Cell.ITEM_POTION]:    '🧪',
-  [Cell.ITEM_SWORD]:     '🗡️',
   [Cell.STAIRS]:         '🪜',
   [Cell.BOMB]:           '💣',
   [Cell.MERCHANT]:       '🎭',
   [Cell.BOSS]:           '⚠️',
-  [Cell.RELIC]:          '🔮',
   [Cell.ALTAR]:          '⛩️',
   [Cell.TRAP_SPIKE]:     '⬆️',
   [Cell.TRAP_SMOKE]:     '💨',

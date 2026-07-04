@@ -1,15 +1,14 @@
 import visualRegistryData from './data/visual-registry.json';
 import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
-import itemsData          from './data/items.json';
 import shapesData         from './data/shapes.json';
 import boonsData          from './data/boons.json';
 import brandsData         from './data/brands.json';
 import modifiersData      from './data/modifiers.json';
-import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec } from './types';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
-import type { MonsterDef, BossDef, ItemDef } from './types';
+import type { MonsterDef, BossDef } from './types';
 
 // ── Visual registry ───────────────────────────────────────────────────────────
 
@@ -74,11 +73,6 @@ interface RawBoss {
   hpMult: number; atkMult: number; xpValue: number; flavorText: string;
 }
 
-interface RawItem {
-  id: string; displayName: string; visualAsset: string; cellTypeId: string;
-  effectType: string; effectValue: number;
-}
-
 interface RawShape {
   matrix: number[][]; color: string; preview: string;
 }
@@ -88,8 +82,6 @@ interface RawShape {
 const CELL_MAP: Record<string, CellValue> = {
   MONSTER_RAT:    Cell.MONSTER_RAT,
   MONSTER_SKEL:   Cell.MONSTER_SKEL,
-  ITEM_POTION:    Cell.ITEM_POTION,
-  ITEM_SWORD:     Cell.ITEM_SWORD,
   MONSTER_ARCHER: Cell.MONSTER_ARCHER,
   MONSTER_SLIME:  Cell.MONSTER_SLIME,
   MONSTER_ORC:    Cell.MONSTER_ORC,
@@ -162,30 +154,6 @@ export const BOSSES: BossDef[] = [
     onHalfHp:   (game) => game.triggerGravityBurst(),
   },
 ];
-
-// ── Items ─────────────────────────────────────────────────────────────────────
-
-const ITEM_EFFECT_TO_TYPE: Record<string, 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock'> = {
-  heal:    'heal',
-  atk:     'stat',
-  mana:    'mana',
-  grenade: 'grenade',
-  cure:    'cure',
-  shock:   'shock',
-};
-
-export const ITEMS: Record<string, ItemDef> = Object.fromEntries(
-  Object.entries(itemsData as Record<string, RawItem>).map(([key, raw]) => [
-    key,
-    {
-      char:      vis(raw.visualAsset),
-      name:      raw.displayName,
-      type:      ITEM_EFFECT_TO_TYPE[raw.effectType] ?? 'heal',
-      statValue: raw.effectValue,
-      cellState: CELL_MAP[raw.cellTypeId] ?? Cell.FLOOR,
-    } satisfies ItemDef,
-  ])
-);
 
 // ── Boons ─────────────────────────────────────────────────────────────────────
 
@@ -273,97 +241,6 @@ export const BRANDS: BrandDef[] = (brandsData as RawBrand[]).map(raw => ({
 export function getThreeRandomBrands(ownedIds: string[] = []): BrandDef[] {
   return buildOffer([...BRANDS], ownedIds);
 }
-
-// ── Relics ────────────────────────────────────────────────────────────────────
-
-export const RELICS: RelicDef[] = [
-  {
-    id: 'vampire_ring',
-    char: '💍',
-    name: 'Vampire Ring',
-    desc: '+2 HP on every kill',
-    onPickup: (p: Player) => { p.killHeal += 2; },
-  },
-  {
-    id: 'echo_stone',
-    char: '🌀',
-    name: 'Echo Stone',
-    desc: '20% chance to dodge attacks',
-    onPickup: (p: Player) => { p.dodgeChance += 0.20; },
-  },
-  {
-    id: 'ember_core',
-    char: '🔥',
-    name: 'Ember Core',
-    desc: 'Line clears deal 5 dmg to all visible monsters',
-    onPickup: (p: Player) => { p.lineClearDamage += 5; },
-  },
-  {
-    id: 'soul_lantern',
-    char: '🕯️',
-    name: 'Soul Lantern',
-    desc: 'Vision radius +3',
-    onPickup: (p: Player) => { p.visionRadius += 3; },
-  },
-  {
-    id: 'talisman',
-    char: '🪬',
-    name: 'Talisman',
-    desc: 'Status effects expire 1 turn sooner',
-    onPickup: (p: Player) => { p.statusDurationBonus += 1; },
-  },
-  {
-    id: 'lodestone',
-    char: '🧲',
-    name: 'Lodestone',
-    desc: 'Stun adjacent monsters each tick',
-    onPickup: (p: Player) => { p.auraStunRadius = 1; },
-  },
-  {
-    id: 'mana_beads',
-    char: '📿',
-    name: 'Mana Beads',
-    desc: 'Every 5th attack deals double damage',
-    onPickup: (p: Player) => { p.critEvery = 5; p.critCount = 0; },
-  },
-  {
-    id: 'blood_pact',
-    char: '🩸',
-    name: 'Blood Pact',
-    desc: '+8 ATK, -10 Max HP',
-    onPickup: (p: Player) => {
-      p.atk += 8;
-      p.maxHp = Math.max(10, p.maxHp - 10);
-      p.hp = Math.min(p.hp, p.maxHp);
-    },
-  },
-  {
-    id: 'reflex_coil',
-    char: '⚡',
-    name: 'Reflex Coil',
-    desc: 'Dodging an attack restores 4 HP  (great with Rift Weaver)',
-    onPickup: (p: Player) => { p.dodgeHeal += 4; },
-  },
-  {
-    id: 'rift_shard',
-    char: '💎',
-    name: 'Rift Shard',
-    desc: 'Each row cleared grants +2 Max HP permanently  (great with Architect)',
-    onLineClear: (p: Player, count: number) => {
-      p.maxHp += 2 * count;
-      p.hp = Math.min(p.hp, p.maxHp);
-    },
-  },
-  {
-    id: 'divine_seal',
-    char: '✨',
-    name: 'Divine Seal',
-    desc: 'Triples your kill-heal (min 4 HP)  (great with Cascade)',
-    onPickup: (p: Player) => {
-      p.killHeal = Math.max(p.killHeal * 3, 4);
-    },
-  },
-];
 
 // ── Modifiers ─────────────────────────────────────────────────────────────────
 

@@ -105,17 +105,6 @@ export class AudioEngine {
     this.osc(100, 0.5, 'sawtooth', 0.16, 0.65);
   }
 
-  playItemPickup(): void {
-    this.osc(900,  0.06, 'sine', 0.12);
-    this.osc(1350, 0.07, 'sine', 0.09, 0.05);
-  }
-
-  playItemUse(): void {
-    this.osc(500, 0.08, 'triangle', 0.14);
-    this.osc(350, 0.10, 'triangle', 0.10, 0.05);
-    this.noise(0.07, 0.06, 0.08);
-  }
-
   playTeleport(): void {
     this.osc(180, 0.28, 'sine', 0.20, 0, 900);
     this.noise(0.06, 0.10, 0.22);
