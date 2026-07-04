@@ -3,8 +3,12 @@ import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
 import itemsData          from './data/items.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole } from './types';
+import boonsData          from './data/boons.json';
+import brandsData         from './data/brands.json';
+import modifiersData      from './data/modifiers.json';
+import { Cell, type CellValue, type StatusType, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec } from './types';
 import type { Player } from './entities';
+import type { Game } from './game';
 import type { MonsterDef, BossDef, ItemDef } from './types';
 
 // ── Visual registry ───────────────────────────────────────────────────────────
@@ -14,6 +18,42 @@ export const VISUAL_REGISTRY: Record<string, string> = visualRegistryData as Rec
 function vis(assetId: string): string {
   return VISUAL_REGISTRY[assetId] ?? '❓';
 }
+
+// ── Declarative effect resolver (JSON-configured boons / brands / modifiers) ───
+// Boons/brands/modifiers describe their effects as data; these apply them.
+
+interface RawBoon     { id: string; char: string; name: string; tier: number; role: string; desc: string; effects?: EffectSpec[]; special?: string }
+interface RawBrand    { id: string; char: string; name: string; setSize: number; role: string; desc: string; setDesc: string; onEquip?: EffectSpec[]; onSet?: EffectSpec[] }
+interface RawModifier { id: string; emoji: string; name: string; desc: string; effects?: EffectSpec[]; special?: string }
+
+function applyEffect(obj: Record<string, number | boolean>, e: EffectSpec): void {
+  const op = e.op ?? 'add';
+  if (op === 'set') { obj[e.stat] = e.value; return; }
+  let n = obj[e.stat] as number;
+  const v = e.value as number;
+  n = op === 'mul' ? n * v : n + v;
+  if (e.floor) n = Math.floor(n);
+  if (e.min !== undefined) n = Math.max(e.min, n);
+  if (e.max !== undefined) n = Math.min(e.max, n);
+  obj[e.stat] = n;
+}
+
+function applyToPlayer(p: Player, effects: EffectSpec[] | undefined): void {
+  for (const e of effects ?? []) applyEffect(p as unknown as Record<string, number | boolean>, e);
+}
+
+// Effects that can't be expressed as plain data:
+const BOON_SPECIALS: Record<string, (p: Player, stacks: number) => void> = {
+  // Void Loop: every Nth attack crits, N shrinking as stacks grow.
+  void_loop: (p, stacks) => {
+    if (stacks === 1) { p.critEvery = 6; p.critCount = 0; }
+    else p.critEvery = Math.max(2, p.critEvery - 1);
+  },
+  // Void Prism recomputes in Player.addBoon — nothing to do per-add.
+};
+const MODIFIER_SPECIALS: Record<string, (g: Game) => void> = {
+  full_heal: (g) => { g.player.hp = g.player.maxHp; },
+};
 
 // ── Raw JSON shapes (local — not exposed) ─────────────────────────────────────
 
@@ -149,34 +189,13 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries(
 
 // ── Boons ─────────────────────────────────────────────────────────────────────
 
-export const BOONS: BoonDef[] = [
-  // ── Tier I — Shards ──────────────────────────────────────────────────────
-  { id: 'whetstone',     char: '⚔️',  name: 'Whetstone',     tier: 1, role: 'offense', desc: '+2 ATK per stack',              onAdd: (p) => { p.atk += 2; } },
-  { id: 'vital_crystal', char: '❤️',  name: 'Vital Crystal', tier: 1, role: 'defense', desc: '+8 Max HP per stack',           onAdd: (p) => { p.maxHp += 8; p.hp += 8; } },
-  { id: 'iron_scale',    char: '🛡️',  name: 'Iron Scale',    tier: 1, role: 'defense', desc: '+1 damage reduction per stack', onAdd: (p) => { p.damageReduction += 1; } },
-  { id: 'mending_drip',  char: '💧',  name: 'Mending Drip',  tier: 1, role: 'defense', desc: '+0.5 HP regen/tick per stack',  onAdd: (p) => { p.regenPerTick += 0.5; } },
-  { id: 'sight_shard',   char: '👁️',  name: 'Sight Shard',   tier: 1, role: 'utility', desc: '+1 vision radius per stack',   onAdd: (p) => { p.visionRadius += 1; } },
-  { id: 'gravity_well',  char: '⏳',  name: 'Gravity Well',  tier: 1, role: 'utility', desc: '5% slower gravity per stack',   onAdd: (p) => { p.tickSlowPercent += 5; } },
-  { id: 'iron_ward',     char: '🧪',  name: 'Iron Ward',     tier: 1, role: 'defense', desc: 'Immune to poison',              onAdd: (p) => { p.poisonImmune = true; } },
-  // ── Tier II — Cores ───────────────────────────────────────────────────────
-  { id: 'bloodtap',  char: '🩸', name: 'Bloodtap Core',  tier: 2, role: 'defense', desc: '+3 HP on kill per stack',           onAdd: (p) => { p.killHeal += 3; } },
-  { id: 'thornweave', char: '🌵', name: 'Thornweave Core', tier: 2, role: 'offense', desc: '+3 thorn dmg to attacker per stack', onAdd: (p) => { p.thornDamage += 3; } },
-  { id: 'riftblast',  char: '💥', name: 'Riftblast Core', tier: 2, role: 'offense', desc: '+4 line-clear monster dmg per stack', onAdd: (p) => { p.lineClearDamage += 4; } },
-  { id: 'ghost_step', char: '🌀', name: 'Ghost Step',     tier: 2, role: 'defense', desc: '+10% dodge (max 75%) per stack',   onAdd: (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.10); } },
-  { id: 'cruelty',    char: '⚡', name: 'Cruelty Core',   tier: 2, role: 'offense', desc: '+1 ATK per kill this floor (per stack)', onAdd: (p) => { p.killAtkBonus += 1; } },
-  {
-    id: 'void_loop', char: '🔮', name: 'Void Loop', tier: 2, role: 'offense', desc: 'Every Nth attack crits (N decreases per stack)',
-    onAdd: (p, stacks) => {
-      if (stacks === 1) { p.critEvery = 6; p.critCount = 0; }
-      else p.critEvery = Math.max(2, p.critEvery - 1);
-    },
+export const BOONS: BoonDef[] = (boonsData as RawBoon[]).map(raw => ({
+  id: raw.id, char: raw.char, name: raw.name, tier: raw.tier as 1 | 2 | 3, role: raw.role as OfferRole, desc: raw.desc,
+  onAdd: (player: Player, stacks: number): void => {
+    applyToPlayer(player, raw.effects);
+    if (raw.special) BOON_SPECIALS[raw.special]?.(player, stacks);
   },
-  // ── Tier III — Runes ─────────────────────────────────────────────────────
-  { id: 'annihilation', char: '☄️', name: 'Annihilation Rune', tier: 3, role: 'offense', desc: 'Line clears deal floor×4 dmg to ALL monsters per stack', onAdd: (p) => { p.lineClearAoeDmgMult += 4; } },
-  { id: 'deathward',    char: '💀', name: 'Deathward Rune',    tier: 3, role: 'defense', desc: 'Survive a killing blow once per floor per stack',         onAdd: (p) => { p.deathwardCharges += 1; } },
-  { id: 'rift_tide',    char: '🌊', name: 'Rift Tide',         tier: 3, role: 'utility', desc: '20% slower gravity, +0.3× line-clear XP per stack',      onAdd: (p) => { p.tickSlowPercent += 20; p.lineClearXpMult += 0.3; } },
-  { id: 'void_prism',   char: '🌌', name: 'Void Prism',        tier: 3, role: 'offense', desc: '+1 ATK & +2 HP per distinct boon per stack',              onAdd: (_p, _s) => { /* handled by recomputeVoidPrism */ } },
-];
+}));
 
 export const BOONS_BY_TIER: Record<1 | 2 | 3, BoonDef[]> = {
   1: BOONS.filter(b => b.tier === 1),
@@ -244,78 +263,12 @@ export function getThreeRandomBoons(pool: BoonDef[], ownedIds: string[] = []): B
 
 // ── Sacred Brands ─────────────────────────────────────────────────────────────
 
-export const BRANDS: BrandDef[] = [
-  {
-    id: 'war', char: '⚔️', name: 'War', setSize: 3, role: 'offense',
-    desc: '+2 ATK per brand',
-    setDesc: 'Set: +10 ATK',
-    onEquip:      (p) => { p.atk += 2; },
-    onSetComplete:(p) => { p.atk += 10; },
-  },
-  {
-    id: 'cryo', char: '❄️', name: 'Cryo', setSize: 3, role: 'utility',
-    desc: '+5% tick slow per brand',
-    setDesc: 'Set: +25% more tick slow',
-    onEquip:      (p) => { p.tickSlowPercent += 5; },
-    onSetComplete:(p) => { p.tickSlowPercent += 25; },
-  },
-  {
-    id: 'sick', char: '☠️', name: 'Sick', setSize: 3, role: 'offense',
-    desc: '+8% chance to poison on hit',
-    setDesc: 'Set: 100% poison on hit',
-    onEquip:      (p) => { p.poisonAttackChance = Math.min(1.0, p.poisonAttackChance + 0.08); },
-    onSetComplete:(p) => { p.poisonAttackChance = 1.0; },
-  },
-  {
-    id: 'sight', char: '👁️', name: 'Sight', setSize: 2, role: 'utility',
-    desc: '+1 vision radius per brand',
-    setDesc: 'Set: +2 more vision radius',
-    onEquip:      (p) => { p.visionRadius += 1; },
-    onSetComplete:(p) => { p.visionRadius += 2; },
-  },
-  {
-    id: 'speed', char: '💨', name: 'Speed', setSize: 2, role: 'utility',
-    desc: 'Collecting the set grants extra move',
-    setDesc: 'Set: move twice per turn',
-    onEquip:      (_p) => { /* set bonus only */ },
-    onSetComplete:(p) => { p.bonusHeroMoves += 1; },
-  },
-  {
-    id: 'life', char: '❤️', name: 'Life', setSize: 3, role: 'defense',
-    desc: '+5 max HP per brand',
-    setDesc: 'Set: free revive (erases all brands!)',
-    onEquip:      (p) => { p.maxHp += 5; p.hp = Math.min(p.hp + 5, p.maxHp); },
-    onSetComplete:(p) => { p.lifeBrandRevive = true; },
-  },
-  {
-    id: 'guard', char: '🛡️', name: 'Guard', setSize: 2, role: 'defense',
-    desc: '+1 damage reduction per brand',
-    setDesc: 'Set: +3 more damage reduction',
-    onEquip:      (p) => { p.damageReduction += 1; },
-    onSetComplete:(p) => { p.damageReduction += 3; },
-  },
-  {
-    id: 'leech', char: '🩸', name: 'Leech', setSize: 2, role: 'defense',
-    desc: '+2 HP on kill per brand',
-    setDesc: 'Set: +5 more HP on kill',
-    onEquip:      (p) => { p.killHeal += 2; },
-    onSetComplete:(p) => { p.killHeal += 5; },
-  },
-  {
-    id: 'forge', char: '🔥', name: 'Forge', setSize: 3, role: 'offense',
-    desc: '+2 line-clear damage per brand',
-    setDesc: 'Set: +8 more line-clear damage',
-    onEquip:      (p) => { p.lineClearDamage += 2; },
-    onSetComplete:(p) => { p.lineClearDamage += 8; },
-  },
-  {
-    id: 'ghost', char: '👻', name: 'Ghost', setSize: 2, role: 'defense',
-    desc: '+5% dodge chance per brand',
-    setDesc: 'Set: +20% more dodge',
-    onEquip:      (p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.05); },
-    onSetComplete:(p) => { p.dodgeChance = Math.min(0.75, p.dodgeChance + 0.20); },
-  },
-];
+export const BRANDS: BrandDef[] = (brandsData as RawBrand[]).map(raw => ({
+  id: raw.id, char: raw.char, name: raw.name, setSize: raw.setSize as 2 | 3, role: raw.role as OfferRole,
+  desc: raw.desc, setDesc: raw.setDesc,
+  onEquip:       (p: Player): void => applyToPlayer(p, raw.onEquip),
+  onSetComplete: (p: Player): void => applyToPlayer(p, raw.onSet),
+}));
 
 export function getThreeRandomBrands(ownedIds: string[] = []): BrandDef[] {
   return buildOffer([...BRANDS], ownedIds);
@@ -414,78 +367,15 @@ export const RELICS: RelicDef[] = [
 
 // ── Modifiers ─────────────────────────────────────────────────────────────────
 
-export const MODIFIERS: ModifierDef[] = [
-  {
-    id: 'glass_cannon',
-    emoji: '🩸',
-    name: 'Glass Cannon',
-    desc: '+8 ATK, −15 Max HP',
-    apply: (g) => { g.player.atk += 8; g.player.maxHp = Math.max(10, g.player.maxHp - 15); g.player.hp = g.player.maxHp; },
+export const MODIFIERS: ModifierDef[] = (modifiersData as RawModifier[]).map(raw => ({
+  id: raw.id, emoji: raw.emoji, name: raw.name, desc: raw.desc,
+  apply: (g: Game): void => {
+    for (const e of raw.effects ?? []) {
+      applyEffect((e.target === 'game' ? g : g.player) as unknown as Record<string, number | boolean>, e);
+    }
+    if (raw.special) MODIFIER_SPECIALS[raw.special]?.(g);
   },
-  {
-    id: 'blessed',
-    emoji: '🍀',
-    name: 'Blessed',
-    desc: 'Potions heal double',
-    apply: (g) => { g.potionHealMult = 2; },
-  },
-  {
-    id: 'overclock',
-    emoji: '⚡',
-    name: 'Overclock',
-    desc: 'Gravity 20% faster, XP ×1.5',
-    apply: (g) => { g.player.tickSlowPercent -= 20; g.xpMultiplier = 1.5; },
-  },
-  {
-    id: 'cursed',
-    emoji: '💀',
-    name: 'Cursed',
-    desc: 'XP ×2 — but line clears don\'t heal',
-    apply: (g) => { g.xpMultiplier = 2.0; g.noLineHeal = true; },
-  },
-  {
-    id: 'blind_run',
-    emoji: '🌑',
-    name: 'Blind Run',
-    desc: 'Vision radius halved',
-    apply: (g) => { g.player.visionRadius = Math.max(1, Math.floor(g.player.visionRadius / 2)); },
-  },
-  {
-    id: 'ironclad',
-    emoji: '🛡️',
-    name: 'Ironclad',
-    desc: '+3 Damage Reduction, −3 ATK',
-    apply: (g) => { g.player.damageReduction += 3; g.player.atk = Math.max(1, g.player.atk - 3); },
-  },
-  {
-    id: 'haunted',
-    emoji: '👁️',
-    name: 'Haunted',
-    desc: 'Double monster spawn rate',
-    apply: (g) => { g.haunted = true; },
-  },
-  {
-    id: 'frozen_rift',
-    emoji: '🧊',
-    name: 'Frozen Rift',
-    desc: 'All monsters spawn stunned for 1 turn',
-    apply: (g) => { g.frozenRift = true; },
-  },
-  {
-    id: 'lucky',
-    emoji: '✨',
-    name: 'Lucky',
-    desc: 'Every 5th block contains a guaranteed item',
-    apply: (g) => { g.luckyEvery = 0; },
-  },
-  {
-    id: 'berserker',
-    emoji: '🔥',
-    name: 'Berserker',
-    desc: 'ATK doubled, Max HP halved',
-    apply: (g) => { g.player.atk = g.player.atk * 2; g.player.maxHp = Math.max(10, Math.floor(g.player.maxHp / 2)); g.player.hp = g.player.maxHp; },
-  },
-];
+}));
 
 // ── Shapes ────────────────────────────────────────────────────────────────────
 

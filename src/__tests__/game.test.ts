@@ -5,7 +5,7 @@ import type { GameCallbacks } from '../types';
 import { Monster, Item } from '../entities';
 import { killMonster, playerAttackMonster, estimateHitChance } from '../systems/combat';
 import { processMonsterTurns } from '../systems/monsterAI';
-import { BRANDS, BOONS, getThreeRandomBoons } from '../content';
+import { BRANDS, BOONS, MODIFIERS, getThreeRandomBoons } from '../content';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -653,5 +653,66 @@ describe('Adjacent enemies attack', () => {
     processMonsterTurns(game);
     spy.mockRestore();
     expect(game.player.hp).toBeLessThan(500);
+  });
+});
+
+// ── Data-driven boons / brands / modifiers (JSON effects) ─────────────────────
+
+describe('JSON-configured effects', () => {
+  let game: Game;
+  beforeEach(() => { game = new Game(makeCallbacks()); });
+
+  it('boon add-effect applies (whetstone +2 ATK)', () => {
+    const atk = game.player.atk;
+    BOONS.find(b => b.id === 'whetstone')!.onAdd(game.player, 1);
+    expect(game.player.atk).toBe(atk + 2);
+  });
+
+  it('boon set-effect sets a boolean flag (iron_ward → poisonImmune)', () => {
+    expect(game.player.poisonImmune).toBe(false);
+    BOONS.find(b => b.id === 'iron_ward')!.onAdd(game.player, 1);
+    expect(game.player.poisonImmune).toBe(true);
+  });
+
+  it('capped add-effect clamps (ghost_step dodge maxes at 0.75)', () => {
+    const gs = BOONS.find(b => b.id === 'ghost_step')!;
+    for (let i = 0; i < 20; i++) gs.onAdd(game.player, i + 1);
+    expect(game.player.dodgeChance).toBe(0.75);
+  });
+
+  it('void_loop special handler drives critEvery by stacks', () => {
+    const vl = BOONS.find(b => b.id === 'void_loop')!;
+    vl.onAdd(game.player, 1);
+    expect(game.player.critEvery).toBe(6);
+    vl.onAdd(game.player, 2);
+    expect(game.player.critEvery).toBe(5);
+  });
+
+  it('brand onSet effect applies (Life set → free-revive flag)', () => {
+    expect(game.player.lifeBrandRevive).toBe(false);
+    BRANDS.find(b => b.id === 'life')!.onSetComplete(game.player);
+    expect(game.player.lifeBrandRevive).toBe(true);
+  });
+
+  it('modifier applies to player with clamp + full-heal special (Glass Cannon)', () => {
+    const p = game.player; p.maxHp = 45; p.hp = 45; p.atk = 6;
+    MODIFIERS.find(m => m.id === 'glass_cannon')!.apply(game);
+    expect(p.atk).toBe(14);    // +8
+    expect(p.maxHp).toBe(30);  // −15
+    expect(p.hp).toBe(30);     // full_heal special sets hp = maxHp
+  });
+
+  it('mul modifier with floor+min clamp (Blind Run halves vision, min 1)', () => {
+    game.player.visionRadius = 3;
+    MODIFIERS.find(m => m.id === 'blind_run')!.apply(game);
+    expect(game.player.visionRadius).toBe(1);   // floor(3*0.5) = 1
+    MODIFIERS.find(m => m.id === 'blind_run')!.apply(game);
+    expect(game.player.visionRadius).toBe(1);   // clamped at min 1
+  });
+
+  it('game-targeted modifier sets game flags (Cursed → xp×2, no line heal)', () => {
+    MODIFIERS.find(m => m.id === 'cursed')!.apply(game);
+    expect(game.xpMultiplier).toBe(2);
+    expect(game.noLineHeal).toBe(true);
   });
 });

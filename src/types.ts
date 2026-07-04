@@ -78,6 +78,19 @@ export type ItemType = 'heal' | 'stat' | 'mana' | 'grenade' | 'cure' | 'shock' |
 // Role used to guarantee variety in a 3-choice offer (>=2 distinct roles)
 export type OfferRole = 'offense' | 'defense' | 'utility';
 
+// Declarative effect used by JSON-configured boons / brands / modifiers.
+// Applied to the player (default) or the game object (modifiers only).
+// op: 'add' (default) | 'mul' | 'set'. Optional floor + min/max clamps.
+export interface EffectSpec {
+  target?: 'player' | 'game';
+  stat: string;
+  op?: 'add' | 'mul' | 'set';
+  value: number | boolean;
+  min?: number;
+  max?: number;
+  floor?: boolean;
+}
+
 // Gold-reroll config handed to the choice modals; run() returns the new
 // state (choices + remaining gold + next cost) or null when unaffordable.
 export interface RerollCfg<T> {
