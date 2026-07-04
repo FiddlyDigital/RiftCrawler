@@ -486,15 +486,29 @@ describe('Gorgoth the Returned (endgame)', () => {
     game = new Game(cb);
   });
 
-  it('summonGorgoth clears the board into an arena and spawns the boss', () => {
+  it('summonGorgoth spawns the boss at the top and leaves the board unchanged', () => {
+    game.map[3]![10] = Tile.FLOOR;  // marker to prove the board isn't wiped
     game.summonGorgoth();
     expect(game.gorgothSummoned).toBe(true);
     expect(game.blockMatrix.flat()).toHaveLength(0);            // no falling piece
     const boss = game.monsters.find(m => m.isGorgoth);
     expect(boss).toBeDefined();
     expect(boss!.isBoss).toBe(true);
+    expect(boss!.y).toBe(0);                                    // the very top of the arena
     expect(boss!.maxHp).toBeGreaterThanOrEqual(1000);           // huge
     expect(boss!.combatLevel).toBe(6);                          // D20
+    expect(game.map[3]![10]).toBe(Tile.FLOOR);                  // board preserved, not reset
+  });
+
+  it('Gorgoth slowly descends toward the hero, phasing through terrain', () => {
+    game.summonGorgoth();
+    game.monsters = game.monsters.filter(m => m.isGorgoth); // isolate the boss
+    const boss = game.monsters.find(m => m.isGorgoth)!;
+    game.player.x = boss.x; game.player.y = 15;  // hero far below, no floor between
+    const y0 = boss.y;
+    for (let i = 0; i < 10; i++) game.autoTick();
+    expect(boss.y).toBeGreaterThan(y0);            // moved downward
+    expect(boss.y).toBeLessThan(15);               // slow — hasn't reached the hero yet
   });
 
   it('overflow summons Gorgoth instead of killing the player', () => {

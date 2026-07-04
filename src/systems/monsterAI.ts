@@ -1,8 +1,12 @@
 import { Tile } from '../types';
+import { CONFIG } from '../config';
 import type { Game } from '../game';
 import type { Monster } from '../entities';
 import { monsterAttackPlayer } from './combat';
 import { checkHazardTrigger } from './hazards';
+
+// Gorgoth advances one tile every this-many turns — slow, dread-building descent.
+const GORGOTH_STEP_TURNS = 2;
 
 export function processMonsterTurns(game: Game): void {
   if (game.player.hp <= 0) return;
@@ -19,6 +23,7 @@ export function processMonsterTurns(game: Game): void {
       case 'healer':    processHealerMonster(m, game);    break;
       case 'berserker': processBerserkerMonster(m, game); break;
       case 'swift':     processSwiftMonster(m, game);     break;
+      case 'gorgoth':   processGorgoth(m, game);          break;
       default:          processMeleeMonster(m, game);     break;
     }
   }
@@ -118,5 +123,33 @@ function processSwiftMonster(m: Monster, game: Game): void {
     if (game.player.hp > 0 && Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y) > 1) {
       moveMonsterToward(m, game);
     }
+  }
+}
+
+// Gorgoth the Returned: a slow, unstoppable descent from the top of the arena.
+// He pursues from ANY distance (unlike the dist<=5 gate on normal melee) and
+// phases through terrain — walls and void never wall him out of the stack — so
+// his arrival is inevitable. One tile every GORGOTH_STEP_TURNS turns.
+function processGorgoth(m: Monster, game: Game): void {
+  const dist = Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y);
+  if (dist <= 1) { monsterAttackPlayer(m, game); return; }
+
+  if (++m.stepCharge < GORGOTH_STEP_TURNS) return;
+  m.stepCharge = 0;
+
+  const sx = Math.sign(game.player.x - m.x);
+  const sy = Math.sign(game.player.y - m.y);
+  // Favour vertical movement so he visibly "comes down"; fall back to lateral.
+  const tries: Array<[number, number]> = sy !== 0
+    ? [[0, sy], [sx, 0], [sx, sy]]
+    : [[sx, 0], [sx, sy]];
+  for (const [ddx, ddy] of tries) {
+    if (ddx === 0 && ddy === 0) continue;
+    const nx = m.x + ddx, ny = m.y + ddy;
+    if (nx < 0 || nx >= CONFIG.COLS || ny < 0 || ny >= CONFIG.ROWS) continue;
+    if (nx === game.player.x && ny === game.player.y) continue;  // don't stand on the hero
+    if (game.getMonsterAt(nx, ny)) continue;                     // don't stack on adds
+    m.x = nx; m.y = ny;
+    return;
   }
 }

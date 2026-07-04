@@ -174,6 +174,9 @@ export class Game {
   // ── Fog of war ───────────────────────────────────────────────────────────
 
   updateVisibility(): void {
+    // During the Gorgoth duel the whole arena stays lit (revealed at summon) so
+    // the player can watch him descend — don't re-fog to the vision radius.
+    if (this.gorgothSummoned) return;
     const onSmoke = this.hazards.some(h => h.type === 'smoke' && h.x === this.player.x && h.y === this.player.y);
     const r = onSmoke ? 1 : this.player.visionRadius;
     for (let x = 0; x < CONFIG.COLS; x++) {
@@ -1183,15 +1186,9 @@ export class Game {
     const nx = this.player.x + dx, ny = this.player.y + dy;
     if (nx < 0 || nx >= CONFIG.COLS || ny < 0 || ny >= CONFIG.ROWS) return;
 
-    if (!this.isValidMove(nx, ny)) {
-      this.cb.log('Cannot cross the deep abyss void!', 'log-neutral');
-      return;
-    }
-
-    // Combat has priority: an enemy is solid. If it stands on an interactable
-    // tile (altar / tattoo artist), attack it first instead of stepping onto
-    // its tile and triggering the interaction. The interaction stays available
-    // once the enemy is dead and you step on again.
+    // Combat has priority and reaches any adjacent tile — even one the hero
+    // can't stand on (e.g. Gorgoth phasing down through the void/stack). An
+    // enemy on an interactable tile is attacked rather than triggering the tile.
     const monster = this.getMonsterAt(nx, ny);
     if (monster) {
       let forceCrit = false;
@@ -1219,6 +1216,11 @@ export class Game {
         }
       }
       this.advanceTurn(); return;
+    }
+
+    if (!this.isValidMove(nx, ny)) {
+      this.cb.log('Cannot cross the deep abyss void!', 'log-neutral');
+      return;
     }
 
     // Tattoo Artist tile — consumed on use (like an altar)
@@ -1513,29 +1515,17 @@ export class Game {
     if (this.gorgothSummoned) return;
     this.gorgothSummoned = true;
 
-    // Wipe the tetromino stack and carve a clean fighting arena.
-    this.map = this.emptyMap();
-    this.colors = this.emptyColors();
-    this.monsters = [];
-    this.items = [];
-    this.hazards = [];
-    this.specialTiles = [];
-    this.altarTiles = [];
-    this.tattooTiles = [];
+    // The board the player built stays exactly as it is — no arena reset; only
+    // the tetromino supply stops.
     this.blockMatrix = [];
     this.heldType = null;
-    for (let x = 1; x < CONFIG.COLS - 1; x++) {
-      for (let y = 18; y < CONFIG.ROWS; y++) {
-        this.map[x]![y] = Tile.FLOOR;
-        this.colors[x]![y] = '#2a0f14';
-      }
-    }
-    this.player.x = 4;
-    this.player.y = CONFIG.ROWS - 2;
 
-    // The Returned rises — fixed, brutal stats so descending only ever helps you.
+    // Gorgoth looms in at the very top-centre and grinds his way down to the
+    // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
+    // so descending floors only ever helps you.
     const hp = 1400;
-    const boss = new Monster(4, 19, '🗿', 'Gorgoth the Returned', hp, hp, 48, 2000, true, 'berserker', 1, 1);
+    const gx = Math.floor(CONFIG.COLS / 2);
+    const boss = new Monster(gx, 0, '🗿', 'Gorgoth the Returned', hp, hp, 48, 2000, true, 'gorgoth', 1, 1);
     boss.combatLevel = 6;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
@@ -1561,8 +1551,8 @@ export class Game {
       }
     }
 
-    this.cb.log('☠️ The stack tops out — GORGOTH THE RETURNED tears through the rift!', 'log-boss');
-    this.cb.onParticle(4, 19, '🗿 GORGOTH', '#ff1744', 18);
+    this.cb.log('☠️ The stack tops out — GORGOTH THE RETURNED looms at the rift\'s edge...', 'log-boss');
+    this.cb.onParticle(gx, 0, '🗿 GORGOTH', '#ff1744', 18);
 
     this.paused = true;
     this.cb.onBossWarning?.(

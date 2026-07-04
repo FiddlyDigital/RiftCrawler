@@ -157,6 +157,7 @@ export class Monster {
   isBoss: boolean;
   isElite = false;
   isGorgoth = false;  // the final boss — killing it wins the run
+  stepCharge = 0;     // paces Gorgoth's slow descent (moves once per N turns)
   combatLevel = 2;
 
   constructor(
