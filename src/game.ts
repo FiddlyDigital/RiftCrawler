@@ -34,6 +34,10 @@ export function scoreForLines(count: number, level: number): number {
 // Gold cost of the first reroll at an altar / tattoo artist; escalates ×1.6 per reroll this visit.
 const REROLL_BASE_COST = 120;
 
+// Gorgoth's full health. His remaining HP persists across escapes so you can
+// whittle him down over multiple attempts.
+const GORGOTH_MAX_HP = 1400;
+
 // ── Game class ───────────────────────────────────────────────────────────────
 
 export class Game {
@@ -125,7 +129,9 @@ export class Game {
   // no tetrominoes fall — the run becomes a boss duel. Killing him wins.
   public gorgothSummoned = false;
   public won = false;
-  private gorgothHintShown = false;  // one-time nudge toward the win condition
+  private gorgothHintShown = false;   // one-time nudge toward the win condition
+  private gorgothHp = GORGOTH_MAX_HP;  // carries over between summons (escape & retry)
+  private gorgothHalfTriggered = false;
 
   readonly cb: GameCallbacks;
 
@@ -1280,12 +1286,13 @@ export class Game {
 
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS) {
       // Fleeing down a ladder escapes a summoned Gorgoth — the next floor plays
-      // as normal, as if he was never called. (resetDungeonState clears him and
-      // respawns the tetromino supply; we just lift the summoned flag first so
-      // gravity/fog resume.)
+      // as normal. His remaining HP is banked, so you can retreat, grow
+      // stronger, and re-summon him to keep whittling him down.
       if (this.gorgothSummoned) {
+        const boss = this.monsters.find(m => m.isGorgoth);
+        if (boss) this.gorgothHp = Math.max(1, boss.hp);
         this.gorgothSummoned = false;
-        this.cb.log('🪜 You slip down the ladder — Gorgoth\'s roar fades behind you...', 'log-perk');
+        this.cb.log('🪜 You slip down the ladder — Gorgoth\'s wounds will still be there when you face him again.', 'log-perk');
       }
       this.dungeonLevel++;
       this.floorsDescended++;
@@ -1549,15 +1556,16 @@ export class Game {
     // Gorgoth looms in at the very top-centre and grinds his way down to the
     // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
     // so descending floors only ever helps you.
-    const hp = 1400;
     const gx = Math.floor(CONFIG.COLS / 2);
-    const boss = new Monster(gx, 0, '🗿', 'Gorgoth the Returned', hp, hp, 48, 2000, true, 'gorgoth', 1, 1);
+    const boss = new Monster(gx, 0, '🗿', 'Gorgoth the Returned', this.gorgothHp, GORGOTH_MAX_HP, 48, 2000, true, 'gorgoth', 1, 1);
     boss.combatLevel = 6;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
 
-    // Half-HP: roar and raise two of the Returned beside him.
+    // Half-HP: roar and raise two of the Returned beside him — but only the
+    // first time he crosses the threshold this run (persists across summons).
     this.activeBossOnHalfHp = (g) => {
+      g.gorgothHalfTriggered = true;
       g.cb.log('🗿 GORGOTH ROARS — the Returned claw their way up!', 'log-boss');
       for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
         const ax = boss.x + dx, ay = boss.y + dy;
@@ -1567,7 +1575,7 @@ export class Game {
       }
     };
     this.activeBossOnDeath = null;  // victory is fired from killMonster (covers every death path)
-    this.bossHalfHpTriggered = false;
+    this.bossHalfHpTriggered = this.gorgothHalfTriggered;
 
     // Reveal the whole arena — no fog for the finale.
     for (let x = 0; x < CONFIG.COLS; x++) {

@@ -573,6 +573,22 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(game.blockMatrix.flat().length).toBeGreaterThan(0);      // tetrominoes resume
   });
 
+  it('Gorgoth keeps his wounds across escape and re-summon (whittle him down)', () => {
+    game.summonGorgoth();
+    const boss1 = game.monsters.find(m => m.isGorgoth)!;
+    boss1.hp = 600;                          // damaged him this attempt
+    boss1.x = 0; boss1.y = 0;
+    game.player.x = 4; game.player.y = 23;
+    game.map[4]![22] = Tile.STAIRS;
+    game.handleHeroMove(0, -1);              // flee down the ladder
+    expect(game.gorgothSummoned).toBe(false);
+
+    game.summonGorgoth();                     // face him again later
+    const boss2 = game.monsters.find(m => m.isGorgoth)!;
+    expect(boss2.hp).toBe(600);               // carried his wounds
+    expect(boss2.maxHp).toBe(1400);           // out of full
+  });
+
   it('nudges the player toward the win condition once when the stack is high', () => {
     for (let y = 0; y < 25; y++) game.map[4]![y] = Tile.FLOOR;  // a column reaching the ceiling
     const hits = (): number => cb.logs.filter(l => l.includes('GORGOTH THE RETURNED and win')).length;
