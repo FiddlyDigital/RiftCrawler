@@ -591,16 +591,17 @@ describe('Adjacent enemies attack', () => {
     expect(game.player.hp).toBeLessThan(500);
   });
 
-  it('diagonally adjacent enemy in tight terrain still attacks (base contact)', () => {
+  it('combat is orthogonal-only: an enemy reachable only diagonally cannot strike', () => {
     game.player.x = 4; game.player.y = 10;
-    game.map[4]![10] = Tile.FLOOR;  // player's tile
-    game.map[5]![11] = Tile.FLOOR;  // monster's tile (diagonal); both approach tiles stay void
+    game.map[4]![10] = Tile.FLOOR;  // hero's tile
+    game.map[5]![11] = Tile.FLOOR;  // enemy diagonally touching; both approach tiles are void
     const m = new Monster(5, 11, '👹', 'G', 80, 80, 10, 5);
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     for (let i = 0; i < 3; i++) processMonsterTurns(game);
     spy.mockRestore();
-    expect(game.player.hp).toBeLessThan(500);
+    expect(game.player.hp).toBe(500);          // no diagonal reach — the void corner blocks it
+    expect(m.x === 5 && m.y === 11).toBe(true); // and no diagonal step to close in
   });
 
   it('adjacent Gorgoth hits the player', () => {

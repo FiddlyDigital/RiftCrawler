@@ -399,11 +399,10 @@ export class Renderer {
 
       // Telegraph: a monster that can strike the player next turn pulses red and
       // shows a ‼ marker, so incoming damage is a read rather than a surprise.
-      // Melee (range 1) strikes from any of the 8 surrounding tiles (Chebyshev);
-      // ranged uses its Manhattan range.
-      const adx = Math.abs(m.x - game.player.x), ady = Math.abs(m.y - game.player.y);
-      const inRange = m.attackRange <= 1 ? Math.max(adx, ady) === 1 : (adx + ady) <= m.attackRange;
-      const threatening = game.player.hp > 0 && !m.isStunned && inRange;
+      // Combat is orthogonal-only, so this is Manhattan range (attackRange 1 =
+      // the four orthogonal tiles; ranged monsters use their larger range).
+      const threatening = game.player.hp > 0 && !m.isStunned &&
+        (Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y)) <= m.attackRange;
       if (threatening) {
         this.drawPulseGlow(m.x, m.y, '244,67,54');
         ctx.font = '9px Arial';

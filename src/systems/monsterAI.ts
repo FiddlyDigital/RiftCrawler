@@ -48,12 +48,12 @@ function moveMonsterToward(m: Monster, game: Game): void {
   }
 }
 
-// "Base contact" = any of the 8 tiles around the hero (Chebyshev distance 1).
-// Melee attacks trigger from here — including diagonally — so an enemy touching
-// the hero always strikes instead of uselessly trying to line up orthogonally
-// (which fails in tight terrain and looked like enemies refusing to attack).
+// Base contact = orthogonally adjacent (Manhattan distance 1). Movement and
+// attacks are strictly 4-directional for the hero and every monster alike — no
+// diagonal reach either way — so a diagonally-touching enemy must first step
+// onto an orthogonal tile before it can strike.
 function inBaseContact(m: Monster, game: Game): boolean {
-  return Math.max(Math.abs(m.x - game.player.x), Math.abs(m.y - game.player.y)) === 1;
+  return manhattanToPlayer(m, game) === 1;
 }
 
 function manhattanToPlayer(m: Monster, game: Game): number {
@@ -147,10 +147,10 @@ function processGorgoth(m: Monster, game: Game): void {
 
   const sx = Math.sign(game.player.x - m.x);
   const sy = Math.sign(game.player.y - m.y);
-  // Favour vertical movement so he visibly "comes down"; fall back to lateral.
+  // Orthogonal steps only — favour vertical so he visibly "comes down", then lateral.
   const tries: Array<[number, number]> = sy !== 0
-    ? [[0, sy], [sx, 0], [sx, sy]]
-    : [[sx, 0], [sx, sy]];
+    ? [[0, sy], [sx, 0]]
+    : [[sx, 0]];
   for (const [ddx, ddy] of tries) {
     if (ddx === 0 && ddy === 0) continue;
     const nx = m.x + ddx, ny = m.y + ddy;
