@@ -4,6 +4,7 @@ import { Cell, Tile } from '../types';
 import type { GameCallbacks } from '../types';
 import { Monster, Item } from '../entities';
 import { killMonster, playerAttackMonster, estimateHitChance } from '../systems/combat';
+import { processMonsterTurns } from '../systems/monsterAI';
 import { BRANDS, BOONS, getThreeRandomBoons } from '../content';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
@@ -556,5 +557,61 @@ describe('Gorgoth the Returned (endgame)', () => {
     game.triggerVictory();
     game.triggerVictory();
     expect(cb.onVictory).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Monsters attack when in base contact ──────────────────────────────────────
+
+describe('Adjacent enemies attack', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+    game.player.x = 4; game.player.y = 23; game.player.hp = 500;
+  });
+
+  it('orthogonally adjacent melee monster hits the player', () => {
+    const m = new Monster(4, 22, '👹', 'G', 80, 80, 10, 5); // directly above, dist 1
+    game.monsters.push(m);
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99); // force a landed hit
+    processMonsterTurns(game);
+    spy.mockRestore();
+    expect(game.player.hp).toBeLessThan(500);
+  });
+
+  it('diagonally adjacent melee monster closes and hits within a few turns', () => {
+    game.map[5]![22] = Tile.FLOOR;  // open floor so it can step in
+    const m = new Monster(5, 22, '👹', 'G', 80, 80, 10, 5); // diagonal, dist 2
+    game.monsters.push(m);
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    for (let i = 0; i < 4; i++) processMonsterTurns(game);
+    spy.mockRestore();
+    expect(game.player.hp).toBeLessThan(500);
+  });
+
+  it('diagonally adjacent enemy in tight terrain still attacks (base contact)', () => {
+    game.player.x = 4; game.player.y = 10;
+    game.map[4]![10] = Tile.FLOOR;  // player's tile
+    game.map[5]![11] = Tile.FLOOR;  // monster's tile (diagonal); both approach tiles stay void
+    const m = new Monster(5, 11, '👹', 'G', 80, 80, 10, 5);
+    game.monsters.push(m);
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    for (let i = 0; i < 3; i++) processMonsterTurns(game);
+    spy.mockRestore();
+    expect(game.player.hp).toBeLessThan(500);
+  });
+
+  it('adjacent Gorgoth hits the player', () => {
+    game.summonGorgoth();
+    const boss = game.monsters.find(m => m.isGorgoth)!;
+    game.monsters = [boss];
+    boss.x = game.player.x; boss.y = game.player.y - 1; // orthogonal, dist 1
+    boss.stepCharge = 0;
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    processMonsterTurns(game);
+    spy.mockRestore();
+    expect(game.player.hp).toBeLessThan(500);
   });
 });

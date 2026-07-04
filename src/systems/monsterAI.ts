@@ -48,6 +48,18 @@ function moveMonsterToward(m: Monster, game: Game): void {
   }
 }
 
+// "Base contact" = any of the 8 tiles around the hero (Chebyshev distance 1).
+// Melee attacks trigger from here — including diagonally — so an enemy touching
+// the hero always strikes instead of uselessly trying to line up orthogonally
+// (which fails in tight terrain and looked like enemies refusing to attack).
+function inBaseContact(m: Monster, game: Game): boolean {
+  return Math.max(Math.abs(m.x - game.player.x), Math.abs(m.y - game.player.y)) === 1;
+}
+
+function manhattanToPlayer(m: Monster, game: Game): number {
+  return Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y);
+}
+
 export function hasLineOfSight(x1: number, y1: number, x2: number, y2: number, game: Game): boolean {
   const absDx = Math.abs(x2 - x1);
   const absDy = Math.abs(y2 - y1);
@@ -66,9 +78,8 @@ export function hasLineOfSight(x1: number, y1: number, x2: number, y2: number, g
 }
 
 function processMeleeMonster(m: Monster, game: Game): void {
-  const dist = Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y);
-  if (dist === 1) { monsterAttackPlayer(m, game); }
-  else if (dist <= 5) { moveMonsterToward(m, game); }
+  if (inBaseContact(m, game)) { monsterAttackPlayer(m, game); }
+  else if (manhattanToPlayer(m, game) <= 5) { moveMonsterToward(m, game); }
 }
 
 function processRangedMonster(m: Monster, game: Game): void {
@@ -101,26 +112,24 @@ function processHealerMonster(m: Monster, game: Game): void {
 }
 
 function processBerserkerMonster(m: Monster, game: Game): void {
-  const dist = Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y);
-  if (dist === 1) {
+  if (inBaseContact(m, game)) {
     const enraged = m.hp < m.maxHp * 0.5;
     monsterAttackPlayer(m, game);
     if (enraged && game.player.hp > 0) {
       game.cb.log(`${m.name} rages and strikes again!`, 'log-damage');
       monsterAttackPlayer(m, game);
     }
-  } else if (dist <= 5) {
+  } else if (manhattanToPlayer(m, game) <= 5) {
     moveMonsterToward(m, game);
   }
 }
 
 function processSwiftMonster(m: Monster, game: Game): void {
-  const dist = Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y);
-  if (dist === 1) {
+  if (inBaseContact(m, game)) {
     monsterAttackPlayer(m, game);
-  } else if (dist <= 7) {
+  } else if (manhattanToPlayer(m, game) <= 7) {
     moveMonsterToward(m, game);
-    if (game.player.hp > 0 && Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y) > 1) {
+    if (game.player.hp > 0 && !inBaseContact(m, game)) {
       moveMonsterToward(m, game);
     }
   }
@@ -131,8 +140,7 @@ function processSwiftMonster(m: Monster, game: Game): void {
 // phases through terrain — walls and void never wall him out of the stack — so
 // his arrival is inevitable. One tile every GORGOTH_STEP_TURNS turns.
 function processGorgoth(m: Monster, game: Game): void {
-  const dist = Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y);
-  if (dist <= 1) { monsterAttackPlayer(m, game); return; }
+  if (inBaseContact(m, game)) { monsterAttackPlayer(m, game); return; }
 
   if (++m.stepCharge < GORGOTH_STEP_TURNS) return;
   m.stepCharge = 0;
