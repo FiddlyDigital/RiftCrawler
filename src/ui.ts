@@ -471,6 +471,29 @@ export class UIManager {
     document.getElementById('start-modal')!.style.display = 'none';
   }
 
+  showPauseMenu(
+    state: { soundOn: boolean; reducedMotion: boolean },
+    handlers: { onResume: () => void; onToggleMute: () => void; onToggleMotion: () => void; onRestart: () => void },
+  ): void {
+    const modal = document.getElementById('pause-modal');
+    if (!modal) return;
+    const muteState = document.getElementById('pause-mute-state');
+    const motionState = document.getElementById('pause-motion-state');
+    if (muteState) muteState.textContent = state.soundOn ? 'On' : 'Off';
+    if (motionState) motionState.textContent = state.reducedMotion ? 'On' : 'Off';
+    const bind = (id: string, fn: () => void): void => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+    bind('pause-resume', handlers.onResume);
+    bind('pause-mute', handlers.onToggleMute);
+    bind('pause-motion', handlers.onToggleMotion);
+    bind('pause-restart', handlers.onRestart);
+    modal.style.display = 'flex';
+  }
+
+  hidePauseMenu(): void {
+    const modal = document.getElementById('pause-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
   showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
     const el = this.inspectTooltip;
     el.innerHTML = `

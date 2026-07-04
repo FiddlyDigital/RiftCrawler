@@ -56,6 +56,7 @@ export class Renderer {
   private comboOverlay: { text: string; alpha: number; mult: number } | null = null;
   private floorTransitionFrames = 0;
   private floorTransitionColor = '10,10,20';
+  private reducedMotion = false;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
@@ -557,8 +558,10 @@ export class Renderer {
     this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0, mult: multiplier };
   }
 
-  public triggerDamageFlash(): void { this.damageFlashFrames = 8; }
+  public setReducedMotion(on: boolean): void { this.reducedMotion = on; }
+  public triggerDamageFlash(): void { if (!this.reducedMotion) this.damageFlashFrames = 8; }
   public triggerShake(intensity: number, duration: number): void {
+    if (this.reducedMotion) return;  // no screen shake when reduced motion is on
     this.shakeIntensity = intensity;
     this.shakeFrames = duration;
   }

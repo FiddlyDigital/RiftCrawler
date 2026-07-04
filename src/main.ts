@@ -3,7 +3,7 @@ import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
-import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute } from './storage';
+import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
 import { audio } from './audio';
 import type { AudioEvent } from './types';
@@ -45,6 +45,73 @@ function stopTick(): void {
 }
 
 function resetTick(): void { startTick(); }
+
+// ── Settings & pause ───────────────────────────────────────────────────────────
+
+let soundOn = !loadMute();
+// No stored preference → follow the OS reduced-motion setting.
+let reducedMotion = loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+renderer.setReducedMotion(reducedMotion);
+let manualPaused = false;
+
+function toggleMute(): void {
+  soundOn = audio.toggle();
+  saveMute(!soundOn);
+  ui.log(`Sound ${soundOn ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
+  if (manualPaused) refreshPauseMenu();
+}
+
+function toggleReducedMotion(): void {
+  reducedMotion = !reducedMotion;
+  renderer.setReducedMotion(reducedMotion);
+  saveReducedMotion(reducedMotion);
+  ui.log(`Reduced motion ${reducedMotion ? 'on' : 'off'}`, 'log-neutral');
+  if (manualPaused) refreshPauseMenu();
+}
+
+function refreshPauseMenu(): void {
+  ui.showPauseMenu({ soundOn, reducedMotion }, {
+    onResume:       closePauseMenu,
+    onToggleMute:   toggleMute,
+    onToggleMotion: toggleReducedMotion,
+    onRestart:      restartRun,
+  });
+}
+
+function openPauseMenu(): void {
+  // Only from active play — never over a boon/altar/cinematic pause or a dead hero.
+  if (manualPaused || game.paused || game.player.hp <= 0) return;
+  manualPaused = true;
+  game.paused = true;
+  stopTick();
+  refreshPauseMenu();
+}
+
+function closePauseMenu(): void {
+  if (!manualPaused) return;
+  manualPaused = false;
+  ui.hidePauseMenu();
+  if (game.player.hp > 0) { game.paused = false; startTick(); }
+}
+
+function togglePauseMenu(): void {
+  if (manualPaused) closePauseMenu();
+  else openPauseMenu();
+}
+
+function restartRun(): void {
+  manualPaused = false;
+  ui.hidePauseMenu();
+  ui.hideDeath();
+  ui.clearLog();
+  startGame(true);
+  launchWithModifier(() => {
+    game.paused = false;
+    startTick();
+    audio.startAmbient();
+    ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
+  });
+}
 
 // ── Audio event router ───────────────────────────────────────────────────────
 
@@ -209,25 +276,15 @@ document.getElementById('start-btn')!.addEventListener('click', () => {
 });
 
 // Restart
-document.getElementById('restart-btn')!.addEventListener('click', () => {
-  ui.hideDeath();
-  ui.clearLog();
-  startGame(true);
-  launchWithModifier(() => {
-    game.paused = false;
-    startTick();
-    audio.startAmbient();
-    ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
-  });
-});
+document.getElementById('restart-btn')!.addEventListener('click', restartRun);
 
-// Mute toggle (M key)
+// On-screen pause / settings button
+document.getElementById('pause-btn')?.addEventListener('click', togglePauseMenu);
+
+// Keyboard: M = mute, Esc/P = pause menu
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'm' || e.key === 'M') {
-    const on = audio.toggle();
-    saveMute(!on);
-    ui.log(`Sound ${on ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
-  }
+  if (e.key === 'm' || e.key === 'M') toggleMute();
+  else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePauseMenu();
 });
 
 // Initial high score / history display

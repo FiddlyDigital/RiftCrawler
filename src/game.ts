@@ -125,6 +125,7 @@ export class Game {
   // no tetrominoes fall — the run becomes a boss duel. Killing him wins.
   public gorgothSummoned = false;
   public won = false;
+  private gorgothHintShown = false;  // one-time nudge toward the win condition
 
   readonly cb: GameCallbacks;
 
@@ -493,7 +494,24 @@ export class Game {
 
     this.checkLineClears();
     this.cb.onAudio?.('blockLand');
+    this.maybeHintGorgoth();
     this.spawnBlock();
+  }
+
+  // One-time teaching nudge: when the stack climbs near the ceiling, tell the
+  // player that topping out summons Gorgoth — the win condition.
+  private maybeHintGorgoth(): void {
+    if (this.gorgothHintShown || this.gorgothSummoned) return;
+    let stackTop: number = CONFIG.ROWS;
+    for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let y = 0; y < CONFIG.ROWS; y++) {
+        if (this.map[x]![y] === Tile.FLOOR) { if (y < stackTop) stackTop = y; break; }
+      }
+    }
+    if (stackTop <= 5) {
+      this.gorgothHintShown = true;
+      this.cb.log('⚠️ The stack climbs high — let it top out to summon GORGOTH THE RETURNED and win the Rift!', 'log-boss');
+    }
   }
 
   // ── Special tile processing ──────────────────────────────────────────────

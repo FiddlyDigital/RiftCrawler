@@ -61,7 +61,29 @@ body {
   grid-area: canvas;
   display: flex; align-items: center; justify-content: center;
   min-height: 0;
+  position: relative;  /* anchor for the floating pause button */
 }
+
+/* Floating pause / settings button over the canvas */
+#pause-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
+  color: #cfcfe0; font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+#pause-btn:hover, #pause-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
+
+/* Settings toggle rows in the pause menu */
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #14141f; border: 1px solid var(--border-color); border-radius: 6px;
+  color: var(--text-color); padding: 10px 12px; font-size: 12px; cursor: pointer;
+  font-family: var(--font-pixel); width: 100%;
+}
+.settings-row:hover, .settings-row:active { border-color: var(--accent-color); }
+.settings-val { color: var(--accent-color); }
 
 /* F · Canvas depth glow — JS updates --canvas-glow to shift color with HP */
 canvas {

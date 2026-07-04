@@ -558,6 +558,15 @@ describe('Gorgoth the Returned (endgame)', () => {
     game.triggerVictory();
     expect(cb.onVictory).toHaveBeenCalledTimes(1);
   });
+
+  it('nudges the player toward the win condition once when the stack is high', () => {
+    for (let y = 0; y < 25; y++) game.map[4]![y] = Tile.FLOOR;  // a column reaching the ceiling
+    const hits = (): number => cb.logs.filter(l => l.includes('GORGOTH THE RETURNED and win')).length;
+    (game as unknown as { maybeHintGorgoth(): void }).maybeHintGorgoth();
+    expect(hits()).toBe(1);
+    (game as unknown as { maybeHintGorgoth(): void }).maybeHintGorgoth();
+    expect(hits()).toBe(1);  // one-time only
+  });
 });
 
 // ── Monsters attack when in base contact ──────────────────────────────────────

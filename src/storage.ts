@@ -63,3 +63,15 @@ export function saveMute(on: boolean): void {
 export function loadMute(): boolean {
   try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; }
 }
+
+// Reduced motion: null = no stored preference yet (fall back to the OS setting).
+const MOTION_KEY = 'riftcrawler_reduced_motion';
+export function saveReducedMotion(on: boolean): void {
+  try { localStorage.setItem(MOTION_KEY, on ? '1' : '0'); } catch { /* quota */ }
+}
+export function loadReducedMotion(): boolean | null {
+  try {
+    const raw = localStorage.getItem(MOTION_KEY);
+    return raw === null ? null : raw === '1';
+  } catch { return null; }
+}
