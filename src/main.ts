@@ -2,10 +2,9 @@ import './style.css';
 import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
-import { bindKeyboard, bindButtons, bindCanvasInspect } from './input';
-import { getHighScore, recordRunEnd, loadHistory } from './storage';
+import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
+import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion } from './storage';
 import { trackGameStart, trackGameOver, trackInstall } from './analytics';
-import { MERCHANT_STOCK } from './content';
 import { audio } from './audio';
 import type { AudioEvent } from './types';
 
@@ -13,10 +12,13 @@ const ui       = new UIManager();
 const canvas   = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 
-// Keep sidebar exactly as tall as the canvas (canvas height is aspect-ratio constrained)
+// Keep sidebar exactly as tall as the canvas on mobile; let CSS control it on desktop
 const sidebar = document.getElementById('sidebar-panel') as HTMLDivElement;
-const syncSidebarHeight = (): void => { sidebar.style.height = `${canvas.clientHeight}px`; };
+const syncSidebarHeight = (): void => {
+  sidebar.style.height = window.innerWidth < 640 ? `${canvas.clientHeight}px` : '';
+};
 new ResizeObserver(syncSidebarHeight).observe(canvas);
+window.addEventListener('resize', syncSidebarHeight);
 
 let game: Game;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -24,7 +26,10 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 // ── Tick management ──────────────────────────────────────────────────────────
 
 function getTickMs(): number {
-  return tickMsForLevel(game.dungeonLevel, game.player.tickSlowPercent + game.biomeGravityPct);
+  return tickMsForLevel(
+    game.dungeonLevel,
+    game.player.tickSlowPercent + game.biomeGravityPct + (game.timeDilationTurns > 0 ? 100 : 0),
+  );
 }
 
 function startTick(): void {
@@ -41,6 +46,73 @@ function stopTick(): void {
 
 function resetTick(): void { startTick(); }
 
+// ── Settings & pause ───────────────────────────────────────────────────────────
+
+let soundOn = !loadMute();
+// No stored preference → follow the OS reduced-motion setting.
+let reducedMotion = loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+renderer.setReducedMotion(reducedMotion);
+let manualPaused = false;
+
+function toggleMute(): void {
+  soundOn = audio.toggle();
+  saveMute(!soundOn);
+  ui.log(`Sound ${soundOn ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
+  if (manualPaused) refreshPauseMenu();
+}
+
+function toggleReducedMotion(): void {
+  reducedMotion = !reducedMotion;
+  renderer.setReducedMotion(reducedMotion);
+  saveReducedMotion(reducedMotion);
+  ui.log(`Reduced motion ${reducedMotion ? 'on' : 'off'}`, 'log-neutral');
+  if (manualPaused) refreshPauseMenu();
+}
+
+function refreshPauseMenu(): void {
+  ui.showPauseMenu({ soundOn, reducedMotion }, {
+    onResume:       closePauseMenu,
+    onToggleMute:   toggleMute,
+    onToggleMotion: toggleReducedMotion,
+    onRestart:      restartRun,
+  });
+}
+
+function openPauseMenu(): void {
+  // Only from active play — never over a boon/altar/cinematic pause or a dead hero.
+  if (manualPaused || game.paused || game.player.hp <= 0) return;
+  manualPaused = true;
+  game.paused = true;
+  stopTick();
+  refreshPauseMenu();
+}
+
+function closePauseMenu(): void {
+  if (!manualPaused) return;
+  manualPaused = false;
+  ui.hidePauseMenu();
+  if (game.player.hp > 0) { game.paused = false; startTick(); }
+}
+
+function togglePauseMenu(): void {
+  if (manualPaused) closePauseMenu();
+  else openPauseMenu();
+}
+
+function restartRun(): void {
+  manualPaused = false;
+  ui.hidePauseMenu();
+  ui.hideDeath();
+  ui.clearLog();
+  startGame(true);
+  launchWithModifier(() => {
+    game.paused = false;
+    startTick();
+    audio.startAmbient();
+    ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
+  });
+}
+
 // ── Audio event router ───────────────────────────────────────────────────────
 
 function handleAudio(event: AudioEvent, data?: number): void {
@@ -48,13 +120,18 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); break;
     case 'blockRotate':  audio.playBlockRotate();      break;
     case 'blockMove':    audio.playBlockMove();        break;
-    case 'hit':          audio.playHit();              break;
-    case 'playerDamage': audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); break;
-    case 'kill':         audio.playKill();             break;
-    case 'lineClear':    audio.playLineClear(data ?? 1); break;
-    case 'descend':      audio.playDescend();          break;
-    case 'poison':       audio.playPoison();           break;
-    case 'bossWarn':     audio.playBossWarn();         break;
+    case 'hit':             audio.playHit();              break;
+    case 'playerDamage':    audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); break;
+    case 'kill':            audio.playKill();             break;
+    case 'lineClear':
+      audio.playLineClear(data ?? 1);
+      renderer.triggerShake(data && data >= 4 ? 5 : 3, data && data >= 4 ? 8 : 5);
+      break;
+    case 'descend':         audio.playDescend();          break;
+    case 'poison':          audio.playPoison();           break;
+    case 'bossWarn':        audio.playBossWarn();         break;
+    case 'teleport':        audio.playTeleport();         break;
+    case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
   }
 }
 
@@ -66,40 +143,48 @@ function startGame(startPaused = false): void {
     log:      (text, cls)          => ui.log(text, cls),
     updateUI: (state)              => ui.updateStats(state),
     onAction: ()                   => resetTick(),
-    onParticle: (x, y, text, col) => renderer.spawnParticle(x, y, text, col),
+    onParticle: (x, y, text, col, fontSize) => renderer.spawnParticle(x, y, text, col, fontSize),
     onAudio:  (event, data)        => handleAudio(event, data),
     onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
     onCombo:     (mult)            => renderer.showCombo(mult),
 
-    onDeath: (title, reason, floor, score, stats) => {
+    onDeath: (title, reason, floor, totalXpEarned, stats) => {
       stopTick();
+      audio.stopAmbient();
       audio.playDeath();
-      const { highScore, history } = recordRunEnd(game, reason, stats);
-      trackGameOver(score, floor);
-      ui.showDeath(title, reason, floor, score, highScore, history, stats);
-      ui.updateBestScore(highScore);
+      const { highXp, history } = recordRunEnd(game, reason, stats);
+      trackGameOver(totalXpEarned, floor);
+      ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, stats);
+      ui.updateBestScore(highXp);
     },
 
-    onLevelUp: (_newLevel) => {
+    onVictory: (floor, totalXpEarned, stats) => {
+      stopTick();
+      audio.stopAmbient();
+      audio.playLevelUp();
+      const { highXp, history } = recordRunEnd(game, 'Defeated Gorgoth the Returned', stats);
+      trackGameOver(totalXpEarned, floor);
+      ui.showVictory(floor, totalXpEarned, highXp, history, stats);
+      ui.updateBestScore(highXp);
+    },
+
+    onLevelUp: (choices, onChoice) => {
       stopTick();
       audio.playLevelUp();
-      const perks = game.getRandomPerks(3);
-      ui.showPerkSelection(perks, (perkId) => {
-        game.applyPerk(perkId);
+      ui.showAltarModal(1, choices, (index) => {
+        onChoice(index);
         audio.playPerk();
         startTick();
-      });
+      }, '⬆️ LEVEL UP — Choose a Boon');
     },
 
-    onOpenShop: (gold) => {
+    onOpenTattooArtist: (choices, onChoice, reroll) => {
       stopTick();
       audio.playShop();
-      ui.showShop(
-        gold,
-        MERCHANT_STOCK,
-        (i) => game.buyMerchantItem(i, MERCHANT_STOCK) ?? null,
-        ()  => { game.closeShop(); startTick(); },
-      );
+      ui.showTattooModal(choices, (i) => {
+        onChoice(i);
+        startTick();
+      }, reroll);
     },
 
     onBossWarning: (boss, onDone) => {
@@ -114,8 +199,18 @@ function startGame(startPaused = false): void {
       stopTick();
       ui.showFloorEvent(event, (index) => {
         onChoice(index);
+        audio.playPerk();
         startTick();
       });
+    },
+
+    onOpenAltar: (tier, choices, onChoice, reroll) => {
+      stopTick();
+      audio.playPerk();
+      ui.showAltarModal(tier, choices, (index) => {
+        onChoice(index);
+        startTick();
+      }, undefined, reroll);
     },
   });
 
@@ -144,6 +239,7 @@ function launchWithModifier(onReady: () => void): void {
 startGame(true); // initialise paused — start screen sits on top
 bindKeyboard(() => game);
 bindButtons(() => game);
+bindGamepad(() => game);
 
 let lastInspectTile: { x: number; y: number } | null = null;
 bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
@@ -162,48 +258,42 @@ bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
   }
 });
 
-ui.showStart(getHighScore());
+ui.showStart(getHighXp());
 
 document.getElementById('start-btn')!.addEventListener('click', () => {
   audio.init(); // unlock AudioContext on first user gesture
+  if (loadMute()) audio.toggle();
   ui.hideStart();
   launchWithModifier(() => {
     game.paused = false;
     startTick();
+    audio.startAmbient();
     audio.playDescend();
     ui.log('The rift yawns open... descend!', 'log-success');
   });
 });
 
 // Restart
-document.getElementById('restart-btn')!.addEventListener('click', () => {
-  ui.hideDeath();
-  ui.clearLog();
-  startGame(true);
-  launchWithModifier(() => {
-    game.paused = false;
-    startTick();
-    ui.log('--- Fresh Rift Opened! Good Luck ---', 'log-success');
-  });
-});
+document.getElementById('restart-btn')!.addEventListener('click', restartRun);
 
-// Mute toggle (M key)
+// On-screen pause / settings button
+document.getElementById('pause-btn')?.addEventListener('click', togglePauseMenu);
+
+// Keyboard: M = mute, Esc/P = pause menu
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'm' || e.key === 'M') {
-    const on = audio.toggle();
-    ui.log(`Sound ${on ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
-  }
+  if (e.key === 'm' || e.key === 'M') toggleMute();
+  else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePauseMenu();
 });
 
 // Initial high score / history display
-ui.updateBestScore(getHighScore());
+ui.updateBestScore(getHighXp());
 const initialHistory = loadHistory();
 if (initialHistory.length > 0) {
   (document.getElementById('run-history') as HTMLElement).innerHTML =
     initialHistory.map((r, i) =>
       `<div class="history-row${i === 0 ? ' history-latest' : ''}">
         <span>${r.date}</span><span>Fl.${r.floor}</span>
-        <span>${r.score.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
+        <span>${r.totalXpEarned.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
        </div>`,
     ).join('');
 }

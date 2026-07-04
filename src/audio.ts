@@ -2,6 +2,9 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   enabled = true;
 
+  private ambientOscs: OscillatorNode[] = [];
+  private ambientGain: GainNode | null = null;
+
   private getCtx(): AudioContext | null {
     if (!this.enabled) return null;
     if (!this.ctx) {
@@ -102,8 +105,74 @@ export class AudioEngine {
     this.osc(100, 0.5, 'sawtooth', 0.16, 0.65);
   }
 
+  playTeleport(): void {
+    this.osc(180, 0.28, 'sine', 0.20, 0, 900);
+    this.noise(0.06, 0.10, 0.22);
+  }
+
+  playComboMilestone(mult: number): void {
+    const freqs = mult >= 5 ? [300, 420, 560, 750, 1000] : [300, 420, 560, 750];
+    freqs.forEach((f, i) => this.osc(f, 0.09, 'square', 0.16, i * 0.07));
+    this.noise(0.08, 0.12, freqs.length * 0.07);
+  }
+
+  startAmbient(): void {
+    const ctx = this.getCtx();
+    if (!ctx || this.ambientOscs.length > 0) return;
+
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, ctx.currentTime);
+    master.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 3.0);
+    master.connect(ctx.destination);
+    this.ambientGain = master;
+
+    const o1 = ctx.createOscillator();
+    o1.type = 'triangle';
+    o1.frequency.setValueAtTime(55, ctx.currentTime);
+    o1.connect(master);
+    o1.start();
+
+    const o2 = ctx.createOscillator();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(82.5, ctx.currentTime);
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.5;
+    o2.connect(g2);
+    g2.connect(master);
+    o2.start();
+
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.07;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 4;
+    lfo.connect(lfoGain);
+    lfoGain.connect(o1.frequency);
+    lfo.start();
+
+    this.ambientOscs = [o1, o2, lfo];
+  }
+
+  stopAmbient(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.ambientGain) return;
+    this.ambientGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
+    const gain = this.ambientGain;
+    const oscs = this.ambientOscs;
+    setTimeout(() => {
+      oscs.forEach(o => { try { o.stop(); } catch { /* already stopped */ } });
+      gain.disconnect();
+    }, 1600);
+    this.ambientOscs = [];
+    this.ambientGain = null;
+  }
+
   toggle(): boolean {
     this.enabled = !this.enabled;
+    if (this.enabled) {
+      this.startAmbient();
+    } else {
+      this.stopAmbient();
+    }
     return this.enabled;
   }
 }

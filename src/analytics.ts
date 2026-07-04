@@ -16,8 +16,8 @@ export function trackGameStart(floor: number): void {
   trackEvent('game_start', { floor });
 }
 
-export function trackGameOver(score: number, floor: number): void {
-  trackEvent('game_over', { score, floor });
+export function trackGameOver(xp: number, floor: number): void {
+  trackEvent('game_over', { xp, floor });
 }
 
 export function trackInstall(): void {

@@ -1,0 +1,18 @@
+[
+  { "id": "glass_cannon", "emoji": "🩸", "name": "Glass Cannon", "desc": "+8 ATK, −15 Max HP",
+    "effects": [{ "stat": "atk", "value": 8 }, { "stat": "maxHp", "value": -15, "min": 10 }], "special": "full_heal" },
+  { "id": "overclock", "emoji": "⚡", "name": "Overclock", "desc": "Gravity 20% faster, XP ×1.5",
+    "effects": [{ "stat": "tickSlowPercent", "value": -20 }, { "target": "game", "stat": "xpMultiplier", "op": "set", "value": 1.5 }] },
+  { "id": "cursed", "emoji": "💀", "name": "Cursed", "desc": "XP ×2 — but line clears don't heal",
+    "effects": [{ "target": "game", "stat": "xpMultiplier", "op": "set", "value": 2.0 }, { "target": "game", "stat": "noLineHeal", "op": "set", "value": true }] },
+  { "id": "blind_run", "emoji": "🌑", "name": "Blind Run", "desc": "Vision radius halved",
+    "effects": [{ "stat": "visionRadius", "op": "mul", "value": 0.5, "floor": true, "min": 1 }] },
+  { "id": "ironclad", "emoji": "🛡️", "name": "Ironclad", "desc": "+3 Damage Reduction, −3 ATK",
+    "effects": [{ "stat": "damageReduction", "value": 3 }, { "stat": "atk", "value": -3, "min": 1 }] },
+  { "id": "haunted", "emoji": "👁️", "name": "Haunted", "desc": "Double monster spawn rate",
+    "effects": [{ "target": "game", "stat": "haunted", "op": "set", "value": true }] },
+  { "id": "frozen_rift", "emoji": "🧊", "name": "Frozen Rift", "desc": "All monsters spawn stunned for 1 turn",
+    "effects": [{ "target": "game", "stat": "frozenRift", "op": "set", "value": true }] },
+  { "id": "berserker", "emoji": "🔥", "name": "Berserker", "desc": "ATK doubled, Max HP halved",
+    "effects": [{ "stat": "atk", "op": "mul", "value": 2 }, { "stat": "maxHp", "op": "mul", "value": 0.5, "floor": true, "min": 10 }], "special": "full_heal" }
+]

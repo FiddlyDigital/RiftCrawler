@@ -53,7 +53,10 @@ export class Renderer {
   private readonly motes: Mote[];
   private readonly revealFrames: Uint8Array;
   private lastDungeonLevel = 1;
-  private comboOverlay: { text: string; alpha: number } | null = null;
+  private comboOverlay: { text: string; alpha: number; mult: number } | null = null;
+  private floorTransitionFrames = 0;
+  private floorTransitionColor = '10,10,20';
+  private reducedMotion = false;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
@@ -64,8 +67,8 @@ export class Renderer {
     this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
   }
 
-  spawnParticle(gridX: number, gridY: number, text: string, color: string): void {
-    this.particles.spawn(gridX, gridY, text, color);
+  spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
+    this.particles.spawn(gridX, gridY, text, color, fontSize);
   }
 
   spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
@@ -130,6 +133,9 @@ export class Renderer {
     if (game.dungeonLevel !== this.lastDungeonLevel) {
       this.revealFrames.fill(0);
       this.lastDungeonLevel = game.dungeonLevel;
+      this.floorTransitionFrames = 30;
+      const biome = getBiomeForFloor(game.dungeonLevel);
+      this.floorTransitionColor = biome.tileRgb || '10,10,20';
     }
 
     // ── Screen shake ─────────────────────────────────────────────────────
@@ -168,7 +174,7 @@ export class Renderer {
         const visible = game.visibility[x]![y]!;
         const seen = game.explored[x]![y]!;
         const type = game.map[x]![y]!;
-        const isMerchant = game.items.length >= 0 && this.isMerchantTile(game, x, y);
+        const isMerchant = this.isMerchantTile(game, x, y);
 
         if (!seen && !visible) {
           ctx.fillStyle = '#020204';
@@ -194,21 +200,8 @@ export class Renderer {
           this.drawSprite('FLOOR', x * TS, y * TS, TS, TS);
           ctx.globalAlpha = alpha;
 
-          if (type === Tile.STAIRS) {
-            if (visible) this.drawPulseGlow(x, y, '186,104,200');
-            if (!this.drawSprite('STAIRS', x * TS, y * TS, TS, TS)) {
-              ctx.font = `${TS * 0.7}px Arial`;
-              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-              ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
-            }
-          } else if (isMerchant) {
-            if (visible) this.drawPulseGlow(x, y, '102,187,106');
-            if (!this.drawSprite('🏪', x * TS, y * TS, TS, TS)) {
-              ctx.font = `${TS * 0.7}px Arial`;
-              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-              ctx.fillText('🏪', x * TS + TS / 2, y * TS + TS / 2);
-            }
-          }
+          // Tile-feature glyphs (stairs / tattoo artist / altar) are drawn in a
+          // later pass so a descending tetromino never hides what's on the tile.
         } else {
           ctx.fillStyle = '#06060a';
           ctx.fillRect(x * TS, y * TS, TS, TS);
@@ -229,6 +222,9 @@ export class Renderer {
 
     // ── Falling block (always visible) ────────────────────────────────────
     ctx.font = `${TS * 0.7}px Arial`;
+    // Preview the terrain an S/L/J/Z piece lays down on lock so it isn't a surprise.
+    const TERRAIN_HINT: Record<string, string> = { S: '🌿', L: '✨', J: '❄️', Z: '⬆️' };
+    const terrainHint = TERRAIN_HINT[game.currentType];
     for (let r = 0; r < game.blockMatrix.length; r++) {
       for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
         const cell = game.blockMatrix[r]![c]!;
@@ -236,10 +232,17 @@ export class Renderer {
         const tx = game.blockX + c, ty = game.blockY + r;
         if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
 
-        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b5e20' : game.blockColor;
+        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
-        ctx.strokeStyle = cell === Cell.BOSS ? '#ff0000' : '#fff';
-        ctx.lineWidth = cell === Cell.BOSS ? 2 : 1;
+        if (cell === Cell.BOSS) {
+          ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
+        } else if (game.currentCursed) {
+          ctx.strokeStyle = '#ef5350'; ctx.lineWidth = 2;
+        } else if (game.currentBlessed) {
+          ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 2;
+        } else {
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+        }
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
         ctx.lineWidth = 1;
 
@@ -249,6 +252,13 @@ export class Renderer {
           if (!this.drawSprite(emoji, tx * TS + inset, ty * TS + inset, TS - 2 * inset, TS - 2 * inset)) {
             ctx.fillText(emoji, tx * TS + TS / 2, ty * TS + TS / 2);
           }
+        } else if (terrainHint) {
+          // Plain cell of a terrain piece — show what it will become.
+          ctx.font = `${TS * 0.42}px Arial`;
+          ctx.globalAlpha = 0.85;
+          ctx.fillText(terrainHint, tx * TS + TS / 2, ty * TS + TS / 2);
+          ctx.globalAlpha = 1.0;
+          ctx.font = `${TS * 0.7}px Arial`;
         }
       }
     }
@@ -272,8 +282,70 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
-    // ── Hazard overlays ───────────────────────────────────────────────────
+    // ── Tile-feature glyphs (stairs / tattoo artist / altar) ───────────────
+    // Drawn AFTER the falling block + ghost so a descending piece can never
+    // hide the feature underneath it — the player always sees what's on a tile.
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let y = 0; y < CONFIG.ROWS; y++) {
+        const visible = game.visibility[x]![y]!;
+        if (!visible && !game.explored[x]![y]!) continue;
+        const type = game.map[x]![y]!;
+        const isMerchant = this.isMerchantTile(game, x, y);
+        const altar = this.getAltarAt(game, x, y);
+        if (type !== Tile.STAIRS && !isMerchant && !altar) continue;
+
+        ctx.globalAlpha = visible ? 1.0 : 0.5;
+        if (type === Tile.STAIRS) {
+          if (visible) this.drawPulseGlow(x, y, '186,104,200');
+          ctx.font = `${TS * 0.7}px Arial`;
+          if (!this.drawSprite('STAIRS', x * TS, y * TS, TS, TS)) ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
+        } else if (isMerchant) {
+          if (visible) this.drawPulseGlow(x, y, '148,0,211');
+          ctx.font = `${TS * 0.7}px Arial`;
+          if (!this.drawSprite('🎭', x * TS, y * TS, TS, TS)) ctx.fillText('🎭', x * TS + TS / 2, y * TS + TS / 2);
+        } else if (altar) {
+          if (visible) {
+            const rgb = altar.tier === 3 ? '255,180,0' : altar.tier === 2 ? '41,182,246' : '156,39,176';
+            this.drawPulseGlow(x, y, rgb);
+          }
+          ctx.font = `${TS * 0.65}px Arial`;
+          ctx.fillText('⛩️', x * TS + TS / 2, y * TS + TS / 2);
+        }
+        ctx.globalAlpha = 1.0;
+      }
+    }
+    ctx.font = `${TS * 0.7}px Arial`;
+
+    // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
     ctx.font = `${TS * 0.55}px Arial`;
+    for (const t of game.specialTiles) {
+      if (!game.visibility[t.x]?.[t.y]) continue;
+      const sx = t.x * TS, sy = t.y * TS;
+      if (t.type === 'swamp') {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#388e3c';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('🌿', sx + TS / 2, sy + TS / 2);
+      } else if (t.type === 'sacred') {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ffb74d';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('✨', sx + TS / 2, sy + TS / 2);
+      } else if (t.type === 'ice') {
+        ctx.globalAlpha = 0.50;
+        ctx.fillStyle = '#81d4fa';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('❄️', sx + TS / 2, sy + TS / 2);
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ── Hazard overlays ───────────────────────────────────────────────────
     for (const h of game.hazards) {
       if (!game.visibility[h.x]?.[h.y]) continue;
       const hx = h.x * TS, hy = h.y * TS;
@@ -300,26 +372,36 @@ export class Renderer {
         ctx.fillStyle = '#7c4dff';
         ctx.fillRect(hx, hy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
-        ctx.fillText('🌀', hx + TS / 2, hy + TS / 2);
+        ctx.save();
+        ctx.translate(hx + TS / 2, hy + TS / 2);
+        ctx.rotate(performance.now() / 600);
+        ctx.fillText('🌀', 0, 0);
+        ctx.restore();
       }
       ctx.globalAlpha = 1.0;
     }
     ctx.font = `${TS * 0.7}px Arial`;
-
-    // ── Items (only if visible) ───────────────────────────────────────────
-    for (const item of game.items) {
-      if (!game.visibility[item.x]?.[item.y]) continue;
-      if (item.type === 'relic') this.drawPulseGlow(item.x, item.y, '156,39,176');
-      if (!this.drawSprite(item.char, item.x * TS, item.y * TS, TS, TS)) {
-        ctx.fillText(item.char, item.x * TS + TS / 2, item.y * TS + TS / 2);
-      }
-    }
 
     // ── Monsters (only if visible) ────────────────────────────────────────
     for (const m of game.monsters) {
       if (!game.visibility[m.x]?.[m.y]) continue;
 
       if (m.isElite) this.drawPulseGlow(m.x, m.y, '255,215,0');
+      if (m.isGorgoth) this.drawPulseGlow(m.x, m.y, '183,28,28');  // ominous final-boss aura
+
+      // Telegraph: a monster that can strike the player next turn pulses red and
+      // shows a ‼ marker, so incoming damage is a read rather than a surprise.
+      // Combat is orthogonal-only, so this is Manhattan range (attackRange 1 =
+      // the four orthogonal tiles; ranged monsters use their larger range).
+      const threatening = game.player.hp > 0 && !m.isStunned &&
+        (Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y)) <= m.attackRange;
+      if (threatening) {
+        this.drawPulseGlow(m.x, m.y, '244,67,54');
+        ctx.font = '9px Arial';
+        ctx.fillStyle = '#ff5252';
+        ctx.fillText('‼', m.x * TS + 5, m.y * TS + 5);
+        ctx.font = `${TS * 0.7}px Arial`;
+      }
 
       if (!this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS)) {
         ctx.fillText(m.char, m.x * TS + TS / 2, m.y * TS + TS / 2);
@@ -354,16 +436,17 @@ export class Renderer {
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
 
+      const idleBob = Math.sin(performance.now() / 500) * 1.5;
       const px = game.player.x * TS + TS / 2;
-      const py = game.player.y * TS + TS / 2;
+      const py = game.player.y * TS + TS / 2 + idleBob;
       const glow = ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
       glow.addColorStop(0, 'rgba(102,187,106,0.38)');
       glow.addColorStop(1, 'rgba(102,187,106,0)');
       ctx.fillStyle = glow;
       ctx.fillRect(game.player.x * TS - TS, game.player.y * TS - TS, TS * 3, TS * 3);
 
-      if (!this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS, TS, TS)) {
-        ctx.fillText(game.player.char, game.player.x * TS + TS / 2, game.player.y * TS + TS / 2);
+      if (!this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS + idleBob, TS, TS)) {
+        ctx.fillText(game.player.char, px, py);
       }
 
       if (game.player.statuses.length > 0) {
@@ -379,16 +462,18 @@ export class Renderer {
 
     // ── Combo overlay ─────────────────────────────────────────────────────
     if (this.comboOverlay) {
-      const { text, alpha } = this.comboOverlay;
+      const { text, alpha, mult } = this.comboOverlay;
       const cw = ctx.canvas.width, ch = ctx.canvas.height;
+      const fontSize = 22 + Math.min(mult, 8) * 2;
+      const color = mult >= 5 ? '#ff1744' : '#ff9100';
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = 'bold 26px monospace';
+      ctx.font = `bold ${fontSize}px 'VT323', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillText(text, cw / 2 + 1, ch / 2 + 1);
-      ctx.fillStyle = '#ff9100';
+      ctx.fillStyle = color;
       ctx.fillText(text, cw / 2, ch / 2);
       ctx.restore();
       this.comboOverlay.alpha -= 0.028;
@@ -402,6 +487,14 @@ export class Renderer {
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     }
 
+    // ── Floor transition flash ────────────────────────────────────────────
+    if (this.floorTransitionFrames > 0) {
+      const flashAlpha = (this.floorTransitionFrames / 30) * 0.88;
+      ctx.fillStyle = `rgba(${this.floorTransitionColor},${flashAlpha})`;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      this.floorTransitionFrames--;
+    }
+
     // ── Low-HP vignette ──────────────────────────────────────────────────
     if (game.player.hp > 0 && game.player.hp / game.player.maxHp <= 0.25) {
       const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 300);
@@ -411,6 +504,22 @@ export class Renderer {
       vignette.addColorStop(1, `rgba(180,0,0,${pulse})`);
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, w, h);
+    }
+
+    // ── Pause overlay ─────────────────────────────────────────────────────
+    if (game.paused && game.player.hp > 0) {
+      const W = ctx.canvas.width, H = ctx.canvas.height;
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      ctx.font = "bold 14px var(--font-pixel, 'VT323', monospace)";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#666';
+      ctx.fillText('— PAUSED —', W / 2, H / 2);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -437,18 +546,25 @@ export class Renderer {
   }
 
   public showCombo(multiplier: number): void {
-    this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0 };
+    this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0, mult: multiplier };
   }
 
-  public triggerDamageFlash(): void { this.damageFlashFrames = 8; }
+  public setReducedMotion(on: boolean): void { this.reducedMotion = on; }
+  public triggerDamageFlash(): void { if (!this.reducedMotion) this.damageFlashFrames = 8; }
   public triggerShake(intensity: number, duration: number): void {
+    if (this.reducedMotion) return;  // no screen shake when reduced motion is on
     this.shakeIntensity = intensity;
     this.shakeFrames = duration;
   }
 
   private isMerchantTile(game: Game, x: number, y: number): boolean {
-    return (game as unknown as { merchantTiles: Array<{ x: number; y: number }> })
-      .merchantTiles.some((t: { x: number; y: number }) => t.x === x && t.y === y);
+    return (game as unknown as { tattooTiles: Array<{ x: number; y: number }> })
+      .tattooTiles.some((t: { x: number; y: number }) => t.x === x && t.y === y);
+  }
+
+  private getAltarAt(game: Game, x: number, y: number): { tier: 1 | 2 | 3 } | undefined {
+    return (game as unknown as { altarTiles: Array<{ x: number; y: number; tier: 1 | 2 | 3 }> })
+      .altarTiles.find((a: { x: number; y: number }) => a.x === x && a.y === y);
   }
 }
 
@@ -459,14 +575,11 @@ const CELL_EMOJI: Partial<Record<number, string>> = {
   [Cell.MONSTER_SLIME]:  '🫧',
   [Cell.MONSTER_ORC]:    '👹',
   [Cell.MONSTER_BAT]:    '🦠',
-  [Cell.ITEM_POTION]:    '🧪',
-  [Cell.ITEM_SWORD]:     '🗡️',
   [Cell.STAIRS]:         '🪜',
   [Cell.BOMB]:           '💣',
-  [Cell.MERCHANT]:       '🏪',
+  [Cell.MERCHANT]:       '🎭',
   [Cell.BOSS]:           '⚠️',
-  [Cell.ITEM_EQUIPMENT]: '📦',
-  [Cell.RELIC]:          '🔮',
+  [Cell.ALTAR]:          '⛩️',
   [Cell.TRAP_SPIKE]:     '⬆️',
   [Cell.TRAP_SMOKE]:     '💨',
   [Cell.TRAP_TELEPORT]:  '🌀',

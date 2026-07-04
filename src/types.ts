@@ -44,21 +44,18 @@ export const Cell = {
   FLOOR: 1,
   MONSTER_RAT: 2,
   MONSTER_SKEL: 3,
-  ITEM_POTION: 4,
-  ITEM_SWORD: 5,
   STAIRS: 6,
   BOMB: 7,
   MERCHANT: 8,
   BOSS: 9,
-  ITEM_EQUIPMENT: 10,
   MONSTER_ARCHER: 11,
   MONSTER_SLIME: 12,
   MONSTER_ORC: 13,
   MONSTER_BAT: 14,
-  RELIC: 15,
   TRAP_SPIKE: 16,
   TRAP_SMOKE: 17,
   TRAP_TELEPORT: 18,
+  ALTAR: 19,
 } as const;
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
@@ -72,8 +69,60 @@ export interface StatusEffect {
   power: number;
 }
 
-export type EquipSlot = 'weapon' | 'armor';
-export type ItemType = 'heal' | 'stat' | 'weapon' | 'armor' | 'relic';
+// Role used to guarantee variety in a 3-choice offer (>=2 distinct roles)
+export type OfferRole = 'offense' | 'defense' | 'utility';
+
+// Declarative effect used by JSON-configured boons / brands / modifiers.
+// Applied to the player (default) or the game object (modifiers only).
+// op: 'add' (default) | 'mul' | 'set'. Optional floor + min/max clamps.
+export interface EffectSpec {
+  target?: 'player' | 'game';
+  stat: string;
+  op?: 'add' | 'mul' | 'set';
+  value: number | boolean;
+  min?: number;
+  max?: number;
+  floor?: boolean;
+}
+
+// Gold-reroll config handed to the choice modals; run() returns the new
+// state (choices + remaining gold + next cost) or null when unaffordable.
+export interface RerollCfg<T> {
+  gold: number;
+  cost: number;
+  run: () => { choices: T[]; gold: number; cost: number } | null;
+}
+
+export interface BoonDef {
+  id: string;
+  char: string;
+  name: string;
+  desc: string;
+  tier: 1 | 2 | 3;
+  role: OfferRole;
+  onAdd: (player: Player, newStacks: number) => void;
+}
+
+export type BodyPart = 'head' | 'body' | 'left_arm' | 'right_arm' | 'legs';
+export const BODY_PARTS: BodyPart[] = ['body', 'left_arm', 'right_arm', 'legs', 'head'];
+
+export interface BrandDef {
+  id: string;
+  char: string;
+  name: string;
+  desc: string;
+  setSize: 2 | 3;
+  setDesc: string;
+  role: OfferRole;
+  onEquip: (player: Player) => void;
+  onSetComplete: (player: Player) => void;
+}
+
+export interface AltarTile {
+  x: number;
+  y: number;
+  tier: 1 | 2 | 3;
+}
 
 export interface HazardTile {
   x: number;
@@ -83,14 +132,10 @@ export interface HazardTile {
   warning: boolean;
 }
 
-export interface RelicDef {
-  id: string;
-  char: string;
-  name: string;
-  desc: string;
-  onPickup?: (player: Player) => void;
-  onKill?: (player: Player) => void;
-  onLineClear?: (player: Player, count: number) => void;
+export interface SpecialTile {
+  x: number;
+  y: number;
+  type: 'swamp' | 'sacred' | 'ice';
 }
 
 export interface ModifierDef {
@@ -113,51 +158,67 @@ export interface RunStats {
   linesCleared: number;
   biggestCombo: number;
   damageTaken: number;
-  itemsPickedUp: number;
+}
+
+export interface RangedAbility {
+  name: string;
+  emoji: string;
+  range: number;
+  damageMult: number;
+  cooldownMax: number;
+  statusEffect?: 'stun';
+  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
 }
 
 export interface UIState {
   hp: number;
   maxHp: number;
   floor: number;
-  score: number;
+  totalXpEarned: number;
   gravityRate: number;
   nextType: ShapeKey;
+  heldType: ShapeKey | null;
+  canHold: boolean;
+  pieceState: 'normal' | 'cursed' | 'blessed';
   xp: number;
   xpToNext: number;
   playerLevel: number;
-  weaponName: string | null;
-  armorName: string | null;
+  boons: Array<{ char: string; name: string; stacks: number; desc: string }>;
+  brands: Array<{ slot: BodyPart; char: string; name: string; setActive: boolean; desc: string; setDesc: string; setSize: number }>;
   statuses: StatusEffect[];
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
-  relics: RelicDef[];
+  rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null } | null;
 }
 
 export type AudioEvent =
   | 'blockLand' | 'blockRotate' | 'blockMove'
   | 'hit' | 'playerDamage' | 'kill'
-  | 'lineClear' | 'descend' | 'poison' | 'bossWarn';
+  | 'lineClear' | 'descend' | 'poison' | 'bossWarn'
+  | 'teleport' | 'comboMilestone';
 
 export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;
   updateUI: (state: UIState) => void;
-  onDeath: (title: string, reason: string, floor: number, score: number, stats: RunStats) => void;
-  onParticle: (gridX: number, gridY: number, text: string, color: string) => void;
-  onLevelUp: (newLevel: number) => void;
-  onOpenShop: (gold: number) => void;
+  onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats) => void;
+  onVictory?: (floor: number, totalXpEarned: number, stats: RunStats) => void;
+  onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
+  onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
+  onOpenShop?: (gold: number) => void;
+  onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;
   onBossWarning?: (boss: BossDef, onDone: () => void) => void;
   onBlockLand?: (cells: Array<{ x: number; y: number }>) => void;
   onCombo?: (multiplier: number) => void;
   onFloorEvent?: (event: import('./types').FloorEventDef, onChoice: (index: number) => void) => void;
+  onOpenAltar?: (tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BoonDef>) => void;
 }
 
 export interface RunRecord {
   date: string;
-  score: number;
+  totalXpEarned: number;
   floor: number;
   playerLevel: number;
   cause: string;
@@ -169,6 +230,7 @@ export interface RunRecord {
 export interface MonsterDef {
   char: string;
   name: string;
+  combatLevel: number;
   baseHp: number;
   hpPerLevel: number;
   baseAtk: number;
@@ -194,19 +256,4 @@ export interface BossDef {
   onDeath?:  (game: import('./game').Game, x: number, y: number) => void;
 }
 
-export interface ItemDef {
-  char: string;
-  name: string;
-  type: 'heal' | 'stat';
-  statValue: number;
-  cellState: CellValue;
-}
 
-export interface EquipmentDef {
-  char: string;
-  name: string;
-  slot: EquipSlot;
-  atkBonus: number;
-  defBonus: number;
-  tier: number;
-}

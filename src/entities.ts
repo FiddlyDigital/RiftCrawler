@@ -1,16 +1,5 @@
 import { CONFIG } from './config';
-import type { StatusEffect, EquipSlot, EquipmentDef, MonsterDef, RelicDef } from './types';
-
-export class Equipment {
-  constructor(
-    public readonly def: EquipmentDef,
-  ) {}
-  get name(): string { return this.def.name; }
-  get char(): string { return this.def.char; }
-  get slot(): EquipSlot { return this.def.slot; }
-  get atkBonus(): number { return this.def.atkBonus; }
-  get defBonus(): number { return this.def.defBonus; }
-}
+import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
 export class Player {
   x: number;
@@ -34,7 +23,26 @@ export class Player {
   damageReduction = 0;
   tickSlowPercent = 0;
 
-  // Relic bonuses
+  // Combat dice level (1=D4 … 6=D20); overridden by class, scales with playerLevel
+  baseCombatLevel = 2;
+
+  // Miss-pity: consecutive whiffs; the 3rd is upgraded to a guaranteed weak hit
+  missStreak = 0;
+
+  get combatLevel(): number {
+    const lvl = this.playerLevel;
+    if (lvl >= 9) return 6;
+    if (lvl >= 7) return 5;
+    if (lvl >= 5) return 4;
+    if (lvl >= 3) return Math.max(this.baseCombatLevel, 3);
+    return this.baseCombatLevel;
+  }
+
+  // Class-set multipliers
+  lineClearXpMult = 1;  // Architect doubles line-clear XP
+  teleportImmune  = false;  // Rift Weaver resists teleport traps
+
+  // Perk-granted bonuses (boons & brands)
   dodgeChance = 0;
   dodgeHeal = 0;
   lineClearDamage = 0;
@@ -43,15 +51,31 @@ export class Player {
   critEvery = 0;
   critCount = 0;
 
+  // Ranged ability (set by class; null = Warrior / no class)
+  rangedAbility: RangedAbility | null = null;
+  rangedCooldown = 0;
+  rangedAmmo = -1;  // -1 = infinite, ≥0 = finite (Rogue darts)
+
   // Status effects
   statuses: StatusEffect[] = [];
 
-  // Equipment
-  weapon: Equipment | null = null;
-  armor: Equipment | null = null;
+  // Run total XP (display metric — accumulates every gainXP call)
+  totalXpEarned = 0;
 
-  // Relics (max 2)
-  relics: RelicDef[] = [];
+  // Boons
+  boons: Array<{ id: string; stacks: number; def: BoonDef }> = [];
+  thornDamage = 0;
+
+  // Brands (Sacred Tattoos)
+  brands: Array<{ slot: BodyPart; brand: BrandDef }> = [];
+  poisonAttackChance = 0;
+  bonusHeroMoves = 0;
+  lifeBrandRevive = false;
+  killAtkBonus = 0;
+  killAtkFloorBonus = 0;
+  lineClearAoeDmgMult = 0;
+  deathwardCharges = 0;
+  voidPrismBonus = { atk: 0, hp: 0 };
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -62,11 +86,11 @@ export class Player {
   }
 
   get totalAtk(): number {
-    return this.atk + (this.weapon?.atkBonus ?? 0);
+    return this.atk;
   }
 
   get totalDef(): number {
-    return (this.armor?.defBonus ?? 0) + this.damageReduction;
+    return this.damageReduction;
   }
 
   get isStunned(): boolean {
@@ -86,6 +110,7 @@ export class Player {
   }
 
   gainXP(amount: number): boolean {
+    this.totalXpEarned += amount;
     this.xp += amount;
     if (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
@@ -96,11 +121,31 @@ export class Player {
     return false;
   }
 
-  equip(equip: Equipment): Equipment | null {
-    const prev = equip.slot === 'weapon' ? this.weapon : this.armor;
-    if (equip.slot === 'weapon') this.weapon = equip;
-    else this.armor = equip;
-    return prev;
+  addBoon(def: BoonDef): void {
+    const entry = this.boons.find(b => b.id === def.id);
+    const newStacks = entry ? ++entry.stacks : 1;
+    if (!entry) this.boons.push({ id: def.id, stacks: newStacks, def });
+    def.onAdd(this, newStacks);
+    this.recomputeVoidPrism();
+  }
+
+  addBrand(slot: BodyPart, def: BrandDef): void {
+    this.brands.push({ slot, brand: def });
+    def.onEquip(this);
+    const count = this.brands.filter(b => b.brand.id === def.id).length;
+    if (count % def.setSize === 0) def.onSetComplete(this);
+  }
+
+  private recomputeVoidPrism(): void {
+    const prism = this.boons.find(b => b.id === 'void_prism');
+    if (!prism) return;
+    const distinct = this.boons.length;
+    const bonus = distinct * prism.stacks;
+    this.atk += bonus - this.voidPrismBonus.atk;
+    const hpDelta = (bonus * 2) - this.voidPrismBonus.hp;
+    this.maxHp += hpDelta;
+    this.hp = Math.min(this.hp + hpDelta, this.maxHp);
+    this.voidPrismBonus = { atk: bonus, hp: bonus * 2 };
   }
 }
 
@@ -108,6 +153,9 @@ export class Monster {
   statuses: StatusEffect[] = [];
   isBoss: boolean;
   isElite = false;
+  isGorgoth = false;  // the final boss — killing it wins the run
+  stepCharge = 0;     // paces Gorgoth's slow descent (moves once per N turns)
+  combatLevel = 2;
 
   constructor(
     public x: number,
@@ -132,19 +180,6 @@ export class Monster {
   }
 }
 
-export class Item {
-  constructor(
-    public x: number,
-    public y: number,
-    public readonly char: string,
-    public readonly name: string,
-    public readonly type: 'heal' | 'stat' | 'weapon' | 'armor' | 'relic',
-    public readonly statValue: number,
-    public readonly equipDef?: EquipmentDef,
-    public readonly relicDef?: RelicDef,
-  ) {}
-}
-
 // Poolable particle — reset() replaces new() to avoid GC pressure
 export class Particle {
   x = 0;
@@ -152,26 +187,33 @@ export class Particle {
   text = '';
   color = '';
   life = 0;
+  fontSize = 13;
 
-  reset(gridX: number, gridY: number, text: string, color: string): void {
-    this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
-    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
+  reset(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
+    this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2 + (Math.random() - 0.5) * CONFIG.TILE_SIZE * 0.4;
+    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4 + Math.random() * CONFIG.TILE_SIZE * 0.3;
     this.text = text;
     this.color = color;
     this.life = 1.0;
+    this.fontSize = fontSize;
   }
 
   update(): void {
-    this.y -= 0.5;
-    this.life -= 0.05;
+    this.y -= 0.7;
+    this.life -= 0.04;
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.globalAlpha = this.life;
+    ctx.font = `bold ${this.fontSize}px monospace`;
+    const tw = ctx.measureText(this.text).width;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(this.text, this.x - tw / 2, this.y);
     ctx.fillStyle = this.color;
-    ctx.font = 'bold 9px monospace';
-    ctx.fillText(this.text, this.x - ctx.measureText(this.text).width / 2, this.y);
+    ctx.fillText(this.text, this.x - tw / 2, this.y);
     ctx.restore();
   }
 }
@@ -184,9 +226,9 @@ export class ParticlePool {
     for (let i = 0; i < size; i++) this.pool.push(new Particle());
   }
 
-  spawn(gridX: number, gridY: number, text: string, color: string): void {
+  spawn(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
     const p = this.pool.pop() ?? new Particle();
-    p.reset(gridX, gridY, text, color);
+    p.reset(gridX, gridY, text, color, fontSize);
     this.active.push(p);
   }
 

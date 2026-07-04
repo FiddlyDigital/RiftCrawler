@@ -46,44 +46,74 @@ body {
 }
 
 #game-wrapper {
-  display: flex; flex-direction: column;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "canvas sidebar"
+    "controls controls";
   width: 100%; max-width: 390px; height: 100%;
-  justify-content: space-between; box-sizing: border-box; padding: 5px;
-}
-
-#viewport-split {
-  display: flex; flex-direction: row; width: 100%;
-  gap: 6px; align-items: flex-start; flex-grow: 1; min-height: 0; padding-top: 2px;
+  box-sizing: border-box; padding: 5px; gap: 6px;
+  margin: 0 auto;
 }
 
 #canvas-container {
-  flex: 1.1; display: flex; align-items: center; justify-content: center;
+  grid-area: canvas;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 0;
+  position: relative;  /* anchor for the floating pause button */
 }
 
-/* F · Canvas depth glow */
+/* Floating pause / settings button over the canvas */
+#pause-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
+  color: #cfcfe0; font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+#pause-btn:hover, #pause-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
+
+/* Settings toggle rows in the pause menu */
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #14141f; border: 1px solid var(--border-color); border-radius: 6px;
+  color: var(--text-color); padding: 10px 12px; font-size: 12px; cursor: pointer;
+  font-family: var(--font-pixel); width: 100%;
+}
+.settings-row:hover, .settings-row:active { border-color: var(--accent-color); }
+.settings-val { color: var(--accent-color); }
+
+/* F · Canvas depth glow — JS updates --canvas-glow to shift color with HP */
 canvas {
   border: 2px solid var(--border-color); background-color: #020205;
   width: 100%; height: auto; max-height: 100%; display: block;
   border-radius: 6px; image-rendering: pixelated;
   box-shadow:
-    0 0 28px rgba(41, 182, 246, 0.15),
-    0 0  6px rgba(41, 182, 246, 0.06),
+    var(--canvas-glow, 0 0 28px rgba(41,182,246,.15), 0 0 6px rgba(41,182,246,.06)),
     inset 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 #sidebar-panel {
-  flex: 0.9; display: flex; flex-direction: column;
+  grid-area: sidebar;
+  display: flex; flex-direction: column;
   justify-content: space-between; background-color: var(--panel-color);
   border: 1px solid var(--border-color); border-radius: 6px;
   padding: 5px; box-sizing: border-box; font-size: 11px; gap: 4px;
   overflow: hidden;
 }
 
+@keyframes titlePulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(255,213,79,.4); }
+  50%       { text-shadow: 0 0 14px rgba(255,213,79,.7); }
+}
 #sidebar-game-title {
   font-family: var(--font-pixel);
-  font-size: 15px; letter-spacing: 2px; color: var(--accent-color);
+  font-size: 17px; letter-spacing: 2px; color: var(--accent-color);
   text-align: center; padding: 3px 0 5px; flex-shrink: 0;
   border-bottom: 1px solid var(--border-color);
+  animation: titlePulse 3s ease-in-out infinite;
   text-shadow: 0 0 10px rgba(255, 213, 79, 0.4);
 }
 
@@ -162,7 +192,7 @@ canvas {
 /* I · Log panel — increased height + slide-in animation */
 #log-panel {
   flex-grow: 1; overflow-y: auto; font-family: monospace; font-size: 10px;
-  display: flex; flex-direction: column-reverse; gap: 2px; max-height: 120px;
+  display: flex; flex-direction: column; gap: 2px; max-height: 120px;
 }
 @keyframes logSlide {
   from { opacity: 0; transform: translateX(-6px); }
@@ -179,13 +209,14 @@ canvas {
 
 /* Run history */
 .history-row {
-  display: grid; grid-template-columns: 2fr 1fr 2fr 1fr;
+  display: grid; grid-template-columns: 2fr 1fr 2fr 1fr 2fr;
   font-size: 8px; color: #666; gap: 2px; padding: 1px 0;
 }
 .history-latest { color: #999; }
 
 /* Controls */
 #controls-layout {
+  grid-area: controls;
   display: flex; flex-direction: row; justify-content: space-around;
   background-color: var(--panel-color); padding: 8px 4px; border-radius: 8px;
   border: 1px solid var(--border-color); gap: 6px;
@@ -263,6 +294,15 @@ canvas {
   text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.8);
   max-height: 85vh; overflow-y: auto;
   animation: modalFadeIn 0.2s ease;
+}
+/* Victory (Gorgoth defeated) — gold treatment on the reused game-over modal */
+.modal-card.victory {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 40px rgba(255,213,79,.35), inset 0 0 22px rgba(255,213,79,.06);
+}
+.modal-card.victory #death-title {
+  color: var(--accent-color);
+  text-shadow: 0 0 12px rgba(255,213,79,.6);
 }
 .modal-title {
   color: var(--hp-color); font-size: 24px; font-weight: bold; margin-bottom: 12px;
@@ -349,6 +389,16 @@ canvas {
 .modifier-info strong { color: #ffd54f; font-size: 12px; font-family: var(--font-pixel); }
 .modifier-info span   { color: #888; font-size: 10px; line-height: 1.3; }
 
+/* Gold reroll button on altar / tattoo offers */
+.reroll-btn {
+  margin-top: 8px; width: 100%; padding: 8px 10px;
+  background-color: #14140f; border: 1px dashed #7a5c1a; border-radius: 6px;
+  color: var(--accent-color); font-family: var(--font-pixel); font-size: 12px;
+  cursor: pointer; transition: background-color .12s ease, border-color .12s ease;
+}
+.reroll-btn:hover:not(:disabled) { background-color: #241d0c; border-color: var(--accent-color); }
+.reroll-btn:disabled { opacity: .45; cursor: not-allowed; color: #888; }
+
 /* ── Boss warning cinematic ─────────────────────────────────────────────── */
 #boss-warning-modal { background-color: rgba(5,0,0,.97); z-index: 200; }
 #boss-warning-card {
@@ -361,18 +411,42 @@ canvas {
   100% { opacity: 1; transform: scale(1); }
 }
 
-/* ── Relic badge in equipment card ─────────────────────────────────────── */
-.relic-badge {
-  font-size: 14px; line-height: 1;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: 4px;
-  background-color: #1a0a30; border: 1px solid #7c4dff;
-  cursor: default;
-  animation: relicGlow 2s ease-in-out infinite;
+/* ── Boon panel ─────────────────────────────────────────────────────────── */
+.boon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  min-height: 16px;
 }
-@keyframes relicGlow {
-  0%, 100% { box-shadow: 0 0 4px rgba(124,77,255,.4); }
-  50%       { box-shadow: 0 0 10px rgba(124,77,255,.8); }
+.boon-chip {
+  background: #1a1230;
+  border: 1px solid #3d2b60;
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #ce93d8;
+}
+
+.brand-chip {
+  background: #1a0a20;
+  border: 1px solid #6a0dad;
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #c084fc;
+}
+
+.brand-chip.brand-set-active {
+  border-color: #ffd54f;
+  color: #ffd54f;
+}
+#altar-modal .modifier-btn:hover {
+  border-color: #ce93d8;
 }
 
 /* ── Active modifier badge ─────────────────────────────────────────────── */
@@ -431,4 +505,68 @@ canvas {
 }
 .inspect-lines {
   font-size: 10px; color: #ccc; line-height: 1.5;
+}
+
+/* ── Desktop layout (≥ 640px) ──────────────────────────────────────────── */
+@media (min-width: 640px) {
+  #game-wrapper {
+    max-width: none;
+    grid-template-columns: 1fr 260px;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      "canvas sidebar"
+      "canvas controls";
+    padding: 12px;
+    gap: 12px;
+  }
+
+  #canvas-container {
+    height: 100%;
+  }
+
+  #gameCanvas {
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100%;
+  }
+
+  #sidebar-panel {
+    height: auto !important;
+    font-size: 13px;
+    overflow-y: auto;
+  }
+
+  .card-title { font-size: 10px; }
+
+  #log-panel {
+    max-height: 240px;
+    flex-grow: 1;
+  }
+
+  .dpad-grid {
+    width: 108px !important;
+    height: 108px !important;
+  }
+}
+
+/* ── Landscape phone (≤ 900px wide, landscape orientation) ─────────────── */
+@media (max-width: 900px) and (orientation: landscape) {
+  #game-wrapper {
+    max-width: none;
+    grid-template-columns: 1fr 200px;
+    grid-template-rows: 1fr;
+    grid-template-areas: "canvas sidebar";
+  }
+
+  #controls-layout { display: none; }
+
+  #gameCanvas {
+    width: auto !important;
+    height: 100% !important;
+  }
+
+  #sidebar-panel {
+    height: auto !important;
+    font-size: 12px;
+  }
 }

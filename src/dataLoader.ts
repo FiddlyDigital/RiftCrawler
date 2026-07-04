@@ -1,15 +1,14 @@
 import visualRegistryData from './data/visual-registry.json';
 import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
-import itemsData          from './data/items.json';
-import equipmentData      from './data/equipment.json';
-import perksData          from './data/perks.json';
-import merchantData       from './data/merchant.json';
 import shapesData         from './data/shapes.json';
-import { Cell, type CellValue, type StatusType, type EquipSlot, type RelicDef, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef } from './types';
-import { Equipment } from './entities';
+import boonsData          from './data/boons.json';
+import brandsData         from './data/brands.json';
+import modifiersData      from './data/modifiers.json';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec } from './types';
 import type { Player } from './entities';
-import type { MonsterDef, BossDef, ItemDef, EquipmentDef } from './types';
+import type { Game } from './game';
+import type { MonsterDef, BossDef } from './types';
 
 // ── Visual registry ───────────────────────────────────────────────────────────
 
@@ -19,26 +18,47 @@ function vis(assetId: string): string {
   return VISUAL_REGISTRY[assetId] ?? '❓';
 }
 
-// ── Runtime interface types (exported for consumers) ──────────────────────────
+// ── Declarative effect resolver (JSON-configured boons / brands / modifiers) ───
+// Boons/brands/modifiers describe their effects as data; these apply them.
 
-export interface PerkDef {
-  id: string;
-  name: string;
-  desc: string;
-  apply: (player: Player) => void;
+interface RawBoon     { id: string; char: string; name: string; tier: number; role: string; desc: string; effects?: EffectSpec[]; special?: string }
+interface RawBrand    { id: string; char: string; name: string; setSize: number; role: string; desc: string; setDesc: string; onEquip?: EffectSpec[]; onSet?: EffectSpec[] }
+interface RawModifier { id: string; emoji: string; name: string; desc: string; effects?: EffectSpec[]; special?: string }
+
+function applyEffect(obj: Record<string, number | boolean>, e: EffectSpec): void {
+  const op = e.op ?? 'add';
+  if (op === 'set') { obj[e.stat] = e.value; return; }
+  let n = obj[e.stat] as number;
+  const v = e.value as number;
+  n = op === 'mul' ? n * v : n + v;
+  if (e.floor) n = Math.floor(n);
+  if (e.min !== undefined) n = Math.max(e.min, n);
+  if (e.max !== undefined) n = Math.min(e.max, n);
+  obj[e.stat] = n;
 }
 
-export interface MerchantItem {
-  name: string;
-  char: string;
-  cost: number;
-  apply: (player: Player) => string;
+function applyToPlayer(p: Player, effects: EffectSpec[] | undefined): void {
+  for (const e of effects ?? []) applyEffect(p as unknown as Record<string, number | boolean>, e);
 }
+
+// Effects that can't be expressed as plain data:
+const BOON_SPECIALS: Record<string, (p: Player, stacks: number) => void> = {
+  // Void Loop: every Nth attack crits, N shrinking as stacks grow.
+  void_loop: (p, stacks) => {
+    if (stacks === 1) { p.critEvery = 6; p.critCount = 0; }
+    else p.critEvery = Math.max(2, p.critEvery - 1);
+  },
+  // Void Prism recomputes in Player.addBoon — nothing to do per-add.
+};
+const MODIFIER_SPECIALS: Record<string, (g: Game) => void> = {
+  full_heal: (g) => { g.player.hp = g.player.maxHp; },
+};
 
 // ── Raw JSON shapes (local — not exposed) ─────────────────────────────────────
 
 interface RawMonster {
   id: string; displayName: string; visualAsset: string; cellTypeId: string;
+  combatLevel?: number;
   baseHp: number; baseAtk: number;
   hpScaleCoefficient: number; atkScaleCoefficient: number;
   xpValue: number; spawnMsg: string;
@@ -53,25 +73,6 @@ interface RawBoss {
   hpMult: number; atkMult: number; xpValue: number; flavorText: string;
 }
 
-interface RawItem {
-  id: string; displayName: string; visualAsset: string; cellTypeId: string;
-  effectType: string; effectValue: number;
-}
-
-interface RawEquipment {
-  id: string; displayName: string; visualAsset: string;
-  slot: string; atkBonus: number; defBonus: number; tier: number;
-}
-
-interface RawPerk {
-  id: string; name: string; desc: string; effectType: string; effectValue: number;
-}
-
-interface RawMerchantItem {
-  id: string; displayName: string; visualAsset: string;
-  cost: number; effectType: string; effectValue: number; effectLabel: string;
-}
-
 interface RawShape {
   matrix: number[][]; color: string; preview: string;
 }
@@ -81,9 +82,6 @@ interface RawShape {
 const CELL_MAP: Record<string, CellValue> = {
   MONSTER_RAT:    Cell.MONSTER_RAT,
   MONSTER_SKEL:   Cell.MONSTER_SKEL,
-  ITEM_POTION:    Cell.ITEM_POTION,
-  ITEM_SWORD:     Cell.ITEM_SWORD,
-  ITEM_EQUIPMENT: Cell.ITEM_EQUIPMENT,
   MONSTER_ARCHER: Cell.MONSTER_ARCHER,
   MONSTER_SLIME:  Cell.MONSTER_SLIME,
   MONSTER_ORC:    Cell.MONSTER_ORC,
@@ -96,15 +94,16 @@ export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(
   Object.entries(monstersData as Record<string, RawMonster>).map(([key, raw]) => [
     key,
     {
-      char:        vis(raw.visualAsset),
-      name:        raw.displayName,
-      baseHp:      raw.baseHp,
-      hpPerLevel:  raw.hpScaleCoefficient,
-      baseAtk:     raw.baseAtk,
-      atkPerLevel: raw.atkScaleCoefficient,
-      cellState:   CELL_MAP[raw.cellTypeId] ?? Cell.FLOOR,
-      spawnMsg:    raw.spawnMsg,
-      xpReward:    raw.xpValue,
+      char:         vis(raw.visualAsset),
+      name:         raw.displayName,
+      combatLevel:  raw.combatLevel ?? 2,
+      baseHp:       raw.baseHp,
+      hpPerLevel:   raw.hpScaleCoefficient,
+      baseAtk:      raw.baseAtk,
+      atkPerLevel:  raw.atkScaleCoefficient,
+      cellState:    CELL_MAP[raw.cellTypeId] ?? Cell.FLOOR,
+      spawnMsg:     raw.spawnMsg,
+      xpReward:     raw.xpValue,
       statusInflict: raw.statusInflict
         ? {
             type:     raw.statusInflict.type as StatusType,
@@ -156,245 +155,104 @@ export const BOSSES: BossDef[] = [
   },
 ];
 
-// ── Items ─────────────────────────────────────────────────────────────────────
+// ── Boons ─────────────────────────────────────────────────────────────────────
 
-const ITEM_EFFECT_TO_TYPE: Record<string, 'heal' | 'stat'> = {
-  heal: 'heal',
-  atk:  'stat',
-};
-
-export const ITEMS: Record<string, ItemDef> = Object.fromEntries(
-  Object.entries(itemsData as Record<string, RawItem>).map(([key, raw]) => [
-    key,
-    {
-      char:      vis(raw.visualAsset),
-      name:      raw.displayName,
-      type:      ITEM_EFFECT_TO_TYPE[raw.effectType] ?? 'heal',
-      statValue: raw.effectValue,
-      cellState: CELL_MAP[raw.cellTypeId] ?? Cell.FLOOR,
-    } satisfies ItemDef,
-  ])
-);
-
-// ── Equipment ─────────────────────────────────────────────────────────────────
-
-export const EQUIPMENT: EquipmentDef[] = (equipmentData as RawEquipment[]).map(raw => ({
-  char:     vis(raw.visualAsset),
-  name:     raw.displayName,
-  slot:     raw.slot as EquipSlot,
-  atkBonus: raw.atkBonus,
-  defBonus: raw.defBonus,
-  tier:     raw.tier,
-}));
-
-// ── Perk effect resolvers ─────────────────────────────────────────────────────
-
-const PERK_RESOLVERS: Record<string, (player: Player, value: number) => void> = {
-  maxHpIncrease:           (p, v) => { p.maxHp += v; p.hp = Math.min(p.hp + v, p.maxHp); },
-  atkIncrease:             (p, v) => { p.atk += v; },
-  visionIncrease:          (p, v) => { p.visionRadius += v; },
-  regenIncrease:           (p, v) => { p.regenPerTick += v; },
-  poisonImmune:            (p)    => { p.poisonImmune = true; },
-  killHealIncrease:        (p, v) => { p.killHeal += v; },
-  damageReductionIncrease: (p, v) => { p.damageReduction += v; },
-  tickSlowIncrease:        (p, v) => { p.tickSlowPercent += v; },
-};
-
-export const PERKS: PerkDef[] = (perksData as RawPerk[]).map(raw => ({
-  id:    raw.id,
-  name:  raw.name,
-  desc:  raw.desc,
-  apply: (player: Player) => {
-    PERK_RESOLVERS[raw.effectType]?.(player, raw.effectValue);
+export const BOONS: BoonDef[] = (boonsData as RawBoon[]).map(raw => ({
+  id: raw.id, char: raw.char, name: raw.name, tier: raw.tier as 1 | 2 | 3, role: raw.role as OfferRole, desc: raw.desc,
+  onAdd: (player: Player, stacks: number): void => {
+    applyToPlayer(player, raw.effects);
+    if (raw.special) BOON_SPECIALS[raw.special]?.(player, stacks);
   },
 }));
 
-// ── Merchant effect resolvers ─────────────────────────────────────────────────
-
-const MERCHANT_RESOLVERS: Record<string, (player: Player, value: number, label: string) => string> = {
-  heal:       (p, v, l) => { const h = p.heal(v); return l.replace('{value}', String(h)); },
-  atkBoost:   (p, v, l) => { p.atk += v; return l; },
-  maxHpBoost: (p, v, l) => { p.maxHp += v; p.hp = Math.min(p.hp + v, p.maxHp); return l; },
-  visionBoost:(p, v, l) => { p.visionRadius += v; return l; },
-  curePoison: (p, _v, l) => { p.statuses = p.statuses.filter(s => s.type !== 'poison'); return l; },
-  regenBoost: (p, v, l)  => { p.regenPerTick += v; return l; },
+export const BOONS_BY_TIER: Record<1 | 2 | 3, BoonDef[]> = {
+  1: BOONS.filter(b => b.tier === 1),
+  2: BOONS.filter(b => b.tier === 2),
+  3: BOONS.filter(b => b.tier === 3),
 };
 
-export const MERCHANT_STOCK: MerchantItem[] = (merchantData as RawMerchantItem[]).map(raw => ({
-  name: raw.displayName,
-  char: vis(raw.visualAsset),
-  cost: raw.cost,
-  apply: (player: Player) => {
-    const resolve = MERCHANT_RESOLVERS[raw.effectType];
-    return resolve ? resolve(player, raw.effectValue, raw.effectLabel) : raw.effectLabel;
-  },
+export function getBoonTierForFloor(floor: number): 1 | 2 | 3 {
+  const r = Math.random();
+  if (floor <= 3) {
+    if (r < 0.82) return 1;
+    if (r < 0.98) return 2;
+    return 3;
+  }
+  if (floor <= 7) {
+    if (r < 0.40) return 1;
+    if (r < 0.85) return 2;
+    return 3;
+  }
+  if (r < 0.15) return 1;
+  if (r < 0.55) return 2;
+  return 3;
+}
+
+interface OfferItem { id: string; role: OfferRole; }
+
+function shuffleInPlace<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
+}
+
+// Build a 3-choice offer that (a) nudges one pick toward a type the player
+// already owns (synergy / set completion) and (b) guarantees at least two
+// distinct roles, so no offer is three of the same flavour and every run can
+// commit to a build. Input randomness stays high; only coherence is enforced.
+function buildOffer<T extends OfferItem>(pool: T[], ownedIds: string[]): T[] {
+  const shuffled = shuffleInPlace([...pool]);
+  if (shuffled.length <= 3) return shuffled;
+
+  const chosen: T[] = [];
+  // Synergy nudge: ~55% of the time seed one owned type when it's in the pool.
+  if (ownedIds.length && Math.random() < 0.55) {
+    const owned = shuffled.find(x => ownedIds.includes(x.id));
+    if (owned) chosen.push(owned);
+  }
+  for (const x of shuffled) {
+    if (chosen.length >= 3) break;
+    if (!chosen.includes(x)) chosen.push(x);
+  }
+  // Guarantee >=2 distinct roles: swap the last pick for a different-role
+  // candidate if all three ended up sharing a role.
+  if (new Set(chosen.map(c => c.role)).size < 2) {
+    const alt = shuffled.find(x => !chosen.includes(x) && x.role !== chosen[0]!.role);
+    if (alt) chosen[chosen.length - 1] = alt;
+  }
+  return chosen.slice(0, 3);
+}
+
+export function getThreeRandomBoons(pool: BoonDef[], ownedIds: string[] = []): BoonDef[] {
+  return buildOffer(pool, ownedIds);
+}
+
+// ── Sacred Brands ─────────────────────────────────────────────────────────────
+
+export const BRANDS: BrandDef[] = (brandsData as RawBrand[]).map(raw => ({
+  id: raw.id, char: raw.char, name: raw.name, setSize: raw.setSize as 2 | 3, role: raw.role as OfferRole,
+  desc: raw.desc, setDesc: raw.setDesc,
+  onEquip:       (p: Player): void => applyToPlayer(p, raw.onEquip),
+  onSetComplete: (p: Player): void => applyToPlayer(p, raw.onSet),
 }));
 
-// ── Relics ────────────────────────────────────────────────────────────────────
-
-export const RELICS: RelicDef[] = [
-  {
-    id: 'vampire_ring',
-    char: '💍',
-    name: 'Vampire Ring',
-    desc: '+2 HP on every kill',
-    onPickup: (p: Player) => { p.killHeal += 2; },
-  },
-  {
-    id: 'echo_stone',
-    char: '🌀',
-    name: 'Echo Stone',
-    desc: '20% chance to dodge attacks',
-    onPickup: (p: Player) => { p.dodgeChance += 0.20; },
-  },
-  {
-    id: 'ember_core',
-    char: '🔥',
-    name: 'Ember Core',
-    desc: 'Line clears deal 5 dmg to all visible monsters',
-    onPickup: (p: Player) => { p.lineClearDamage += 5; },
-  },
-  {
-    id: 'soul_lantern',
-    char: '🕯️',
-    name: 'Soul Lantern',
-    desc: 'Vision radius +3',
-    onPickup: (p: Player) => { p.visionRadius += 3; },
-  },
-  {
-    id: 'talisman',
-    char: '🪬',
-    name: 'Talisman',
-    desc: 'Status effects expire 1 turn sooner',
-    onPickup: (p: Player) => { p.statusDurationBonus += 1; },
-  },
-  {
-    id: 'lodestone',
-    char: '🧲',
-    name: 'Lodestone',
-    desc: 'Stun adjacent monsters each tick',
-    onPickup: (p: Player) => { p.auraStunRadius = 1; },
-  },
-  {
-    id: 'mana_beads',
-    char: '📿',
-    name: 'Mana Beads',
-    desc: 'Every 5th attack deals double damage',
-    onPickup: (p: Player) => { p.critEvery = 5; p.critCount = 0; },
-  },
-  {
-    id: 'blood_pact',
-    char: '🩸',
-    name: 'Blood Pact',
-    desc: '+8 ATK, -10 Max HP',
-    onPickup: (p: Player) => {
-      p.atk += 8;
-      p.maxHp = Math.max(10, p.maxHp - 10);
-      p.hp = Math.min(p.hp, p.maxHp);
-    },
-  },
-  {
-    id: 'reflex_coil',
-    char: '⚡',
-    name: 'Reflex Coil',
-    desc: 'Dodging an attack restores 4 HP  (great with Rogue)',
-    onPickup: (p: Player) => { p.dodgeHeal += 4; },
-  },
-  {
-    id: 'rift_shard',
-    char: '💎',
-    name: 'Rift Shard',
-    desc: 'Each row cleared grants +2 Max HP permanently  (great with Mage)',
-    onLineClear: (p: Player, count: number) => {
-      p.maxHp += 2 * count;
-      p.hp = Math.min(p.hp, p.maxHp);
-    },
-  },
-  {
-    id: 'divine_seal',
-    char: '✨',
-    name: 'Divine Seal',
-    desc: 'Triples your kill-heal (min 4 HP)  (great with Priest)',
-    onPickup: (p: Player) => {
-      p.killHeal = Math.max(p.killHeal * 3, 4);
-    },
-  },
-];
+export function getThreeRandomBrands(ownedIds: string[] = []): BrandDef[] {
+  return buildOffer([...BRANDS], ownedIds);
+}
 
 // ── Modifiers ─────────────────────────────────────────────────────────────────
 
-export const MODIFIERS: ModifierDef[] = [
-  {
-    id: 'glass_cannon',
-    emoji: '🩸',
-    name: 'Glass Cannon',
-    desc: '+8 ATK, −15 Max HP',
-    apply: (g) => { g.player.atk += 8; g.player.maxHp = Math.max(10, g.player.maxHp - 15); g.player.hp = g.player.maxHp; },
+export const MODIFIERS: ModifierDef[] = (modifiersData as RawModifier[]).map(raw => ({
+  id: raw.id, emoji: raw.emoji, name: raw.name, desc: raw.desc,
+  apply: (g: Game): void => {
+    for (const e of raw.effects ?? []) {
+      applyEffect((e.target === 'game' ? g : g.player) as unknown as Record<string, number | boolean>, e);
+    }
+    if (raw.special) MODIFIER_SPECIALS[raw.special]?.(g);
   },
-  {
-    id: 'blessed',
-    emoji: '🍀',
-    name: 'Blessed',
-    desc: 'Potions heal double',
-    apply: (g) => { g.potionHealMult = 2; },
-  },
-  {
-    id: 'overclock',
-    emoji: '⚡',
-    name: 'Overclock',
-    desc: 'Gravity 20% faster, score ×1.5',
-    apply: (g) => { g.player.tickSlowPercent -= 20; g.scoreMultiplier = 1.5; },
-  },
-  {
-    id: 'cursed',
-    emoji: '💀',
-    name: 'Cursed',
-    desc: 'Score ×2 — but line clears don\'t heal',
-    apply: (g) => { g.scoreMultiplier = 2.0; g.noLineHeal = true; },
-  },
-  {
-    id: 'blind_run',
-    emoji: '🌑',
-    name: 'Blind Run',
-    desc: 'Vision radius halved',
-    apply: (g) => { g.player.visionRadius = Math.max(1, Math.floor(g.player.visionRadius / 2)); },
-  },
-  {
-    id: 'ironclad',
-    emoji: '🛡️',
-    name: 'Ironclad',
-    desc: '+3 Damage Reduction, −3 ATK',
-    apply: (g) => { g.player.damageReduction += 3; g.player.atk = Math.max(1, g.player.atk - 3); },
-  },
-  {
-    id: 'haunted',
-    emoji: '👁️',
-    name: 'Haunted',
-    desc: 'Double monster spawn rate',
-    apply: (g) => { g.haunted = true; },
-  },
-  {
-    id: 'frozen_rift',
-    emoji: '🧊',
-    name: 'Frozen Rift',
-    desc: 'All monsters spawn stunned for 1 turn',
-    apply: (g) => { g.frozenRift = true; },
-  },
-  {
-    id: 'lucky',
-    emoji: '✨',
-    name: 'Lucky',
-    desc: 'Every 5th block contains a guaranteed item',
-    apply: (g) => { g.luckyEvery = 0; },
-  },
-  {
-    id: 'berserker',
-    emoji: '🔥',
-    name: 'Berserker',
-    desc: 'ATK doubled, Max HP halved',
-    apply: (g) => { g.player.atk = g.player.atk * 2; g.player.maxHp = Math.max(10, Math.floor(g.player.maxHp / 2)); g.player.hp = g.player.maxHp; },
-  },
-];
+}));
 
 // ── Shapes ────────────────────────────────────────────────────────────────────
 
@@ -415,53 +273,58 @@ export const NEXT_PREVIEWS: Record<ShapeKey, string> = Object.fromEntries(
 
 export const CLASSES: ClassDef[] = [
   {
-    id: 'warrior',
-    emoji: '⚔️',
-    name: 'Warrior',
-    tagline: 'Front-line fighter. Tough and straightforward.',
-    statPreview: '+20 HP  −2 ATK  +3 DEF',
-    apply: (p: Player) => {
-      p.maxHp += 20; p.hp += 20;
-      p.atk = Math.max(1, p.atk - 2);
-      p.damageReduction += 3;
-    },
-  },
-  {
-    id: 'rogue',
-    emoji: '🗡️',
-    name: 'Rogue',
-    tagline: 'Strike fast, stay elusive. High risk, high reward.',
-    statPreview: '−10 HP  +3 ATK  20% dodge  crit ×2 every 5th',
-    apply: (p: Player) => {
-      p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
-      p.atk += 3;
-      p.dodgeChance += 0.20;
-      p.critEvery = 5;
-    },
-  },
-  {
-    id: 'mage',
-    emoji: '🔮',
-    name: 'Mage',
-    tagline: 'Harness rift energy. Line clears deal extra damage.',
-    statPreview: '−5 HP  +2 vision  line clears deal 5 dmg',
+    id: 'chronomancer',
+    emoji: '⌛',
+    name: 'Chronomancer',
+    tagline: 'Bend time to your will. Slow the rift, outlast everything.',
+    statPreview: '−5 HP  gravity 25% slower  D6 dice  ⌛ Time Dilation (Q, +100 slow/15t, cd 14)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
-      p.visionRadius += 2;
-      p.lineClearDamage += 5;
+      p.tickSlowPercent += 25;
+      p.baseCombatLevel = 2;
+      p.rangedAbility = { name: 'Time Dilation', emoji: '⌛', range: 0, damageMult: 0, cooldownMax: 14, abilityType: 'time_dilation' } satisfies RangedAbility;
     },
   },
   {
-    id: 'priest',
-    emoji: '✨',
-    name: 'Priest',
-    tagline: 'Survive through healing. Regenerate and siphon life.',
-    statPreview: '+10 HP  −1 ATK  +1 regen/tick  +4 HP on kill',
+    id: 'rift_weaver',
+    emoji: '🌀',
+    name: 'Rift Weaver',
+    tagline: 'Command spatial forces. Pull enemies to their doom.',
+    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  🌀 Gravity Well (Q, 4-tile pull×2+stun, cd 8)',
     apply: (p: Player) => {
-      p.maxHp += 10; p.hp += 10;
-      p.atk = Math.max(1, p.atk - 1);
-      p.regenPerTick += 1;
-      p.killHeal += 4;
+      p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
+      p.atk += 2;
+      p.visionRadius += 2;
+      p.teleportImmune = true;
+      p.baseCombatLevel = 3;
+      p.rangedAbility = { name: 'Gravity Well', emoji: '🌀', range: 4, damageMult: 0, cooldownMax: 8, abilityType: 'gravity_well' } satisfies RangedAbility;
+    },
+  },
+  {
+    id: 'architect',
+    emoji: '🏗️',
+    name: 'The Architect',
+    tagline: 'Master the Tetris layer. Every clear is your weapon.',
+    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  ✨ Consecrate (Q, vision-wide, cd 10)',
+    apply: (p: Player) => {
+      p.maxHp += 15; p.hp += 15;
+      p.atk = Math.max(1, p.atk - 2);
+      p.lineClearXpMult = 2;
+      p.baseCombatLevel = 3;
+      p.rangedAbility = { name: 'Consecrate', emoji: '✨', range: 0, damageMult: 0, cooldownMax: 10, abilityType: 'consecrate' } satisfies RangedAbility;
+    },
+  },
+  {
+    id: 'cascade',
+    emoji: '💥',
+    name: 'Cascade',
+    tagline: 'Stack kills, then unleash. Pure explosive potential.',
+    statPreview: '−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  💥 Overload (Q, 8×kills min floor×5, cd 12)',
+    apply: (p: Player) => {
+      p.maxHp = Math.max(10, p.maxHp - 20); p.hp = Math.min(p.hp, p.maxHp);
+      p.atk += 10;
+      p.baseCombatLevel = 4;
+      p.rangedAbility = { name: 'Overload', emoji: '💥', range: 0, damageMult: 0, cooldownMax: 12, abilityType: 'overload' } satisfies RangedAbility;
     },
   },
 ];
@@ -514,13 +377,14 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     options: [
       {
         label: 'Offer HP (20)',
-        desc: 'Sacrifice 20 HP for a random perk.',
+        desc: 'Sacrifice 20 HP for a random boon.',
         apply: (game) => {
           game.player.hp = Math.max(1, game.player.hp - 20);
           game.damageTaken += 20;
-          const perk = PERKS[Math.floor(Math.random() * PERKS.length)]!;
-          perk.apply(game.player);
-          return `The shrine grants: ${perk.name}! (${perk.desc})`;
+          const pool = [...BOONS_BY_TIER[1], ...BOONS_BY_TIER[2]];
+          const boon = pool[Math.floor(Math.random() * pool.length)]!;
+          game.player.addBoon(boon);
+          return `The shrine grants: ${boon.char} ${boon.name}! (${boon.desc})`;
         },
       },
       {
@@ -562,16 +426,14 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     flavor: 'The corpse of a warrior lies here, still clutching their belongings.',
     options: [
       {
-        label: 'Take their gear',
-        desc: 'Equip a random piece of equipment.',
+        label: 'Take their boon',
+        desc: 'Absorb the power of a fallen hero.',
         apply: (game) => {
-          const tier = Math.min(3, 1 + Math.floor(game.dungeonLevel / 3));
-          const eligible = EQUIPMENT.filter(e => e.tier <= tier);
-          const def = eligible[Math.floor(Math.random() * eligible.length)]!;
-          const prev = game.player.equip(new Equipment(def));
-          return prev
-            ? `Equipped ${def.name}, replacing ${prev.name}.`
-            : `Equipped ${def.name}!`;
+          const tier = game.dungeonLevel >= 5 ? 2 : 1;
+          const pool = BOONS_BY_TIER[tier as 1 | 2];
+          const def = pool[Math.floor(Math.random() * pool.length)]!;
+          game.player.addBoon(def);
+          return `You absorb the champion's power: ${def.name}!`;
         },
       },
       {
@@ -620,8 +482,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
           const levelled = game.player.gainXP(150);
           if (levelled) {
             game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
-            game.paused = true;
-            game.cb.onLevelUp(game.player.playerLevel);
+            game.openLevelUpBoons();
           }
           return `You absorb the battle tactics. +150 XP`;
         },
@@ -644,19 +505,19 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     options: [
       {
         label: 'Search carefully',
-        desc: 'Gain 800 score.',
+        desc: 'Gain 800 gold.',
         apply: (game) => {
-          game.score += 800;
-          return 'You find 800 pts worth of loot!';
+          game.gold += 800;
+          return 'You find 800 gold worth of loot!';
         },
       },
       {
         label: 'Grab quickly',
-        desc: '50/50: gain 2000 score OR trigger a trap (−30 HP).',
+        desc: '50/50: gain 2000 gold OR trigger a trap (−30 HP).',
         apply: (game) => {
           if (Math.random() < 0.5) {
-            game.score += 2000;
-            return '🎉 Jackpot! +2000 score!';
+            game.gold += 2000;
+            return '🎉 Jackpot! +2000 gold!';
           }
           const dmg = game.player.takeDamage(30);
           game.damageTaken += dmg;
@@ -691,6 +552,62 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
     ],
   },
 ];
+
+// Additional floor events
+FLOOR_EVENTS.push(
+  {
+    id: 'cursed_armory',
+    emoji: '🗡️',
+    title: 'Cursed Armory',
+    flavor: 'Weapons of the fallen gleam with dark purpose.',
+    options: [
+      {
+        label: 'Take the cursed blade',
+        desc: '+8 ATK — but suffer 3 turns of poison.',
+        apply: (game) => {
+          game.player.atk += 8;
+          game.player.statuses.push({ type: 'poison', duration: 3, power: 4 });
+          return 'Dark power flows through you. +8 ATK, but the blade bites back.';
+        },
+      },
+      {
+        label: 'Walk away',
+        desc: 'Some power is not worth the price.',
+        apply: () => 'You leave the cursed weapons untouched.',
+      },
+    ],
+  },
+  {
+    id: 'rift_scholar',
+    emoji: '📜',
+    title: 'Rift Scholar',
+    flavor: 'A fractured echo of intelligence lingers here.',
+    options: [
+      {
+        label: 'Learn combat theory',
+        desc: '+50 XP and +1 combat level.',
+        apply: (game) => {
+          const levelled = game.player.gainXP(50);
+          game.player.baseCombatLevel += 1;
+          if (levelled) {
+            game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
+            game.openLevelUpBoons();
+          }
+          return 'Combat mastery expands. +50 XP, +1 combat level.';
+        },
+      },
+      {
+        label: 'Absorb passive wisdom',
+        desc: '+3 vision, +1 HP regen/tick permanently.',
+        apply: (game) => {
+          game.player.visionRadius += 3;
+          game.player.regenPerTick += 1;
+          return 'Ancient wisdom seeps in. +3 vision, +1 regen/tick.';
+        },
+      },
+    ],
+  },
+);
 
 export function getRandomFloorEvent(): FloorEventDef {
   return FLOOR_EVENTS[Math.floor(Math.random() * FLOOR_EVENTS.length)]!;

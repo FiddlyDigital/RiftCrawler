@@ -41,6 +41,11 @@ export function checkHazardTrigger(entity: { x: number; y: number }, game: Game,
   const h = game.hazards.find(hz => hz.x === entity.x && hz.y === entity.y);
   if (!h) return;
   if (h.type === 'teleport') {
+    if (isPlayer && game.player.teleportImmune) {
+      game.cb.log('🌀 Teleport rune — you resist! (Rift Weaver)', 'log-success');
+      game.cb.onParticle(entity.x, entity.y, '🛡️', '#7e57c2');
+      return;
+    }
     game.hazards = game.hazards.filter(hz => hz !== h);
     const oldX = entity.x, oldY = entity.y;
     teleportEntity(entity, game);
@@ -48,6 +53,7 @@ export function checkHazardTrigger(entity: { x: number; y: number }, game: Game,
     if (isPlayer) {
       game.cb.log('🌀 Teleport trap! You vanish in a swirl!', 'log-damage');
       game.cb.onParticle(entity.x, entity.y, '⚡', '#673ab7');
+      game.cb.onAudio?.('teleport');
     }
   }
 }

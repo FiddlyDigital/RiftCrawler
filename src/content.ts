@@ -1,4 +1,3 @@
 // Data-driven re-exports — all values come from JSON via dataLoader
-export type { MonsterDef, BossDef, ItemDef, EquipmentDef, ClassDef, BiomeDef, FloorEventDef } from './types';
-export type { PerkDef, MerchantItem }                       from './dataLoader';
-export { MONSTERS, BOSSES, ITEMS, EQUIPMENT, PERKS, MERCHANT_STOCK, MONSTER_DEFS, RELICS, MODIFIERS, CLASSES, BIOMES, FLOOR_EVENTS, getBiomeForFloor, getRandomFloorEvent } from './dataLoader';
+export type { MonsterDef, BossDef, BoonDef, BrandDef, ClassDef, BiomeDef, FloorEventDef } from './types';
+export { MONSTERS, BOSSES, BOONS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, BRANDS, getThreeRandomBrands, MONSTER_DEFS, MODIFIERS, CLASSES, BIOMES, FLOOR_EVENTS, getBiomeForFloor, getRandomFloorEvent } from './dataLoader';
