@@ -394,13 +394,15 @@ describe('Balance levers', () => {
     expect(game.gold).toBe(10);
   });
 
-  // Phase 3
-  it('a spawned block never contains more than one monster', () => {
+  // Phase 3 — the random spawn is capped at one monster; a cursed piece may add
+  // exactly one deliberate curse rider on top.
+  it('a spawned block never dumps more than one random monster (+ curse)', () => {
     const monsterCells = [Cell.MONSTER_RAT, Cell.MONSTER_SKEL, Cell.MONSTER_ARCHER, Cell.MONSTER_SLIME, Cell.MONSTER_ORC, Cell.MONSTER_BAT] as number[];
     for (let i = 0; i < 200; i++) {
       (game as unknown as { spawnBlock(): void }).spawnBlock();
+      const cursed = (game as unknown as { currentCursed: boolean }).currentCursed;
       const count = game.blockMatrix.flat().filter(c => monsterCells.includes(c)).length;
-      expect(count).toBeLessThanOrEqual(1);
+      expect(count).toBeLessThanOrEqual(cursed ? 2 : 1);
     }
   });
 
@@ -418,5 +420,55 @@ describe('Balance levers', () => {
     game.monsters.push(m);
     const info = game.getInspectInfo(4, 22);
     expect(info!.lines.some(l => l.toLowerCase().includes('hit chance'))).toBe(true);
+  });
+});
+
+// ── Descent visibility & interaction priority ─────────────────────────────────
+
+describe('Descent visibility & interaction priority', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+  const monsterCells = [Cell.MONSTER_RAT, Cell.MONSTER_SKEL, Cell.MONSTER_ARCHER, Cell.MONSTER_SLIME, Cell.MONSTER_ORC, Cell.MONSTER_BAT] as number[];
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('an enemy on an interactable tile blocks it — combat takes priority', () => {
+    let altarOpened = false;
+    cb.onOpenAltar = () => { altarOpened = true; };
+    const m = new Monster(4, 22, '👹', 'Guard', 500, 500, 3, 5);
+    game.monsters.push(m);
+    (game as unknown as { altarTiles: Array<{ x: number; y: number; tier: number }> }).altarTiles.push({ x: 4, y: 22, tier: 1 });
+    game.player.atk = 100;
+    game.handleHeroMove(0, -1);
+    expect(game.player.x).toBe(4);
+    expect(game.player.y).toBe(23);   // did not step onto the enemy's tile
+    expect(altarOpened).toBe(false);  // altar not triggered while guarded
+    expect(m.hp).toBeLessThan(500);   // attacked instead
+    expect((game as unknown as { altarTiles: unknown[] }).altarTiles).toHaveLength(1);
+  });
+
+  it('a cursed piece injects its monster as a visible rider cell', () => {
+    const g = game as unknown as { blockMatrix: number[][]; currentCursed: boolean; currentType: string; injectShapeBonusRiders(): void };
+    g.blockMatrix = [[Cell.FLOOR, Cell.FLOOR], [Cell.FLOOR, Cell.FLOOR]];
+    g.currentCursed = true;
+    g.currentType = 'O';
+    g.injectShapeBonusRiders();
+    expect(g.blockMatrix.flat().some(c => monsterCells.includes(c))).toBe(true);
+  });
+
+  it('an O-piece can carry its altar as a rider cell (visible during descent)', () => {
+    const g = game as unknown as { blockMatrix: number[][]; currentCursed: boolean; currentType: string; injectShapeBonusRiders(): void };
+    let found = false;
+    for (let i = 0; i < 80 && !found; i++) {
+      g.blockMatrix = [[Cell.FLOOR, Cell.FLOOR], [Cell.FLOOR, Cell.FLOOR]];
+      g.currentCursed = false;
+      g.currentType = 'O';
+      g.injectShapeBonusRiders();
+      if (g.blockMatrix.flat().includes(Cell.ALTAR)) found = true;
+    }
+    expect(found).toBe(true); // ~40% per try → essentially certain within 80
   });
 });

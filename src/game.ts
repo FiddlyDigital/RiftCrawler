@@ -294,11 +294,38 @@ export class Game {
       }),
     );
 
+    this.injectShapeBonusRiders();
+
     this.blockX = Math.floor((CONFIG.COLS - this.blockMatrix[0]!.length) / 2);
     this.blockY = 0;
 
     if (this.checkBlockCollision(this.blockX, this.blockY, this.blockMatrix)) {
       triggerDeath(this, 'DUNGEON OVERFLOW', 'Masonry blocks stacked to the ceiling!');
+    }
+  }
+
+  // Decide shape/curse bonus riders at spawn (not at lock) so an O-piece's altar
+  // or a cursed piece's monster rides the block as a visible cell during descent,
+  // instead of popping into existence when the piece locks.
+  private injectShapeBonusRiders(): void {
+    const plain: Array<{ r: number; c: number }> = [];
+    for (let r = 0; r < this.blockMatrix.length; r++) {
+      for (let c = 0; c < this.blockMatrix[r]!.length; c++) {
+        if (this.blockMatrix[r]![c] === Cell.FLOOR) plain.push({ r, c });
+      }
+    }
+    const take = (): { r: number; c: number } | null =>
+      plain.length ? plain.splice(Math.floor(Math.random() * plain.length), 1)[0]! : null;
+
+    // O-piece: a chance to carry an altar (Architect class rolls it more often).
+    if (this.currentType === 'O' && Math.random() < (this.activeClassId === 'architect' ? 0.80 : 0.40)) {
+      const p = take();
+      if (p) this.blockMatrix[p.r]![p.c] = Cell.ALTAR;
+    }
+    // Cursed piece: carries a monster that crawls out where it lands.
+    if (this.currentCursed) {
+      const p = take();
+      if (p) this.blockMatrix[p.r]![p.c] = MONSTERS[this.getRandomMonsterKey()]!.cellState;
     }
   }
 
@@ -423,20 +450,6 @@ export class Game {
           }
         }
         this.cb.log('⬆️ Spike Field — fires every 5 ticks!', 'log-tetris');
-      } else if (this.currentType === 'O' && Math.random() < (this.activeClassId === 'architect' ? 0.80 : 0.40)) {
-        const eligible = lockedFloorCells.filter(fc =>
-          !this.getItemAt(fc.x, fc.y) && !this.getMonsterAt(fc.x, fc.y) &&
-          !this.altarTiles.some(a => a.x === fc.x && a.y === fc.y)
-        );
-        if (eligible.length > 0) {
-          const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
-          const tier: 1 | 2 | 3 = 1;
-          const altarColor = '#1a0a2a';
-          this.colors[fc.x]![fc.y] = altarColor;
-          this.altarTiles.push({ x: fc.x, y: fc.y, tier });
-          this.cb.log('⛩️ Vault sealed — an Altar revealed!', 'log-perk');
-          this.cb.onParticle(fc.x, fc.y, '⛩️ ALTAR!', '#ce93d8');
-        }
       } else if (this.currentType === 'T' && this.player.rangedCooldown > 0) {
         const cdReduce = this.activeClassId === 'architect' ? 4 : 2;
         this.player.rangedCooldown = Math.max(0, this.player.rangedCooldown - cdReduce);
@@ -444,16 +457,7 @@ export class Game {
       }
     }
 
-    // Cursed piece: spawn an extra monster
-    if (this.currentCursed && lockedFloorCells.length > 0) {
-      const eligible = lockedFloorCells.filter(fc => !this.getMonsterAt(fc.x, fc.y));
-      if (eligible.length > 0) {
-        const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
-        this.spawnMonster(this.getRandomMonsterKey(), fc.x, fc.y);
-        this.cb.log('⛧ A cursed rift tears open — something crawls out!', 'log-damage');
-        this.cb.onParticle(fc.x, fc.y, '💀 CURSE!', '#ef5350');
-      }
-    }
+    // (Cursed pieces carry their monster as a visible rider — injected at spawn.)
 
     // Blessed piece: consecrate one cell as sacred ground
     if (this.currentBlessed && lockedFloorCells.length > 0) {
@@ -1175,24 +1179,10 @@ export class Game {
       return;
     }
 
-    // Tattoo Artist tile — consumed on use (like an altar)
-    if (this.isTattooTile(nx, ny)) {
-      this.player.x = nx; this.player.y = ny;
-      this.tattooTiles = this.tattooTiles.filter(t => !(t.x === nx && t.y === ny));
-      this.openTattooArtist();
-      return;
-    }
-
-    // Altar tile
-    const altar = this.altarTiles.find(a => a.x === nx && a.y === ny);
-    if (altar) {
-      this.player.x = nx; this.player.y = ny;
-      this.altarTiles = this.altarTiles.filter(a => a !== altar);
-      this.openAltar(altar.tier);
-      return;
-    }
-
-    // Attack monster — Mana Beads forces a critical every N attacks
+    // Combat has priority: an enemy is solid. If it stands on an interactable
+    // tile (altar / tattoo artist), attack it first instead of stepping onto
+    // its tile and triggering the interaction. The interaction stays available
+    // once the enemy is dead and you step on again.
     const monster = this.getMonsterAt(nx, ny);
     if (monster) {
       let forceCrit = false;
@@ -1220,6 +1210,23 @@ export class Game {
         }
       }
       this.advanceTurn(); return;
+    }
+
+    // Tattoo Artist tile — consumed on use (like an altar)
+    if (this.isTattooTile(nx, ny)) {
+      this.player.x = nx; this.player.y = ny;
+      this.tattooTiles = this.tattooTiles.filter(t => !(t.x === nx && t.y === ny));
+      this.openTattooArtist();
+      return;
+    }
+
+    // Altar tile
+    const altar = this.altarTiles.find(a => a.x === nx && a.y === ny);
+    if (altar) {
+      this.player.x = nx; this.player.y = ny;
+      this.altarTiles = this.altarTiles.filter(a => a !== altar);
+      this.openAltar(altar.tier);
+      return;
     }
 
     // Pick up item
