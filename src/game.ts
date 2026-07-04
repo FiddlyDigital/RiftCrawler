@@ -1279,6 +1279,14 @@ export class Game {
     }
 
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS) {
+      // Fleeing down a ladder escapes a summoned Gorgoth — the next floor plays
+      // as normal, as if he was never called. (resetDungeonState clears him and
+      // respawns the tetromino supply; we just lift the summoned flag first so
+      // gravity/fog resume.)
+      if (this.gorgothSummoned) {
+        this.gorgothSummoned = false;
+        this.cb.log('🪜 You slip down the ladder — Gorgoth\'s roar fades behind you...', 'log-perk');
+      }
       this.dungeonLevel++;
       this.floorsDescended++;
       if (this.dungeonLevel % 5 === 0) this.pendingBossFloor = true;

@@ -559,6 +559,20 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(cb.onVictory).toHaveBeenCalledTimes(1);
   });
 
+  it('descending a ladder while Gorgoth is up escapes the duel and resumes normal play', () => {
+    game.summonGorgoth();
+    const boss = game.monsters.find(m => m.isGorgoth)!;
+    boss.x = 0; boss.y = 0;                 // keep him away from the ladder
+    game.player.x = 4; game.player.y = 23;
+    game.map[4]![22] = Tile.STAIRS;         // ladder directly above the hero
+    const floor0 = game.dungeonLevel;
+    game.handleHeroMove(0, -1);             // step onto the ladder
+    expect(game.gorgothSummoned).toBe(false);
+    expect(game.dungeonLevel).toBe(floor0 + 1);
+    expect(game.monsters.find(m => m.isGorgoth)).toBeUndefined();  // left behind
+    expect(game.blockMatrix.flat().length).toBeGreaterThan(0);      // tetrominoes resume
+  });
+
   it('nudges the player toward the win condition once when the stack is high', () => {
     for (let y = 0; y < 25; y++) game.map[4]![y] = Tile.FLOOR;  // a column reaching the ceiling
     const hits = (): number => cb.logs.filter(l => l.includes('GORGOTH THE RETURNED and win')).length;
