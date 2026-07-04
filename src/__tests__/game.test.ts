@@ -64,6 +64,8 @@ function makeCallbacks(): GameCallbacks & { logs: string[] } {
     onLevelUp: vi.fn(),
     onOpenShop: vi.fn(),
     onOpenTattooArtist: vi.fn(),
+    onVictory: vi.fn(),
+    onBossWarning: (_boss, onDone) => onDone(),  // resolve the cinematic immediately in tests
     onAction: vi.fn(),
   };
 }
@@ -470,5 +472,68 @@ describe('Descent visibility & interaction priority', () => {
       if (g.blockMatrix.flat().includes(Cell.ALTAR)) found = true;
     }
     expect(found).toBe(true); // ~40% per try → essentially certain within 80
+  });
+});
+
+// ── Endgame: Gorgoth the Returned ─────────────────────────────────────────────
+
+describe('Gorgoth the Returned (endgame)', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('summonGorgoth clears the board into an arena and spawns the boss', () => {
+    game.summonGorgoth();
+    expect(game.gorgothSummoned).toBe(true);
+    expect(game.blockMatrix.flat()).toHaveLength(0);            // no falling piece
+    const boss = game.monsters.find(m => m.isGorgoth);
+    expect(boss).toBeDefined();
+    expect(boss!.isBoss).toBe(true);
+    expect(boss!.maxHp).toBeGreaterThanOrEqual(1000);           // huge
+    expect(boss!.combatLevel).toBe(6);                          // D20
+  });
+
+  it('overflow summons Gorgoth instead of killing the player', () => {
+    // Fill the spawn row so the next piece collides on spawn (a topped-out stack).
+    for (let x = 0; x < 10; x++) game.map[x]![0] = Tile.FLOOR;
+    (game as unknown as { spawnBlock(): void }).spawnBlock();
+    expect(game.gorgothSummoned).toBe(true);
+    expect(cb.onDeath).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent — a second summon does nothing', () => {
+    game.summonGorgoth();
+    const count = game.monsters.filter(m => m.isGorgoth).length;
+    game.summonGorgoth();
+    expect(game.monsters.filter(m => m.isGorgoth).length).toBe(count);
+  });
+
+  it('no tetrominoes are generated while Gorgoth is active', () => {
+    game.summonGorgoth();
+    game.autoTick();
+    game.autoTick();
+    expect(game.blockMatrix.flat()).toHaveLength(0);
+    (game as unknown as { handleBlockDrop(): void }).handleBlockDrop(); // no-op
+    expect(game.blockMatrix.flat()).toHaveLength(0);
+  });
+
+  it('defeating Gorgoth wins the run (via any kill path)', () => {
+    game.summonGorgoth();
+    const boss = game.monsters.find(m => m.isGorgoth)!;
+    killMonster(boss, game);
+    expect(game.won).toBe(true);
+    expect(cb.onVictory).toHaveBeenCalledTimes(1);
+    expect(game.monsters).not.toContain(boss);
+  });
+
+  it('triggerVictory is idempotent', () => {
+    game.summonGorgoth();
+    game.triggerVictory();
+    game.triggerVictory();
+    expect(cb.onVictory).toHaveBeenCalledTimes(1);
   });
 });

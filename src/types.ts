@@ -208,6 +208,7 @@ export interface GameCallbacks {
   log: (text: string, cls: LogClass) => void;
   updateUI: (state: UIState) => void;
   onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats) => void;
+  onVictory?: (floor: number, totalXpEarned: number, stats: RunStats) => void;
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (gold: number) => void;

@@ -156,6 +156,7 @@ export class Monster {
   statuses: StatusEffect[] = [];
   isBoss: boolean;
   isElite = false;
+  isGorgoth = false;  // the final boss — killing it wins the run
   combatLevel = 2;
 
   constructor(

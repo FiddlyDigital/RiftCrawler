@@ -4,7 +4,7 @@ import { Player, Monster, Item } from './entities';
 import { MONSTERS, BOSSES, ITEMS, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, RELICS, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
-import { killMonster, triggerDeath, playerAttackMonster, estimateHitChance } from './systems/combat';
+import { killMonster, playerAttackMonster, estimateHitChance } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
@@ -120,6 +120,11 @@ export class Game {
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
   private activeBossOnDeath:   ((game: Game, x: number, y: number) => void) | null = null;
   private bossHalfHpTriggered = false;
+
+  // Endgame: overflowing the stack summons Gorgoth the Returned. While summoned,
+  // no tetrominoes fall — the run becomes a boss duel. Killing him wins.
+  public gorgothSummoned = false;
+  public won = false;
 
   readonly cb: GameCallbacks;
 
@@ -299,8 +304,9 @@ export class Game {
     this.blockX = Math.floor((CONFIG.COLS - this.blockMatrix[0]!.length) / 2);
     this.blockY = 0;
 
+    // Stack topped out — the rift yields no more blocks and summons Gorgoth.
     if (this.checkBlockCollision(this.blockX, this.blockY, this.blockMatrix)) {
-      triggerDeath(this, 'DUNGEON OVERFLOW', 'Masonry blocks stacked to the ceiling!');
+      this.summonGorgoth();
     }
   }
 
@@ -1006,7 +1012,7 @@ export class Game {
     applyAuraStun(this);
     processHazards(this);
     this.processSpecialTiles();
-    this.moveGravity();
+    if (!this.gorgothSummoned) this.moveGravity();  // no falling blocks during the Gorgoth duel
     processMonsterTurns(this);
     this.tickRangedCooldown();
     this.updateVisibility();
@@ -1461,7 +1467,7 @@ export class Game {
   }
 
   handleBlockHold(): void {
-    if (this.player.hp <= 0 || this.paused) return;
+    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.canHold) {
       this.cb.log('Already held this piece — lock it first.', 'log-neutral');
       return;
@@ -1493,34 +1499,109 @@ export class Game {
     this.blockX = Math.floor((CONFIG.COLS - this.blockMatrix[0]!.length) / 2);
     this.blockY = 0;
     if (this.checkBlockCollision(this.blockX, this.blockY, this.blockMatrix)) {
-      triggerDeath(this, 'DUNGEON OVERFLOW', 'Masonry blocks stacked to the ceiling!');
+      this.summonGorgoth();
     }
   }
 
+  // ── Endgame: Gorgoth the Returned ─────────────────────────────────────────
+
+  /** Overflowing the stack summons the final boss into a cleared arena. */
+  summonGorgoth(): void {
+    if (this.gorgothSummoned) return;
+    this.gorgothSummoned = true;
+
+    // Wipe the tetromino stack and carve a clean fighting arena.
+    this.map = this.emptyMap();
+    this.colors = this.emptyColors();
+    this.monsters = [];
+    this.items = [];
+    this.hazards = [];
+    this.specialTiles = [];
+    this.altarTiles = [];
+    this.tattooTiles = [];
+    this.blockMatrix = [];
+    this.heldType = null;
+    for (let x = 1; x < CONFIG.COLS - 1; x++) {
+      for (let y = 18; y < CONFIG.ROWS; y++) {
+        this.map[x]![y] = Tile.FLOOR;
+        this.colors[x]![y] = '#2a0f14';
+      }
+    }
+    this.player.x = 4;
+    this.player.y = CONFIG.ROWS - 2;
+
+    // The Returned rises — fixed, brutal stats so descending only ever helps you.
+    const hp = 1400;
+    const boss = new Monster(4, 19, '🗿', 'Gorgoth the Returned', hp, hp, 48, 2000, true, 'berserker', 1, 1);
+    boss.combatLevel = 6;  // D20 — even a maxed hero misses ~half the time
+    boss.isGorgoth = true;
+    this.monsters.push(boss);
+
+    // Half-HP: roar and raise two of the Returned beside him.
+    this.activeBossOnHalfHp = (g) => {
+      g.cb.log('🗿 GORGOTH ROARS — the Returned claw their way up!', 'log-boss');
+      for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
+        const ax = boss.x + dx, ay = boss.y + dy;
+        if (ax >= 0 && ax < CONFIG.COLS && ay >= 0 && ay < CONFIG.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
+          g.spawnMonster(g.getRandomMonsterKey(), ax, ay);
+        }
+      }
+    };
+    this.activeBossOnDeath = null;  // victory is fired from killMonster (covers every death path)
+    this.bossHalfHpTriggered = false;
+
+    // Reveal the whole arena — no fog for the finale.
+    for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let y = 0; y < CONFIG.ROWS; y++) {
+        this.visibility[x]![y] = true;
+        this.explored[x]![y] = true;
+      }
+    }
+
+    this.cb.log('☠️ The stack tops out — GORGOTH THE RETURNED tears through the rift!', 'log-boss');
+    this.cb.onParticle(4, 19, '🗿 GORGOTH', '#ff1744', 18);
+
+    this.paused = true;
+    this.cb.onBossWarning?.(
+      { char: '🗿', name: 'Gorgoth the Returned', hpMult: 1, atkMult: 1, xpReward: 2000, flavorText: 'The rift disgorges what it swallowed.' },
+      () => { this.paused = false; },
+    );
+    this.pushUI();
+  }
+
+  /** Gorgoth defeated — the run is won. Idempotent. */
+  triggerVictory(): void {
+    if (this.won) return;
+    this.won = true;
+    this.cb.log('🏆 GORGOTH THE RETURNED FALLS — the rift is sealed. You win!', 'log-boss');
+    this.cb.onParticle(this.player.x, this.player.y, '🏆 VICTORY', '#ffd54f', 20);
+    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats());
+  }
+
   handleBlockLeft(): void {
-    if (this.player.hp <= 0 || this.paused) return;
+    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   handleBlockRight(): void {
-    if (this.player.hp <= 0 || this.paused) return;
+    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   handleBlockRotate(): void {
-    if (this.player.hp <= 0 || this.paused) return;
+    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     const rotated = rotateMatrix(this.blockMatrix);
     if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); this.advanceTurn(); }
   }
 
   handleBlockSoftDrop(): void {
-    if (this.player.hp <= 0 || this.paused) return;
+    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) { this.blockY++; this.advanceTurn(); }
     else { this.lockBlock(); this.advanceTurn(); }
   }
 
   handleBlockDrop(): void {
-    if (this.player.hp <= 0 || this.paused) return;
+    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
     this.lockBlock();
     this.advanceTurn();

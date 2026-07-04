@@ -214,6 +214,16 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
 
 export function killMonster(m: Monster, game: Game): void {
   game.cb.onAudio?.('kill');
+  // Gorgoth's fall wins the run — short-circuit before XP/level-up so the
+  // victory screen isn't stepped on by a level-up modal. Covers every death
+  // path (melee, ranged, poison, thorns) since they all route through here.
+  if (m.isGorgoth) {
+    game.monstersKilled++;
+    game.bossesKilled++;
+    game.monsters = game.monsters.filter(x => x !== m);
+    game.triggerVictory();
+    return;
+  }
   game.monstersKilled++;
   game.killsThisFloor++;
   if (m.isBoss) game.bossesKilled++;

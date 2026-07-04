@@ -273,6 +273,15 @@ canvas {
   max-height: 85vh; overflow-y: auto;
   animation: modalFadeIn 0.2s ease;
 }
+/* Victory (Gorgoth defeated) — gold treatment on the reused game-over modal */
+.modal-card.victory {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 40px rgba(255,213,79,.35), inset 0 0 22px rgba(255,213,79,.06);
+}
+.modal-card.victory #death-title {
+  color: var(--accent-color);
+  text-shadow: 0 0 12px rgba(255,213,79,.6);
+}
 .modal-title {
   color: var(--hp-color); font-size: 24px; font-weight: bold; margin-bottom: 12px;
   font-family: var(--font-pixel);

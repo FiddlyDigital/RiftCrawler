@@ -195,6 +195,18 @@ export class UIManager {
   showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
     this.els['deathTitle']!.textContent  = title;
     this.els['deathReason']!.textContent = reason;
+    this.modal.querySelector('.modal-card')?.classList.remove('victory');
+    this.populateEndModal(floor, totalXpEarned, highXp, history, stats);
+  }
+
+  showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
+    this.els['deathTitle']!.textContent  = '🏆 GORGOTH VANQUISHED';
+    this.els['deathReason']!.textContent = 'You felled Gorgoth the Returned and sealed the rift — the run is won.';
+    this.modal.querySelector('.modal-card')?.classList.add('victory');
+    this.populateEndModal(floor, totalXpEarned, highXp, history, stats);
+  }
+
+  private populateEndModal(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
     this.els['finalFloor']!.textContent  = String(floor);
     this.els['finalScore']!.textContent  = String(totalXpEarned);
     this.els['highScore']!.textContent   = String(highXp);

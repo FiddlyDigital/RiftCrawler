@@ -395,6 +395,7 @@ export class Renderer {
       if (!game.visibility[m.x]?.[m.y]) continue;
 
       if (m.isElite) this.drawPulseGlow(m.x, m.y, '255,215,0');
+      if (m.isGorgoth) this.drawPulseGlow(m.x, m.y, '183,28,28');  // ominous final-boss aura
 
       // Telegraph: a monster that can strike the player next turn pulses red and
       // shows a ‼ marker, so incoming damage is a read rather than a surprise.

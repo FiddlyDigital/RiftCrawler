@@ -93,6 +93,16 @@ function startGame(startPaused = false): void {
       ui.updateBestScore(highXp);
     },
 
+    onVictory: (floor, totalXpEarned, stats) => {
+      stopTick();
+      audio.stopAmbient();
+      audio.playLevelUp();
+      const { highXp, history } = recordRunEnd(game, 'Defeated Gorgoth the Returned', stats);
+      trackGameOver(totalXpEarned, floor);
+      ui.showVictory(floor, totalXpEarned, highXp, history, stats);
+      ui.updateBestScore(highXp);
+    },
+
     onLevelUp: (choices, onChoice) => {
       stopTick();
       audio.playLevelUp();
