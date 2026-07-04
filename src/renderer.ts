@@ -199,31 +199,8 @@ export class Renderer {
           this.drawSprite('FLOOR', x * TS, y * TS, TS, TS);
           ctx.globalAlpha = alpha;
 
-          if (type === Tile.STAIRS) {
-            if (visible) this.drawPulseGlow(x, y, '186,104,200');
-            if (!this.drawSprite('STAIRS', x * TS, y * TS, TS, TS)) {
-              ctx.font = `${TS * 0.7}px Arial`;
-              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-              ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
-            }
-          } else if (isMerchant) {
-            if (visible) this.drawPulseGlow(x, y, '148,0,211');
-            if (!this.drawSprite('🎭', x * TS, y * TS, TS, TS)) {
-              ctx.font = `${TS * 0.7}px Arial`;
-              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-              ctx.fillText('🎭', x * TS + TS / 2, y * TS + TS / 2);
-            }
-          } else {
-            const altar = this.getAltarAt(game, x, y);
-            if (altar && visible) {
-              const rgb = altar.tier === 3 ? '255,180,0' : altar.tier === 2 ? '41,182,246' : '156,39,176';
-              this.drawPulseGlow(x, y, rgb);
-              ctx.font = `${TS * 0.65}px Arial`;
-              ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
-              ctx.fillText('⛩️', x * TS + TS / 2, y * TS + TS / 2);
-              ctx.font = `${TS * 0.7}px Arial`;
-            }
-          }
+          // Tile-feature glyphs (stairs / tattoo artist / altar) are drawn in a
+          // later pass so a descending tetromino never hides what's on the tile.
         } else {
           ctx.fillStyle = '#06060a';
           ctx.fillRect(x * TS, y * TS, TS, TS);
@@ -244,6 +221,9 @@ export class Renderer {
 
     // ── Falling block (always visible) ────────────────────────────────────
     ctx.font = `${TS * 0.7}px Arial`;
+    // Preview the terrain an S/L/J/Z piece lays down on lock so it isn't a surprise.
+    const TERRAIN_HINT: Record<string, string> = { S: '🌿', L: '✨', J: '❄️', Z: '⬆️' };
+    const terrainHint = TERRAIN_HINT[game.currentType];
     for (let r = 0; r < game.blockMatrix.length; r++) {
       for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
         const cell = game.blockMatrix[r]![c]!;
@@ -271,6 +251,13 @@ export class Renderer {
           if (!this.drawSprite(emoji, tx * TS + inset, ty * TS + inset, TS - 2 * inset, TS - 2 * inset)) {
             ctx.fillText(emoji, tx * TS + TS / 2, ty * TS + TS / 2);
           }
+        } else if (terrainHint) {
+          // Plain cell of a terrain piece — show what it will become.
+          ctx.font = `${TS * 0.42}px Arial`;
+          ctx.globalAlpha = 0.85;
+          ctx.fillText(terrainHint, tx * TS + TS / 2, ty * TS + TS / 2);
+          ctx.globalAlpha = 1.0;
+          ctx.font = `${TS * 0.7}px Arial`;
         }
       }
     }
@@ -293,6 +280,42 @@ export class Renderer {
       }
       ctx.globalAlpha = 1.0;
     }
+
+    // ── Tile-feature glyphs (stairs / tattoo artist / altar) ───────────────
+    // Drawn AFTER the falling block + ghost so a descending piece can never
+    // hide the feature underneath it — the player always sees what's on a tile.
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let y = 0; y < CONFIG.ROWS; y++) {
+        const visible = game.visibility[x]![y]!;
+        if (!visible && !game.explored[x]![y]!) continue;
+        const type = game.map[x]![y]!;
+        const isMerchant = this.isMerchantTile(game, x, y);
+        const altar = this.getAltarAt(game, x, y);
+        if (type !== Tile.STAIRS && !isMerchant && !altar) continue;
+
+        ctx.globalAlpha = visible ? 1.0 : 0.5;
+        if (type === Tile.STAIRS) {
+          if (visible) this.drawPulseGlow(x, y, '186,104,200');
+          ctx.font = `${TS * 0.7}px Arial`;
+          if (!this.drawSprite('STAIRS', x * TS, y * TS, TS, TS)) ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
+        } else if (isMerchant) {
+          if (visible) this.drawPulseGlow(x, y, '148,0,211');
+          ctx.font = `${TS * 0.7}px Arial`;
+          if (!this.drawSprite('🎭', x * TS, y * TS, TS, TS)) ctx.fillText('🎭', x * TS + TS / 2, y * TS + TS / 2);
+        } else if (altar) {
+          if (visible) {
+            const rgb = altar.tier === 3 ? '255,180,0' : altar.tier === 2 ? '41,182,246' : '156,39,176';
+            this.drawPulseGlow(x, y, rgb);
+          }
+          ctx.font = `${TS * 0.65}px Arial`;
+          ctx.fillText('⛩️', x * TS + TS / 2, y * TS + TS / 2);
+        }
+        ctx.globalAlpha = 1.0;
+      }
+    }
+    ctx.font = `${TS * 0.7}px Arial`;
 
     // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
     ctx.font = `${TS * 0.55}px Arial`;
