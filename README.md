@@ -1,6 +1,6 @@
 # Rift Crawler
 
-A mobile-first **Tetris-meets-roguelike** hybrid. You play both halves of the board at once: steer falling tetrominoes to **build** the dungeon floor, then move a hero across the tiles you just laid down to **fight, loot, and descend**. Grow strong enough, then deliberately top out the stack to summon the final boss — **Gorgoth the Returned** — and escape the Rift.
+A mobile-first **Tetris-meets-roguelike** hybrid. You play both halves of the board at once: steer falling tetrominoes to **build** the dungeon floor, then move a hero across the tiles you just laid down to **fight, grow stronger, and descend**. Grow strong enough, then deliberately top out the stack to summon the final boss — **Gorgoth the Returned** — and escape the Rift.
 
 Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canvas>`; everything else is plain DOM.
 
@@ -91,7 +91,7 @@ src/
   config.ts        CONFIG (10×25 grid, 17px tiles) + shape re-exports
   types.ts         Shared types: Cell/Tile enums, EffectSpec, *Def interfaces,
                    GameCallbacks, UIState, …
-  dataLoader.ts    Loads /data JSON → runtime tables (MONSTERS, BOSSES, ITEMS,
+  dataLoader.ts    Loads /data JSON → runtime tables (MONSTERS, BOSSES,
                    BOONS, BRANDS, MODIFIERS, …) + the effect resolver
   content.ts       Re-export barrel for the data tables
   storage.ts       localStorage (high XP, run history, mute, reduced-motion)
