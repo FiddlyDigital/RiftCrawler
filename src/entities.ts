@@ -70,9 +70,12 @@ export class Player {
   boons: Array<{ id: string; stacks: number; def: BoonDef }> = [];
   thornDamage = 0;
 
-  // Brands (Sacred Tattoos)
+  // Brands (Ogham Marks)
   brands: Array<{ slot: BodyPart; brand: BrandDef }> = [];
+  brandsAcquiredTotal = 0;  // lifetime count — survives the Life Mark's brands-wipe, unlike brands.length
   poisonAttackChance = 0;
+  stunAttackChance = 0;
+  ghostDodgeCharges = 0;
   bonusHeroMoves = 0;
   lifeBrandRevive = false;
   killAtkBonus = 0;
@@ -95,6 +98,14 @@ export class Player {
 
   get totalDef(): number {
     return this.damageReduction;
+  }
+
+  get brandsCapped(): boolean {
+    return this.brandsAcquiredTotal >= BALANCE.brands.maxLifetime;
+  }
+
+  get brandsRemaining(): number {
+    return Math.max(0, BALANCE.brands.maxLifetime - this.brandsAcquiredTotal);
   }
 
   get isStunned(): boolean {
@@ -135,6 +146,7 @@ export class Player {
 
   addBrand(slot: BodyPart, def: BrandDef): void {
     this.brands.push({ slot, brand: def });
+    this.brandsAcquiredTotal++;
     def.onEquip(this);
     const count = this.brands.filter(b => b.brand.id === def.id).length;
     if (count % def.setSize === 0) def.onSetComplete(this);

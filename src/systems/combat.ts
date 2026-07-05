@@ -133,11 +133,19 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     }
   }
 
-  // Sick brand: chance to inflict poison on hit
+  // Sick Mark: chance to inflict poison on hit
   if (dmg > 0 && game.player.poisonAttackChance > 0 && Math.random() < game.player.poisonAttackChance) {
     if (!monster.statuses.some(s => s.type === 'poison')) {
       monster.statuses.push({ type: 'poison', duration: 3, power: 3 });
       game.cb.log(`Poisoned ${monster.name}!`, 'log-success', 'status_poison');
+    }
+  }
+
+  // Cryo Mark: chance to freeze the target on hit
+  if (dmg > 0 && game.player.stunAttackChance > 0 && Math.random() < game.player.stunAttackChance) {
+    if (!monster.isStunned) {
+      monster.statuses.push({ type: 'stun', duration: 1, power: 0 });
+      game.cb.log(`${monster.name} is frozen solid!`, 'log-success', 'special_ice');
     }
   }
 
@@ -148,6 +156,13 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
 // ── Monster attacks player ────────────────────────────────────────────────────
 
 export function monsterAttackPlayer(m: Monster, game: Game): void {
+  // Ghost Mark: guaranteed dodge once per floor, checked before the percentage roll
+  if (game.player.ghostDodgeCharges > 0) {
+    game.player.ghostDodgeCharges--;
+    game.cb.log(`${m.name} attacks — you phase through the strike!`, 'log-success');
+    game.cb.onParticle(game.player.x, game.player.y, 'PHASE!', '#b39ddb');
+    return;
+  }
   if (game.player.dodgeChance > 0 && Math.random() < game.player.dodgeChance) {
     game.cb.log(`${m.name} attacks — you dodge!`, 'log-success');
     game.cb.onParticle(game.player.x, game.player.y, 'DODGE!', '#29b6f6');

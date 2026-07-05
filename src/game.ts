@@ -1,5 +1,5 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile } from './types';
 import { Player, Monster } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
@@ -250,7 +250,7 @@ export class Game {
           bombInjected = true;
           return Cell.BOMB;
         }
-        if (!merchantInjected && Math.random() < BALANCE.spawnRates.merchantChance) {
+        if (!merchantInjected && !this.player.brandsCapped && Math.random() < BALANCE.spawnRates.merchantChance) {
           merchantInjected = true;
           return Cell.MERCHANT;
         }
@@ -860,10 +860,14 @@ export class Game {
     this.player.deathwardCharges = this.player.boons
       .filter(b => b.id === 'deathward')
       .reduce((sum, b) => sum + b.stacks, 0);
-    // Life Brand: replenish revive flag each floor if set was completed
+    // Life Mark: replenish revive flag each floor if set was completed
     if (this.player.brands.filter(b => b.brand.id === 'life').length >= 3) {
       this.player.lifeBrandRevive = true;
     }
+    // Ghost Mark: replenish guaranteed-dodge charges from completed sets
+    this.player.ghostDodgeCharges = Math.floor(
+      this.player.brands.filter(b => b.brand.id === 'ghost').length / 2
+    );
     this.generateStartPlatform();
     this.maybeSpawnDungeonRoom();
     this.spawnBlock();
@@ -993,12 +997,10 @@ export class Game {
   openTattooArtist(): void {
     this.paused = true;
     const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
-    let cost = BALANCE.economy.rerollBaseCost;
+    let cost = BALANCE.economy.ogmRerollBaseCost;
     let choices = getThreeRandomBrands(ownedIds());
     const commit = (index: number): void => {
-      const slot = this.player.brands.length < 5
-        ? (['body', 'left_arm', 'right_arm', 'legs', 'head'] as const)[this.player.brands.length]!
-        : 'body' as const;
+      const slot = BODY_PARTS[this.player.brands.length % BODY_PARTS.length]!;
       this.player.addBrand(slot, choices[index]!);
       this.cb.log(`${choices[index]!.name} Ogham mark tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
       this.paused = false;
@@ -1011,7 +1013,7 @@ export class Game {
       run: () => {
         if (this.gold < cost) return null;
         this.gold -= cost;
-        cost = Math.floor(cost * BALANCE.economy.rerollCostGrowth);
+        cost = Math.floor(cost * BALANCE.economy.ogmRerollCostGrowth);
         choices = getThreeRandomBrands(ownedIds());
         this.pushUI();
         return { choices, gold: this.gold, cost };
@@ -1023,7 +1025,7 @@ export class Game {
     this.paused = true;
     const pool = BOONS_BY_TIER[tier];
     const ownedIds = (): string[] => this.player.boons.map(b => b.id);
-    let cost = BALANCE.economy.rerollBaseCost;
+    let cost = BALANCE.economy.geasaRerollBaseCost;
     let choices = getThreeRandomBoons(pool, ownedIds());
     const commit = (index: number): void => {
       this.player.addBoon(choices[index]!);
@@ -1037,7 +1039,7 @@ export class Game {
       run: () => {
         if (this.gold < cost) return null;
         this.gold -= cost;
-        cost = Math.floor(cost * BALANCE.economy.rerollCostGrowth);
+        cost = Math.floor(cost * BALANCE.economy.geasaRerollCostGrowth);
         choices = getThreeRandomBoons(pool, ownedIds());
         this.pushUI();
         return { choices, gold: this.gold, cost };
@@ -1099,7 +1101,11 @@ export class Game {
     if (this.isTattooTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
       this.tattooTiles = this.tattooTiles.filter(t => !(t.x === nx && t.y === ny));
-      this.openTattooArtist();
+      if (this.player.brandsCapped) {
+        this.cb.log('Your body bears its fifth and final Ogham Mark — the Tattoo Artist has nothing left to offer.', 'log-neutral', 'tile_merchant');
+      } else {
+        this.openTattooArtist();
+      }
       return;
     }
 
@@ -1547,7 +1553,9 @@ export class Game {
     }
 
     if (this.isTattooTile(x, y)) {
-      return { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Ogham Mark'] };
+      return this.player.brandsCapped
+        ? { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['No room left — you already bear 5 Ogham Marks'] }
+        : { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Ogham Mark'] };
     }
 
     const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
@@ -1594,6 +1602,8 @@ export class Game {
           desc: b.brand.desc, setDesc: b.brand.setDesc, setSize: b.brand.setSize,
         };
       }),
+      brandsAcquiredTotal: this.player.brandsAcquiredTotal,
+      brandsMaxLifetime: BALANCE.brands.maxLifetime,
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
       activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,

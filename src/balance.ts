@@ -66,9 +66,14 @@ export interface BalanceConfig {
     tickBaseMs: number; tickMinMs: number; tickMsPerDungeonLevel: number;
     lineClearScoreBase: number[]; lineClearScoreOverflow: number;
   };
-  economy: { rerollBaseCost: number; rerollCostGrowth: number; bombGoldPerDungeonLevel: number };
+  economy: {
+    geasaRerollBaseCost: number; geasaRerollCostGrowth: number;
+    ogmRerollBaseCost: number; ogmRerollCostGrowth: number;
+    bombGoldPerDungeonLevel: number;
+  };
   ammo: { replenishOnDescend: number; maxAmmo: number };
   altars: { vaultTierMinFloorT3: number; vaultTierMinFloorT2: number };
+  brands: { maxLifetime: number };
   floors: { bossFloorInterval: number; floorEventInterval: number; dungeonRoomChance: number };
   boss: { baseHpFloor1: number; baseHpPerDungeonLevel: number; baseAtkFloor1: number; baseAtkPerDungeonLevel: number; combatLevel: number };
   gorgoth: { maxHp: number; atk: number; xpReward: number; combatLevel: number };

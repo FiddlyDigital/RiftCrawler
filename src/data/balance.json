@@ -37,9 +37,14 @@
     "lineClearScoreOverflow": 1200
   },
   "economy": {
-    "rerollBaseCost": 120,
-    "rerollCostGrowth": 1.6,
+    "geasaRerollBaseCost": 120,
+    "geasaRerollCostGrowth": 1.6,
+    "ogmRerollBaseCost": 350,
+    "ogmRerollCostGrowth": 2.2,
     "bombGoldPerDungeonLevel": 50
+  },
+  "brands": {
+    "maxLifetime": 5
   },
   "ammo": {
     "replenishOnDescend": 3,

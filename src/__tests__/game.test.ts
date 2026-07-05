@@ -3,7 +3,7 @@ import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
 import { Cell, Tile } from '../types';
 import type { GameCallbacks } from '../types';
 import { Monster } from '../entities';
-import { killMonster, playerAttackMonster, estimateHitChance } from '../systems/combat';
+import { killMonster, playerAttackMonster, monsterAttackPlayer, estimateHitChance, triggerDeath } from '../systems/combat';
 import { processMonsterTurns } from '../systems/monsterAI';
 import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, getThreeRandomBoons } from '../content';
 import { BALANCE, COMBAT_BALANCE, MONSTER_AI, weightedPick } from '../balance';
@@ -307,11 +307,37 @@ describe('Monster clearing & Sacred Brands', () => {
   it('addBrand applies per-brand bonus and fires the set bonus at setSize', () => {
     const war = BRANDS.find(b => b.id === 'war')!;
     const atk0 = game.player.atk;
-    game.player.addBrand('body', war);      // +2
-    game.player.addBrand('left_arm', war);  // +2
-    expect(game.player.atk).toBe(atk0 + 4);
-    game.player.addBrand('right_arm', war); // +2 plus +10 set bonus (setSize 3)
-    expect(game.player.atk).toBe(atk0 + 16);
+    game.player.addBrand('body', war);      // +1
+    game.player.addBrand('left_arm', war);  // +1
+    expect(game.player.atk).toBe(atk0 + 2);
+    game.player.addBrand('right_arm', war); // +1 plus +18 set bonus (setSize 3)
+    expect(game.player.atk).toBe(atk0 + 21);
+  });
+
+  it('Ogham Marks are capped at 5 lifetime acquisitions — a 6th tattoo tile offers nothing', () => {
+    const sight = BRANDS.find(b => b.id === 'sight')!;
+    for (let i = 0; i < 5; i++) game.player.addBrand('body', sight);
+    expect(game.player.brandsCapped).toBe(true);
+    let opened = false;
+    cb.onOpenTattooArtist = () => { opened = true; };
+    const gameTiles = game as unknown as { tattooTiles: Array<{ x: number; y: number }> };
+    gameTiles.tattooTiles.push({ x: 4, y: 22 });
+    game.handleHeroMove(0, -1);
+    expect(opened).toBe(false);
+    expect(game.player.brands).toHaveLength(5);
+  });
+
+  it('a Life Mark revive does not reset the lifetime brand-acquisition cap (no farming exploit)', () => {
+    const life = BRANDS.find(b => b.id === 'life')!;
+    game.player.addBrand('body', life);
+    game.player.addBrand('left_arm', life);
+    game.player.addBrand('right_arm', life); // completes the set → lifeBrandRevive = true
+    expect(game.player.brandsAcquiredTotal).toBe(3);
+    game.player.hp = 1;
+    triggerDeath(game, 'HERO DEFEATED', 'test');
+    expect(game.player.brands).toHaveLength(0);       // wiped, as before
+    expect(game.player.brandsAcquiredTotal).toBe(3);  // NOT reset — still counts toward the cap
+    expect(game.player.brandsRemaining).toBe(2);
   });
 });
 
@@ -361,6 +387,40 @@ describe('Balance levers', () => {
     expect(game.player.missStreak).toBe(0);
   });
 
+  it('Cryo Mark: stunAttackChance can freeze a target on a landed non-crit hit', () => {
+    const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 2);
+    game.monsters.push(m);
+    game.player.stunAttackChance = 1;
+    const spy = vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.5)  // aRoll = 4 (D6, not the natural-max crit roll)
+      .mockReturnValueOnce(0.2)  // dRoll = 2 → margin 2, a landed "weak" hit
+      .mockReturnValue(0);       // freeze-chance roll always succeeds
+    playerAttackMonster(m, game);
+    spy.mockRestore();
+    expect(m.statuses.some(s => s.type === 'stun')).toBe(true);
+  });
+
+  it('Ghost Mark: a guaranteed-dodge charge blocks damage entirely and is consumed', () => {
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5);
+    game.player.hp = 100; game.player.maxHp = 100;
+    game.player.ghostDodgeCharges = 1;
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99); // would otherwise land a hit
+    monsterAttackPlayer(m, game);
+    spy.mockRestore();
+    expect(game.player.hp).toBe(100);
+    expect(game.player.ghostDodgeCharges).toBe(0);
+  });
+
+  it('Ghost Mark: guaranteed-dodge charges renew on floor descent from completed sets', () => {
+    const ghost = BRANDS.find(b => b.id === 'ghost')!;
+    game.player.addBrand('body', ghost);
+    game.player.addBrand('left_arm', ghost); // completes one set (setSize 2)
+    expect(game.player.ghostDodgeCharges).toBe(1);
+    game.player.ghostDodgeCharges = 0; // simulate having spent it earlier this floor
+    game.resetDungeonState();
+    expect(game.player.ghostDodgeCharges).toBe(1); // renewed from the completed set
+  });
+
   // Phase 2
   it('every boon offer spans at least two distinct roles', () => {
     for (let i = 0; i < 40; i++) {
@@ -378,7 +438,7 @@ describe('Balance levers', () => {
     expect(reroll).toBeTypeOf('function');
     const res = reroll!();
     expect(res).not.toBeNull();
-    expect(game.gold).toBe(500 - BALANCE.economy.rerollBaseCost);
+    expect(game.gold).toBe(500 - BALANCE.economy.ogmRerollBaseCost);
     expect(res!.choices).toHaveLength(3);
   });
 
@@ -687,6 +747,18 @@ describe('JSON-configured effects', () => {
     expect(game.player.lifeBrandRevive).toBe(false);
     BRANDS.find(b => b.id === 'life')!.onSetComplete(game.player);
     expect(game.player.lifeBrandRevive).toBe(true);
+  });
+
+  it('brand onSet effect applies (Cryo set → freeze-on-hit chance)', () => {
+    expect(game.player.stunAttackChance).toBe(0);
+    BRANDS.find(b => b.id === 'cryo')!.onSetComplete(game.player);
+    expect(game.player.stunAttackChance).toBe(0.25);
+  });
+
+  it('brand onSet effect applies (Ghost set → guaranteed-dodge charge)', () => {
+    expect(game.player.ghostDodgeCharges).toBe(0);
+    BRANDS.find(b => b.id === 'ghost')!.onSetComplete(game.player);
+    expect(game.player.ghostDodgeCharges).toBe(1);
   });
 
   it('modifier applies to player with clamp + full-heal special (Glass Cannon)', () => {

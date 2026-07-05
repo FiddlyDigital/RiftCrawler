@@ -43,6 +43,7 @@ export class UIManager {
       playerLevel:      document.getElementById('player-level')!,
       boonPanel:        document.getElementById('boon-panel')!,
       brandPanel:       document.getElementById('brand-panel')!,
+      brandCount:       document.getElementById('brand-count')!,
       statusRow:        document.getElementById('status-row')!,
       runHistory:       document.getElementById('run-history')!,
       activeModifier:   document.getElementById('active-modifier-badge')!,
@@ -120,6 +121,7 @@ export class UIManager {
     this.els['xpLabel']!.textContent     = `${state.xp}/${state.xpToNext} XP`;
     this.updateBoons(state.boons);
     this.updateBrands(state.brands);
+    this.els['brandCount']!.textContent = `(${state.brandsAcquiredTotal}/${state.brandsMaxLifetime})`;
 
     // Status effect tags
     this.els['statusRow']!.innerHTML = state.statuses
@@ -427,7 +429,7 @@ export class UIManager {
     this.renderOfferModal({
       title: 'Occult Tattoo Artist — Choose an Ogham Mark',
       titleIcon: 'tile_altar',
-      subtitle: 'Ogham marks are permanent. Collect a set for a powerful bonus.',
+      subtitle: 'Ogham marks are permanent — you may only ever bear 5 in this life. Choose your identity.',
       choices, onChoice, reroll,
       buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
     });
@@ -438,7 +440,7 @@ export class UIManager {
     this.renderOfferModal({
       title: titleOverride ?? `${tierNames[tier]} — Choose a Geis`,
       titleIcon: 'tile_altar',
-      subtitle: 'Geasa stack — pick the same one again to amplify its effect.',
+      subtitle: 'Geasa are unlimited — stack freely, and pick the same one again to amplify its effect.',
       choices, onChoice, reroll,
       buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
     });
