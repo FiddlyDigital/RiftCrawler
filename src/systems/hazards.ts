@@ -2,6 +2,7 @@ import { CONFIG } from '../config';
 import { Tile } from '../types';
 import type { Game } from '../game';
 import { triggerDeath } from './combat';
+import { HAZARD_BALANCE } from '../balance';
 
 export function processHazards(game: Game): void {
   const spikeFirePositions: typeof game.hazards = [];
@@ -9,16 +10,16 @@ export function processHazards(game: Game): void {
   for (const h of game.hazards) {
     if (h.type !== 'spike') continue;
     h.timer--;
-    h.warning = h.timer <= 2;
+    h.warning = h.timer <= HAZARD_BALANCE.spike.warningThreshold;
     if (h.timer <= 0) {
-      h.timer = 5 + Math.floor(Math.random() * 4);
+      h.timer = HAZARD_BALANCE.spike.rearmMinTurns + Math.floor(Math.random() * HAZARD_BALANCE.spike.rearmRandomTurns);
       h.warning = false;
       spikeFirePositions.push(h);
     }
   }
 
   for (const h of spikeFirePositions) {
-    const damage = Math.max(1, game.dungeonLevel * 3);
+    const damage = Math.max(HAZARD_BALANCE.spike.minDamage, game.dungeonLevel * HAZARD_BALANCE.spike.damagePerDungeonLevel);
     if (game.player.x === h.x && game.player.y === h.y) {
       const actual = game.player.takeDamage(damage);
       game.damageTaken += actual;

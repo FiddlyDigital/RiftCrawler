@@ -1,5 +1,6 @@
 import { CONFIG } from './config';
 import { SPRITE_MAP, getSpriteImage } from './sprites';
+import { BALANCE } from './balance';
 import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
 export class Player {
@@ -14,7 +15,7 @@ export class Player {
   // Progression
   xp = 0;
   playerLevel = 1;
-  xpToNext = 50;
+  xpToNext = BALANCE.player.xpToNextStart;
 
   // Perk-granted bonuses
   visionRadius = 4;
@@ -32,15 +33,17 @@ export class Player {
 
   get combatLevel(): number {
     const lvl = this.playerLevel;
-    if (lvl >= 9) return 6;
-    if (lvl >= 7) return 5;
-    if (lvl >= 5) return 4;
-    if (lvl >= 3) return Math.max(this.baseCombatLevel, 3);
+    for (const band of BALANCE.player.combatLevelBands) {
+      if (lvl < band.minPlayerLevel) continue;
+      if (band.combatLevel !== undefined) return band.combatLevel;
+      if (band.combatLevelFloor !== undefined) return Math.max(this.baseCombatLevel, band.combatLevelFloor);
+    }
     return this.baseCombatLevel;
   }
 
   // Class-set multipliers
   lineClearXpMult = 1;  // Architect doubles line-clear XP
+  lineClearDmgMult = 0;  // Cascade: line clears deal lineClearDmgMult×rows×floor dmg
   teleportImmune  = false;  // Rift Weaver resists teleport traps
 
   // Perk-granted bonuses (boons & brands)
@@ -81,9 +84,9 @@ export class Player {
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
-    this.hp = 45;
-    this.maxHp = 45;
-    this.atk = 6;
+    this.hp = BALANCE.player.startingHp;
+    this.maxHp = BALANCE.player.startingHp;
+    this.atk = BALANCE.player.startingAtk;
   }
 
   get totalAtk(): number {
@@ -116,7 +119,7 @@ export class Player {
     if (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
       this.playerLevel++;
-      this.xpToNext = Math.floor(this.xpToNext * 1.5);
+      this.xpToNext = Math.floor(this.xpToNext * BALANCE.player.xpToNextGrowth);
       return true;
     }
     return false;

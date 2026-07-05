@@ -1,0 +1,9 @@
+{
+  "common":    { "contactDistance": 1 },
+  "melee":     { "chaseRange": 5 },
+  "berserker": { "chaseRange": 5, "enrageHpFraction": 0.5 },
+  "swift":     { "chaseRange": 7, "doubleMoveOnChase": true },
+  "ranged":    { "retreatDistance": 2, "advanceRangeBonus": 3 },
+  "healer":    { "healRadius": 1, "healFraction": 0.25 },
+  "gorgoth":   { "stepTurns": 2 }
+}

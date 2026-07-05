@@ -7,6 +7,7 @@ export interface ClassDef {
   name: string;
   tagline: string;
   statPreview: string;
+  tPieceCdReduction: number;
   apply: (player: Player) => void;
 }
 
@@ -168,6 +169,7 @@ export interface RangedAbility {
   cooldownMax: number;
   statusEffect?: 'stun';
   abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
+  params?: Record<string, number | string>;
 }
 
 export interface UIState {

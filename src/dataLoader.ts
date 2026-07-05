@@ -4,10 +4,14 @@ import shapesData         from './data/shapes.json';
 import boonsData          from './data/boons.json';
 import brandsData         from './data/brands.json';
 import modifiersData      from './data/modifiers.json';
+import classesData        from './data/classes.json';
+import biomesData         from './data/biomes.json';
+import floorEventsData    from './data/floor-events.json';
 import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
+import { numOr } from './balance';
 
 // ── Declarative effect resolver (JSON-configured boons / brands / modifiers) ───
 // Boons/brands/modifiers describe their effects as data; these apply them.
@@ -15,6 +19,25 @@ import type { MonsterDef, BossDef } from './types';
 interface RawBoon     { id: string; char: string; name: string; tier: number; role: string; desc: string; effects?: EffectSpec[]; special?: string }
 interface RawBrand    { id: string; char: string; name: string; setSize: number; role: string; desc: string; setDesc: string; onEquip?: EffectSpec[]; onSet?: EffectSpec[] }
 interface RawModifier { id: string; emoji: string; name: string; desc: string; effects?: EffectSpec[]; special?: string }
+interface RawClassAbility {
+  name: string; emoji: string;
+  abilityType: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
+  range: number; damageMult: number; cooldownMax: number;
+  statusEffect?: 'stun';
+  params?: Record<string, number | string>;
+}
+interface RawClass {
+  id: string; emoji: string; name: string; tagline: string; statPreview: string;
+  tPieceCdReduction?: number;
+  effects?: EffectSpec[];
+  ability?: RawClassAbility;
+}
+interface RawFloorEventOption {
+  label: string; desc: string; handler: string;
+  params?: Record<string, number>;
+  resultMsg?: string;
+}
+interface RawFloorEvent { id: string; emoji: string; title: string; flavor: string; options: RawFloorEventOption[] }
 
 function applyEffect(obj: Record<string, number | boolean>, e: EffectSpec): void {
   const op = e.op ?? 'add';
@@ -254,96 +277,26 @@ export const SHAPES = shapesData as Record<ShapeKey, ShapeDef>;
 
 // ── Starting classes ──────────────────────────────────────────────────────────
 
-export const CLASSES: ClassDef[] = [
-  {
-    id: 'chronomancer',
-    emoji: 'class_chronomancer',
-    name: 'Chronomancer',
-    tagline: 'Bend time to your will. Slow the rift, outlast everything.',
-    statPreview: '−5 HP  gravity 25% slower  D6 dice  Time Dilation (Q, +100 slow/15t, cd 14)',
-    apply: (p: Player) => {
-      p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
-      p.tickSlowPercent += 25;
-      p.baseCombatLevel = 2;
-      p.rangedAbility = { name: 'Time Dilation', emoji: 'class_chronomancer', range: 0, damageMult: 0, cooldownMax: 14, abilityType: 'time_dilation' } satisfies RangedAbility;
-    },
+export const CLASSES: ClassDef[] = (classesData as unknown as RawClass[]).map(raw => ({
+  id: raw.id,
+  emoji: raw.emoji,
+  name: raw.name,
+  tagline: raw.tagline,
+  statPreview: raw.statPreview,
+  tPieceCdReduction: raw.tPieceCdReduction ?? 2,
+  apply: (p: Player): void => {
+    applyToPlayer(p, raw.effects);
+    p.hp = Math.min(p.hp, p.maxHp);
+    if (raw.ability) {
+      p.rangedAbility = { ...raw.ability } satisfies RangedAbility;
+    }
   },
-  {
-    id: 'rift_weaver',
-    emoji: 'class_rift_weaver',
-    name: 'Rift Weaver',
-    tagline: 'Command spatial forces. Pull enemies to their doom.',
-    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  Gravity Well (Q, 4-tile pull×2+stun, cd 8)',
-    apply: (p: Player) => {
-      p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
-      p.atk += 2;
-      p.visionRadius += 2;
-      p.teleportImmune = true;
-      p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Gravity Well', emoji: 'trap_teleport', range: 4, damageMult: 0, cooldownMax: 8, abilityType: 'gravity_well' } satisfies RangedAbility;
-    },
-  },
-  {
-    id: 'architect',
-    emoji: 'class_architect',
-    name: 'The Architect',
-    tagline: 'Master the Tetris layer. Every clear is your weapon.',
-    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  Consecrate (Q, vision-wide, cd 10)',
-    apply: (p: Player) => {
-      p.maxHp += 15; p.hp += 15;
-      p.atk = Math.max(1, p.atk - 2);
-      p.lineClearXpMult = 2;
-      p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Consecrate', emoji: 'special_sacred', range: 0, damageMult: 0, cooldownMax: 10, abilityType: 'consecrate' } satisfies RangedAbility;
-    },
-  },
-  {
-    id: 'cascade',
-    emoji: 'class_cascade',
-    name: 'Cascade',
-    tagline: 'Stack kills, then unleash. Pure explosive potential.',
-    statPreview: '−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  Overload (Q, 8×kills min floor×5, cd 12)',
-    apply: (p: Player) => {
-      p.maxHp = Math.max(10, p.maxHp - 20); p.hp = Math.min(p.hp, p.maxHp);
-      p.atk += 10;
-      p.baseCombatLevel = 4;
-      p.rangedAbility = { name: 'Overload', emoji: 'fx_impact', range: 0, damageMult: 0, cooldownMax: 12, abilityType: 'overload' } satisfies RangedAbility;
-    },
-  },
-];
+}));
 
 // ── Biomes ────────────────────────────────────────────────────────────────────
 // Ordered highest minFloor first so getBiomeForFloor can use .find()
 
-export const BIOMES: BiomeDef[] = [
-  {
-    id: 'rift',
-    name: 'Corrupted Rift',
-    minFloor: 10,
-    tileRgb: '100,40,140',
-    monsterHpMult: 1.0,
-    gravityPctBonus: -25,
-    desc: 'Reality fractures. Blocks fall 25% faster.',
-  },
-  {
-    id: 'cavern',
-    name: 'Crystal Caverns',
-    minFloor: 5,
-    tileRgb: '30,90,160',
-    monsterHpMult: 1.25,
-    gravityPctBonus: 0,
-    desc: 'Ancient crystals harden foes. Monsters have +25% HP.',
-  },
-  {
-    id: 'stone',
-    name: 'Stone Halls',
-    minFloor: 1,
-    tileRgb: '',
-    monsterHpMult: 1.0,
-    gravityPctBonus: 0,
-    desc: 'Familiar ruins. Standard difficulty.',
-  },
-];
+export const BIOMES: BiomeDef[] = biomesData as BiomeDef[];
 
 export function getBiomeForFloor(floor: number): BiomeDef {
   return BIOMES.find(b => floor >= b.minFloor) ?? BIOMES[BIOMES.length - 1]!;
@@ -351,246 +304,146 @@ export function getBiomeForFloor(floor: number): BiomeDef {
 
 // ── Floor events ──────────────────────────────────────────────────────────────
 
-export const FLOOR_EVENTS: FloorEventDef[] = [
-  {
-    id: 'ancient_shrine',
-    emoji: 'tile_altar',
-    title: 'Ancient Shrine',
-    flavor: 'A worn altar pulses with faint magic. Power can be bought — for a price.',
-    options: [
-      {
-        label: 'Offer HP (20)',
-        desc: 'Sacrifice 20 HP for a random boon.',
-        apply: (game) => {
-          game.player.hp = Math.max(1, game.player.hp - 20);
-          game.damageTaken += 20;
-          const pool = [...BOONS_BY_TIER[1], ...BOONS_BY_TIER[2]];
-          const boon = pool[Math.floor(Math.random() * pool.length)]!;
-          game.player.addBoon(boon);
-          return `The shrine grants: ${boon.name}! (${boon.desc})`;
-        },
-      },
-      {
-        label: 'Leave undisturbed',
-        desc: 'Nothing happens.',
-        apply: () => 'You leave the shrine undisturbed.',
-      },
-    ],
-  },
-  {
-    id: 'healing_spring',
-    emoji: 'item_droplet',
-    title: 'Healing Spring',
-    flavor: 'A clear pool bubbles up from the stone floor. Its waters shimmer with life.',
-    options: [
-      {
-        label: 'Drink deeply',
-        desc: 'Restore to full HP.',
-        apply: (game) => {
-          const gained = game.player.heal(game.player.maxHp);
-          return `The spring restores you fully. +${gained} HP`;
-        },
-      },
-      {
-        label: 'Fill your flask',
-        desc: 'Heal 25 HP and gain +1 regen per tick.',
-        apply: (game) => {
-          const gained = game.player.heal(25);
-          game.player.regenPerTick += 1;
-          return `Healed ${gained} HP and gained passive regeneration.`;
-        },
-      },
-    ],
-  },
-  {
-    id: 'fallen_champion',
-    emoji: 'sprite_equip_iron_sword',
-    title: 'Fallen Champion',
-    flavor: 'The corpse of a warrior lies here, still clutching their belongings.',
-    options: [
-      {
-        label: 'Take their boon',
-        desc: 'Absorb the power of a fallen hero.',
-        apply: (game) => {
-          const tier = game.dungeonLevel >= 5 ? 2 : 1;
-          const pool = BOONS_BY_TIER[tier as 1 | 2];
-          const def = pool[Math.floor(Math.random() * pool.length)]!;
-          game.player.addBoon(def);
-          return `You absorb the champion's power: ${def.name}!`;
-        },
-      },
-      {
-        label: 'Take their rations',
-        desc: 'Heal 35 HP.',
-        apply: (game) => {
-          const gained = game.player.heal(35);
-          return `You eat the champion's rations. +${gained} HP`;
-        },
-      },
-    ],
-  },
-  {
-    id: 'dark_bargain',
-    emoji: 'fx_arcane',
-    title: 'Dark Bargain',
-    flavor: 'A disembodied voice whispers from the shadows, offering terrible power.',
-    options: [
-      {
-        label: 'Accept the deal',
-        desc: '+12 ATK, −25 Max HP.',
-        apply: (game) => {
-          game.player.atk += 12;
-          game.player.maxHp = Math.max(10, game.player.maxHp - 25);
-          game.player.hp = Math.min(game.player.hp, game.player.maxHp);
-          return 'Power surges through you — at terrible cost. +12 ATK, −25 Max HP.';
-        },
-      },
-      {
-        label: 'Refuse the voice',
-        desc: 'Nothing happens. Some deals aren\'t worth making.',
-        apply: () => 'You refuse the dark voice. It fades, frustrated.',
-      },
-    ],
-  },
-  {
-    id: 'tome_of_knowledge',
-    emoji: 'item_book',
-    title: 'Tome of Knowledge',
-    flavor: 'A dusty tome lies open to a marked page, its text glowing faintly.',
-    options: [
-      {
-        label: 'Study tactics',
-        desc: 'Gain 150 XP.',
-        apply: (game) => {
-          const levelled = game.player.gainXP(150);
-          if (levelled) {
-            game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
-            game.openLevelUpBoons();
-          }
-          return `You absorb the battle tactics. +150 XP`;
-        },
-      },
-      {
-        label: 'Learn from lore',
-        desc: '+2 vision radius permanently.',
-        apply: (game) => {
-          game.player.visionRadius += 2;
-          return 'Your perception expands. +2 vision radius.';
-        },
-      },
-    ],
-  },
-  {
-    id: 'abandoned_cache',
-    emoji: 'item_gold_pouch',
-    title: 'Abandoned Cache',
-    flavor: 'A hidden stash behind a loose stone. Someone left in a hurry.',
-    options: [
-      {
-        label: 'Search carefully',
-        desc: 'Gain 800 gold.',
-        apply: (game) => {
-          game.gold += 800;
-          return 'You find 800 gold worth of loot!';
-        },
-      },
-      {
-        label: 'Grab quickly',
-        desc: '50/50: gain 2000 gold OR trigger a trap (−30 HP).',
-        apply: (game) => {
-          if (Math.random() < 0.5) {
-            game.gold += 2000;
-            return 'Jackpot! +2000 gold!';
-          }
-          const dmg = game.player.takeDamage(30);
-          game.damageTaken += dmg;
-          return `It was booby-trapped! −${dmg} HP`;
-        },
-      },
-    ],
-  },
-  {
-    id: 'mystic_font',
-    emoji: 'special_sacred',
-    title: 'Mystic Font',
-    flavor: 'Runes carved into the floor glow with trapped rift energy.',
-    options: [
-      {
-        label: 'Purify',
-        desc: 'Cure all status effects and gain poison immunity.',
-        apply: (game) => {
-          game.player.statuses = [];
-          game.player.poisonImmune = true;
-          return 'All afflictions cleansed. Poison cannot touch you.';
-        },
-      },
-      {
-        label: 'Empower',
-        desc: '+2 ATK permanently.',
-        apply: (game) => {
-          game.player.atk += 2;
-          return 'Rift energy floods your muscles. +2 ATK.';
-        },
-      },
-    ],
-  },
-];
+type FloorEventHandler = (game: Game, opt: RawFloorEventOption) => string;
 
-// Additional floor events
-FLOOR_EVENTS.push(
-  {
-    id: 'cursed_armory',
-    emoji: 'sprite_equip_dagger',
-    title: 'Cursed Armory',
-    flavor: 'Weapons of the fallen gleam with dark purpose.',
-    options: [
-      {
-        label: 'Take the cursed blade',
-        desc: '+8 ATK — but suffer 3 turns of poison.',
-        apply: (game) => {
-          game.player.atk += 8;
-          game.player.statuses.push({ type: 'poison', duration: 3, power: 4 });
-          return 'Dark power flows through you. +8 ATK, but the blade bites back.';
-        },
-      },
-      {
-        label: 'Walk away',
-        desc: 'Some power is not worth the price.',
-        apply: () => 'You leave the cursed weapons untouched.',
-      },
-    ],
+const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
+  static_message: (_game, opt) => opt.resultMsg ?? 'Nothing happened.',
+
+  shrine_offer_hp: (game, opt) => {
+    const hpCost = numOr(opt.params?.hpCost, 20);
+    game.player.hp = Math.max(1, game.player.hp - hpCost);
+    game.damageTaken += hpCost;
+    const pool = [...BOONS_BY_TIER[1], ...BOONS_BY_TIER[2]];
+    const boon = pool[Math.floor(Math.random() * pool.length)]!;
+    game.player.addBoon(boon);
+    return `The shrine grants: ${boon.name}! (${boon.desc})`;
   },
-  {
-    id: 'rift_scholar',
-    emoji: 'item_scroll',
-    title: 'Rift Scholar',
-    flavor: 'A fractured echo of intelligence lingers here.',
-    options: [
-      {
-        label: 'Learn combat theory',
-        desc: '+50 XP and +1 combat level.',
-        apply: (game) => {
-          const levelled = game.player.gainXP(50);
-          game.player.baseCombatLevel += 1;
-          if (levelled) {
-            game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
-            game.openLevelUpBoons();
-          }
-          return 'Combat mastery expands. +50 XP, +1 combat level.';
-        },
-      },
-      {
-        label: 'Absorb passive wisdom',
-        desc: '+3 vision, +1 HP regen/tick permanently.',
-        apply: (game) => {
-          game.player.visionRadius += 3;
-          game.player.regenPerTick += 1;
-          return 'Ancient wisdom seeps in. +3 vision, +1 regen/tick.';
-        },
-      },
-    ],
+
+  spring_full_heal: (game, _opt) => {
+    const gained = game.player.heal(game.player.maxHp);
+    return `The spring restores you fully. +${gained} HP`;
   },
-);
+
+  spring_fill_flask: (game, opt) => {
+    const healAmount = numOr(opt.params?.healAmount, 25);
+    const regenBonus = numOr(opt.params?.regenBonus, 1);
+    const gained = game.player.heal(healAmount);
+    game.player.regenPerTick += regenBonus;
+    return `Healed ${gained} HP and gained passive regeneration.`;
+  },
+
+  champion_take_boon: (game, opt) => {
+    const tierBreakFloor = numOr(opt.params?.tierBreakFloor, 5);
+    const tier = game.dungeonLevel >= tierBreakFloor ? 2 : 1;
+    const pool = BOONS_BY_TIER[tier as 1 | 2];
+    const def = pool[Math.floor(Math.random() * pool.length)]!;
+    game.player.addBoon(def);
+    return `You absorb the champion's power: ${def.name}!`;
+  },
+
+  champion_rations: (game, opt) => {
+    const healAmount = numOr(opt.params?.healAmount, 35);
+    const gained = game.player.heal(healAmount);
+    return `You eat the champion's rations. +${gained} HP`;
+  },
+
+  bargain_accept: (game, opt) => {
+    const atkBonus = numOr(opt.params?.atkBonus, 12);
+    const hpCost = numOr(opt.params?.hpCost, 25);
+    game.player.atk += atkBonus;
+    game.player.maxHp = Math.max(10, game.player.maxHp - hpCost);
+    game.player.hp = Math.min(game.player.hp, game.player.maxHp);
+    return `Power surges through you — at terrible cost. +${atkBonus} ATK, −${hpCost} Max HP.`;
+  },
+
+  tome_tactics: (game, opt) => {
+    const xpGain = numOr(opt.params?.xpGain, 150);
+    const levelled = game.player.gainXP(xpGain);
+    if (levelled) {
+      game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
+      game.openLevelUpBoons();
+    }
+    return `You absorb the battle tactics. +${xpGain} XP`;
+  },
+
+  tome_lore: (game, opt) => {
+    const visionBonus = numOr(opt.params?.visionBonus, 2);
+    game.player.visionRadius += visionBonus;
+    return `Your perception expands. +${visionBonus} vision radius.`;
+  },
+
+  cache_search: (game, opt) => {
+    const gold = numOr(opt.params?.gold, 800);
+    game.gold += gold;
+    return `You find ${gold} gold worth of loot!`;
+  },
+
+  cache_gamble: (game, opt) => {
+    const successChance = numOr(opt.params?.successChance, 0.5);
+    const jackpotGold = numOr(opt.params?.jackpotGold, 2000);
+    const trapDamage = numOr(opt.params?.trapDamage, 30);
+    if (Math.random() < successChance) {
+      game.gold += jackpotGold;
+      return `Jackpot! +${jackpotGold} gold!`;
+    }
+    const dmg = game.player.takeDamage(trapDamage);
+    game.damageTaken += dmg;
+    return `It was booby-trapped! −${dmg} HP`;
+  },
+
+  font_purify: (game, _opt) => {
+    game.player.statuses = [];
+    game.player.poisonImmune = true;
+    return 'All afflictions cleansed. Poison cannot touch you.';
+  },
+
+  font_empower: (game, opt) => {
+    const atkBonus = numOr(opt.params?.atkBonus, 2);
+    game.player.atk += atkBonus;
+    return `Rift energy floods your muscles. +${atkBonus} ATK.`;
+  },
+
+  armory_cursed_blade: (game, opt) => {
+    const atkBonus = numOr(opt.params?.atkBonus, 8);
+    const poisonDuration = numOr(opt.params?.poisonDuration, 3);
+    const poisonPower = numOr(opt.params?.poisonPower, 4);
+    game.player.atk += atkBonus;
+    game.player.statuses.push({ type: 'poison', duration: poisonDuration, power: poisonPower });
+    return `Dark power flows through you. +${atkBonus} ATK, but the blade bites back.`;
+  },
+
+  scholar_combat_theory: (game, opt) => {
+    const xpGain = numOr(opt.params?.xpGain, 50);
+    const combatLevelBonus = numOr(opt.params?.combatLevelBonus, 1);
+    const levelled = game.player.gainXP(xpGain);
+    game.player.baseCombatLevel += combatLevelBonus;
+    if (levelled) {
+      game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
+      game.openLevelUpBoons();
+    }
+    return `Combat mastery expands. +${xpGain} XP, +${combatLevelBonus} combat level.`;
+  },
+
+  scholar_wisdom: (game, opt) => {
+    const visionBonus = numOr(opt.params?.visionBonus, 3);
+    const regenBonus = numOr(opt.params?.regenBonus, 1);
+    game.player.visionRadius += visionBonus;
+    game.player.regenPerTick += regenBonus;
+    return `Ancient wisdom seeps in. +${visionBonus} vision, +${regenBonus} regen/tick.`;
+  },
+};
+
+export const FLOOR_EVENTS: FloorEventDef[] = (floorEventsData as RawFloorEvent[]).map(raw => ({
+  id: raw.id,
+  emoji: raw.emoji,
+  title: raw.title,
+  flavor: raw.flavor,
+  options: raw.options.map(opt => ({
+    label: opt.label,
+    desc: opt.desc,
+    apply: (game: Game): string => (FLOOR_EVENT_HANDLERS[opt.handler] ?? (() => 'Nothing happened.'))(game, opt),
+  })),
+}));
 
 export function getRandomFloorEvent(): FloorEventDef {
   return FLOOR_EVENTS[Math.floor(Math.random() * FLOOR_EVENTS.length)]!;
