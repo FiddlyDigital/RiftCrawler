@@ -1,4 +1,5 @@
 import { CONFIG } from './config';
+import { TIER_COLORS } from './colors';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
 import { getBiomeForFloor } from './content';
@@ -24,18 +25,29 @@ export class Renderer {
   private floorTransitionFrames = 0;
   private floorTransitionColor = '10,10,20';
   private reducedMotion = false;
+  private impactGlow: { x: number; y: number; rgb: string; frames: number; maxFrames: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
     canvas.height = CONFIG.ROWS * CONFIG.TILE_SIZE;
     this.ctx = canvas.getContext('2d')!;
-    this.particles = new ParticlePool(60);
+    this.particles = new ParticlePool(90);
     this.motes = Array.from({ length: 14 }, () => this.spawnMote(true));
     this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
   }
 
   spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
     this.particles.spawn(gridX, gridY, text, color, fontSize, icon);
+  }
+
+  spawnBurst(gridX: number, gridY: number, count: number, color: string, icon = ''): void {
+    if (this.reducedMotion) return;
+    this.particles.spawnBurst(gridX, gridY, count, color, icon);
+  }
+
+  triggerImpactGlow(gx: number, gy: number, rgb: string, frames = 16): void {
+    if (this.reducedMotion) return;
+    this.impactGlow = { x: gx, y: gy, rgb, frames, maxFrames: frames };
   }
 
   spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
@@ -264,15 +276,14 @@ export class Renderer {
 
         ctx.globalAlpha = visible ? 1.0 : 0.5;
         if (type === Tile.STAIRS) {
-          if (visible) this.drawPulseGlow(x, y, '186,104,200');
+          if (visible) this.drawPulseGlow(x, y, '168,132,184');
           this.drawSprite('tile_stairs', x * TS, y * TS, TS, TS);
         } else if (isMerchant) {
-          if (visible) this.drawPulseGlow(x, y, '148,0,211');
+          if (visible) this.drawPulseGlow(x, y, '122,58,150');
           this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
         } else if (altar) {
           if (visible) {
-            const rgb = altar.tier === 3 ? '255,180,0' : altar.tier === 2 ? '41,182,246' : '156,39,176';
-            this.drawPulseGlow(x, y, rgb);
+            this.drawPulseGlow(x, y, TIER_COLORS[altar.tier].rgb);
           }
           const inset = TS * 0.1;
           this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
@@ -349,8 +360,8 @@ export class Renderer {
     for (const m of game.monsters) {
       if (!game.visibility[m.x]?.[m.y]) continue;
 
-      if (m.isElite) this.drawPulseGlow(m.x, m.y, '255,215,0');
-      if (m.isGorgoth) this.drawPulseGlow(m.x, m.y, '183,28,28');  // ominous final-boss aura
+      if (m.isElite) this.drawPulseGlow(m.x, m.y, '212,175,55');
+      if (m.isGorgoth) this.drawPulseGlow(m.x, m.y, '139,26,26');  // ominous final-boss aura
 
       // Telegraph: a monster that can strike the player next turn pulses red and
       // shows a ‼ marker, so incoming damage is a read rather than a surprise.
@@ -359,9 +370,9 @@ export class Renderer {
       const threatening = game.player.hp > 0 && !m.isStunned &&
         (Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y)) <= m.attackRange;
       if (threatening) {
-        this.drawPulseGlow(m.x, m.y, '244,67,54');
+        this.drawPulseGlow(m.x, m.y, '198,58,50');
         ctx.font = '9px Arial';
-        ctx.fillStyle = '#ff5252';
+        ctx.fillStyle = '#d9695c';
         ctx.fillText('‼', m.x * TS + 5, m.y * TS + 5);
         ctx.font = `${TS * 0.7}px Arial`;
       }
@@ -413,6 +424,21 @@ export class Renderer {
           this.drawSprite(key, game.player.x * TS + TS / 2 - iconSize - 1 + i * (iconSize + 1), game.player.y * TS - iconSize - 1, iconSize, iconSize);
         });
       }
+    }
+
+    // ── One-shot impact glow (crit/boss/phase moments) ──────────────────────
+    if (this.impactGlow) {
+      const { x, y, rgb, frames, maxFrames } = this.impactGlow;
+      const alpha = 0.5 * (frames / maxFrames);
+      const TSg = CONFIG.TILE_SIZE;
+      const px = x * TSg + TSg / 2, py = y * TSg + TSg / 2;
+      const glow = ctx.createRadialGradient(px, py, 0, px, py, TSg * 2.2);
+      glow.addColorStop(0, `rgba(${rgb},${alpha})`);
+      glow.addColorStop(1, `rgba(${rgb},0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(px - TSg * 2.2, py - TSg * 2.2, TSg * 4.4, TSg * 4.4);
+      this.impactGlow.frames--;
+      if (this.impactGlow.frames <= 0) this.impactGlow = null;
     }
 
     // ── Particles ─────────────────────────────────────────────────────────

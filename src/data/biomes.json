@@ -3,7 +3,7 @@
     "id": "rift",
     "name": "Bres's Causeway",
     "minFloor": 10,
-    "tileRgb": "100,40,140",
+    "tileRgb": "52,44,78",
     "monsterHpMult": 1.0,
     "gravityPctBonus": -25,
     "desc": "Bres's unfinished bridge to Ériu warps the world around it. Blocks fall 25% faster."
@@ -12,7 +12,7 @@
     "id": "cavern",
     "name": "Sídhe Caverns",
     "minFloor": 5,
-    "tileRgb": "30,90,160",
+    "tileRgb": "45,120,110",
     "monsterHpMult": 1.25,
     "gravityPctBonus": 0,
     "desc": "Otherworld light hardens all who dwell here. Monsters have +25% HP."
@@ -21,7 +21,7 @@
     "id": "stone",
     "name": "Cairn Halls",
     "minFloor": 1,
-    "tileRgb": "",
+    "tileRgb": "60,70,55",
     "monsterHpMult": 1.0,
     "gravityPctBonus": 0,
     "desc": "Old passage-tombs, half-swallowed by moss. Standard difficulty."

@@ -208,6 +208,8 @@ export interface GameCallbacks {
   onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats) => void;
   onVictory?: (floor: number, totalXpEarned: number, stats: RunStats) => void;
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number, icon?: string) => void;
+  onParticleBurst?: (gridX: number, gridY: number, count: number, color: string, icon?: string) => void;
+  onImpactGlow?: (gridX: number, gridY: number, rgb: string, frames?: number) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (gold: number) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;

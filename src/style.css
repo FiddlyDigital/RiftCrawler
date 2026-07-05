@@ -1,13 +1,13 @@
 :root {
-  --bg-color: #050508;
-  --panel-color: #0f0f16;
-  --border-color: #222233;
-  --accent-color: #ffd54f;
-  --text-color: #e2e2eb;
-  --hp-color: #ef5350;
-  --xp-color: #7c4dff;
-  --block-accent: #29b6f6;
-  --hero-accent: #66bb6a;
+  --bg-color: #08090a;
+  --panel-color: #151a15;
+  --border-color: #2b332a;
+  --accent-color: #d9a441;
+  --text-color: #e8e3d2;
+  --hp-color: #c1443c;
+  --xp-color: #8d6fd4;
+  --block-accent: #3f9e93;
+  --hero-accent: #4c8c53;
   --font-pixel: 'VT323', monospace;
 }
 
@@ -91,7 +91,7 @@ canvas {
   width: 100%; height: auto; max-height: 100%; display: block;
   border-radius: 6px; image-rendering: pixelated;
   box-shadow:
-    var(--canvas-glow, 0 0 28px rgba(41,182,246,.15), 0 0 6px rgba(41,182,246,.06)),
+    var(--canvas-glow, 0 0 28px rgba(63,158,147,.15), 0 0 6px rgba(63,158,147,.06)),
     inset 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
@@ -142,7 +142,7 @@ canvas {
   transition: width .15s ease, background-color .3s ease;
   background-color: var(--hp-color);
 }
-.hp-bar-fill.hp-full    { background-color: #4caf50; }
+.hp-bar-fill.hp-full    { background-color: #5a9c52; }
 .hp-bar-fill.hp-warning { background-color: var(--accent-color); }
 .hp-bar-fill.hp-critical {
   background-color: var(--hp-color);
@@ -288,7 +288,7 @@ canvas {
   background-color: var(--hero-accent);
   color: #000;
 }
-.hero-wait-btn { background-color: #1b5e20; }
+.hero-wait-btn { background-color: #1f3d1f; }
 
 /* H · Modal entrance animation */
 @keyframes modalFadeIn {
@@ -438,33 +438,33 @@ canvas {
   min-height: 16px;
 }
 .boon-chip {
-  background: #1a1230;
-  border: 1px solid #3d2b60;
+  background: #191622;
+  border: 1px solid #3a3450;
   border-radius: 4px;
   padding: 2px 5px;
   cursor: pointer;
   white-space: nowrap;
   font-size: 11px;
-  color: #ce93d8;
+  color: #b98fc4;
 }
 
 .brand-chip {
-  background: #1a0a20;
-  border: 1px solid #6a0dad;
+  background: #181420;
+  border: 1px solid #5a3f7a;
   border-radius: 4px;
   padding: 2px 5px;
   cursor: pointer;
   white-space: nowrap;
   font-size: 11px;
-  color: #c084fc;
+  color: #9d7bc7;
 }
 
 .brand-chip.brand-set-active {
-  border-color: #ffd54f;
-  color: #ffd54f;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 #altar-modal .modifier-btn:hover {
-  border-color: #ce93d8;
+  border-color: #b98fc4;
 }
 
 /* ── Active modifier badge ─────────────────────────────────────────────── */

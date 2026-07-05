@@ -80,10 +80,10 @@ export class UIManager {
     hpBar.parentElement?.classList.toggle('hp-critical-glow', hpPct < 0.3);
 
     const glowValue = hpPct > 0.6
-      ? '0 0 28px rgba(41,182,246,.15), 0 0 6px rgba(41,182,246,.06)'
+      ? '0 0 28px rgba(63,158,147,.15), 0 0 6px rgba(63,158,147,.06)'
       : hpPct >= 0.3
-        ? '0 0 28px rgba(255,152,0,.3), 0 0 6px rgba(255,152,0,.14)'
-        : '0 0 28px rgba(220,20,20,.5), 0 0 8px rgba(220,20,20,.22)';
+        ? '0 0 28px rgba(201,140,44,.3), 0 0 6px rgba(201,140,44,.14)'
+        : '0 0 28px rgba(178,58,58,.5), 0 0 8px rgba(178,58,58,.22)';
     document.documentElement.style.setProperty('--canvas-glow', glowValue);
 
     if (state.totalXpEarned !== this.lastXpEarned) {

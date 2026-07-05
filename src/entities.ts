@@ -205,8 +205,14 @@ export class Particle {
   color = '';
   life = 0;
   fontSize = 13;
+  vx = 0;
+  vy = -0.7;
+  drag = 1;  // 1 = no decay (today's constant-rise drift); <1 = outward-then-settle for bursts
 
-  reset(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
+  reset(
+    gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = '',
+    vx = 0, vy = -0.7, drag = 1,
+  ): void {
     this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2 + (Math.random() - 0.5) * CONFIG.TILE_SIZE * 0.4;
     this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4 + Math.random() * CONFIG.TILE_SIZE * 0.3;
     this.text = text;
@@ -214,10 +220,16 @@ export class Particle {
     this.color = color;
     this.life = 1.0;
     this.fontSize = fontSize;
+    this.vx = vx;
+    this.vy = vy;
+    this.drag = drag;
   }
 
   update(): void {
-    this.y -= 0.7;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vx *= this.drag;
+    this.vy *= this.drag;
     this.life -= 0.04;
   }
 
@@ -265,6 +277,18 @@ export class ParticlePool {
     const p = this.pool.pop() ?? new Particle();
     p.reset(gridX, gridY, text, color, fontSize, icon);
     this.active.push(p);
+  }
+
+  // Radial burst: `count` icon/dot particles fly outward from the tile then
+  // settle (drag < 1), for high-impact moments (crits, kills, level-ups, ...).
+  spawnBurst(gridX: number, gridY: number, count: number, color: string, icon = '', fontSize = 10): void {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+      const speed = 0.5 + Math.random() * 0.7;
+      const p = this.pool.pop() ?? new Particle();
+      p.reset(gridX, gridY, '', color, fontSize, icon, Math.cos(angle) * speed, Math.sin(angle) * speed, 0.90);
+      this.active.push(p);
+    }
   }
 
   tick(ctx: CanvasRenderingContext2D): void {

@@ -127,6 +127,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
   } else {
     game.cb.log(`CRITICAL on ${monster.name}! (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-combo');
     game.cb.onParticle(monster.x, monster.y, 'CRIT!', '#ffd54f', 18, 'fx_impact');
+    game.cb.onParticleBurst?.(monster.x, monster.y, 6, '#d9a441', 'fx_impact');
     if (!monster.isStunned) {
       monster.statuses.push({ type: 'stun', duration: COMBAT_BALANCE.critStun.duration, power: COMBAT_BALANCE.critStun.power });
       game.cb.log(`${monster.name} is stunned!`, 'log-success');
@@ -258,11 +259,14 @@ export function killMonster(m: Monster, game: Game): void {
   if (m.isBoss) {
     game.cb.log(`BOSS SLAIN: ${m.name}!`, 'log-boss', 'sprite_equip_iron_sword');
     game.cb.onParticle(m.x, m.y, 'BOSS!', '#ffd54f', undefined, 'item_trophy');
+    game.cb.onParticleBurst?.(m.x, m.y, 14, '#c1443c');
+    game.cb.onImpactGlow?.(m.x, m.y, '139,26,26', 20);
   } else {
     if (m.isElite) {
       const bonus = COMBAT_BALANCE.rewards.eliteGoldBonusPerFloor * game.dungeonLevel;
       game.gold += bonus;
       game.cb.onParticle(m.x, m.y, `+${bonus}`, '#ffd700', undefined, 'item_gold_pouch');
+      game.cb.onParticleBurst?.(m.x, m.y, 8, '#d4af37');
       game.cb.log(`Elite vanquished! +${bonus} gold.`, 'log-perk', 'special_sacred');
     }
     const healBonus = game.player.heal(COMBAT_BALANCE.rewards.healOnKill);

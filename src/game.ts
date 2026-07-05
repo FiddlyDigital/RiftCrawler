@@ -8,6 +8,7 @@ import { killMonster, playerAttackMonster, estimateHitChance } from './systems/c
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 import { spriteIconHTML } from './sprites';
 import { HAZARD_BALANCE, BALANCE, weightedPick } from './balance';
+import { TIER_COLORS } from './colors';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -382,7 +383,7 @@ export class Game {
 
         if (cell === Cell.STAIRS) {
           this.map[tx]![ty] = Tile.STAIRS;
-          this.colors[tx]![ty] = '#8e24aa';
+          this.colors[tx]![ty] = '#6d3f7a';
         } else if (cell === Cell.BOMB) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
@@ -390,12 +391,12 @@ export class Game {
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.MERCHANT) {
           this.map[tx]![ty] = Tile.FLOOR;
-          this.colors[tx]![ty] = '#2a0a3a';
+          this.colors[tx]![ty] = '#241830';
           this.tattooTiles.push({ x: tx, y: ty });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.ALTAR) {
           const tier = getBoonTierForFloor(this.dungeonLevel);
-          const altarColor = tier === 3 ? '#2a1a00' : tier === 2 ? '#001a2a' : '#1a0a2a';
+          const altarColor = TIER_COLORS[tier].bg;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = altarColor;
           this.altarTiles.push({ x: tx, y: ty, tier });
@@ -620,7 +621,7 @@ export class Game {
       // Place a bonus altar in the vault, guarded by a monster.
       const altarX = roomX + (side === 'left' ? 0 : 1);
       const altarTier: 1 | 2 | 3 = this.dungeonLevel >= BALANCE.altars.vaultTierMinFloorT3 ? 3 : this.dungeonLevel >= BALANCE.altars.vaultTierMinFloorT2 ? 2 : 1;
-      const altarColor = altarTier === 3 ? '#2a1a00' : altarTier === 2 ? '#001a2a' : '#1a0a2a';
+      const altarColor = TIER_COLORS[altarTier].bg;
       this.colors[altarX]![midY] = altarColor;
       this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
       this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
@@ -747,6 +748,7 @@ export class Game {
         if (this.comboCount >= 2) this.cb.onAudio?.('comboMilestone', this.comboCount + 1);
       }
       this.gold += goldAdded;
+      this.cb.onParticleBurst?.(this.player.x, this.player.y, Math.min(6 + rowsCleared * 2 + this.comboCount * 2, 20), '#d9a441');
 
       // XP for line clears — multi-row clears give a stacked bonus; Architect doubles it; Rift Tide stacks on top
       const LINE_CLEAR_XP = [0, 15, 40, 80, 150];
@@ -955,6 +957,7 @@ export class Game {
     const choices = getThreeRandomBoons(pool, this.player.boons.map(b => b.id));
     this.cb.onLevelUp?.(choices, (index) => {
       this.player.addBoon(choices[index]!);
+      this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4');
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
@@ -1001,7 +1004,10 @@ export class Game {
     let choices = getThreeRandomBrands(ownedIds());
     const commit = (index: number): void => {
       const slot = BODY_PARTS[this.player.brands.length % BODY_PARTS.length]!;
-      this.player.addBrand(slot, choices[index]!);
+      const chosen = choices[index]!;
+      this.player.addBrand(slot, chosen);
+      const setCompleted = this.player.brands.filter(b => b.brand.id === chosen.id).length % chosen.setSize === 0;
+      this.cb.onParticleBurst?.(this.player.x, this.player.y, setCompleted ? 14 : 6, setCompleted ? '#d9a441' : '#9d7bc7');
       this.cb.log(`${choices[index]!.name} Ogham mark tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
       this.paused = false;
       this.pushUI();
@@ -1029,6 +1035,7 @@ export class Game {
     let choices = getThreeRandomBoons(pool, ownedIds());
     const commit = (index: number): void => {
       this.player.addBoon(choices[index]!);
+      this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#b98fc4');
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
@@ -1078,6 +1085,8 @@ export class Game {
       // Biome boss half-HP mechanic
       if (monster.isBoss && !this.bossHalfHpTriggered && monster.hp <= monster.maxHp * 0.5 && this.activeBossOnHalfHp) {
         this.bossHalfHpTriggered = true;
+        this.cb.onParticleBurst?.(monster.x, monster.y, 12, '#c1443c');
+        this.cb.onImpactGlow?.(monster.x, monster.y, '139,26,26', 24);
         this.activeBossOnHalfHp(this);
       }
 
