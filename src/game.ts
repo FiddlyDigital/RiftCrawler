@@ -1000,7 +1000,7 @@ export class Game {
         ? (['body', 'left_arm', 'right_arm', 'legs', 'head'] as const)[this.player.brands.length]!
         : 'body' as const;
       this.player.addBrand(slot, choices[index]!);
-      this.cb.log(`${choices[index]!.name} Brand tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
+      this.cb.log(`${choices[index]!.name} Ogham mark tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
@@ -1511,7 +1511,7 @@ export class Game {
         `ATK ${this.player.totalAtk}  DEF ${this.player.totalDef}`,
         `Lv.${this.player.playerLevel}`,
       ];
-      if (this.player.boons.length > 0) lines.push(`Boons: ${this.player.boons.map(b => `${spriteIconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
+      if (this.player.boons.length > 0) lines.push(`Geasa: ${this.player.boons.map(b => `${spriteIconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
       return { icon: this.player.char, title: 'You', lines };
     }
 
@@ -1547,13 +1547,13 @@ export class Game {
     }
 
     if (this.isTattooTile(x, y)) {
-      return { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Sacred Brand'] };
+      return { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Ogham Mark'] };
     }
 
     const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
     if (altarInfo) {
       const tierName = altarInfo.tier === 3 ? 'Grand Altar (Tier III)' : altarInfo.tier === 2 ? 'Ruined Altar (Tier II)' : 'Minor Altar (Tier I)';
-      return { icon: 'tile_altar', title: tierName, lines: ['Step on to choose a stackable boon'] };
+      return { icon: 'tile_altar', title: tierName, lines: ['Step on to choose a stackable geis'] };
     }
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);

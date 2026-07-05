@@ -24,7 +24,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 
 **The loop.** Blocks fall on a gravity timer (and every hero/block action also advances a turn). When a block locks, its cells become dungeon floor — and some cells carry *riders*: monsters, altars, the tattoo artist, stairs, bombs, and traps. Your hero can only walk on floor you've built. So you're constantly deciding where to drop pieces to shape a path, reach altars, and corner enemies.
 
-**Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons**, **brands**, **curses**, and a starting **class**.
+**Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons** (Geasa), **brands** (Ogham Marks), **curses**, and a starting **class**.
 
 **Winning.** There is one win condition: let the tetromino stack reach the ceiling. Instead of dying, the Rift stops producing blocks and summons **Bres the Beautiful**, a colossal fixed-stat boss who descends slowly from the top of the board as he nears completing his bridge to Ériu. Defeat him and you win. This is a deliberate choice — you gather strength across floors, then commit when ready. (Flee down a ladder mid-fight and his remaining HP is banked, so you can chip him down over multiple attempts.)
 
@@ -38,8 +38,8 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 |---|---|---|
 | **Dice combat** | `src/systems/combat.ts` | Attacker & defender each roll a die sized by combat level (L1→D4 … L6→D20). Outcome by margin: miss / weak (0.5×) / normal (1×) / power (1.5×) / crit (2×, natural-max roll). **Miss-pity**: the 3rd consecutive whiff is upgraded to a hit. **Graze floor**: a miss still chips ~25% ATK, so no swing is wasted. |
 | **Turns & gravity** | `src/game.ts` | `tickMsForLevel = max(400, 3000 − (floor−1)·100) × (1 + slow%/100)`. Floor 1 ≈ 3s/tick; deepens toward the 400ms floor. Every hero move / block action also advances monster turns. |
-| **Boons** | altars & level-ups | Stackable passives (ATK, HP, dodge, regen, line-clear damage, …), grouped into tiers I–III. |
-| **Sacred Brands** | Occult Tattoo Artist tiles | Permanent, body-slotted marks; collecting a **set** of the same brand grants a powerful set bonus (e.g. War ×3 → +10 ATK, Life ×3 → free revive). |
+| **Boons** (*Geasa* in-game) | altars & level-ups | Stackable passives (ATK, HP, dodge, regen, line-clear damage, …), grouped into tiers I–III. |
+| **Brands** (*Ogham Marks* in-game) | Occult Tattoo Artist tiles | Permanent, body-slotted marks; collecting a **set** of the same mark grants a powerful set bonus (e.g. War ×3 → +10 ATK, Life ×3 → free revive). |
 | **Curses (modifiers)** | chosen at run start | Run-long trade-offs (Glass Cannon, Overclock, Cursed, Berserker, …). |
 | **Offers** | `src/dataLoader.ts` | Every 3-choice offer (boons/brands) guarantees ≥2 distinct roles and nudges toward what you already own; gold can reroll. |
 | **Biomes** | `src/dataLoader.ts` | Depth-scaled monster HP and gravity, plus biome-specific bosses. |

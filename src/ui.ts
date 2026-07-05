@@ -425,9 +425,9 @@ export class UIManager {
 
   showTattooModal(choices: BrandDef[], onChoice: (i: number) => void, reroll?: RerollCfg<BrandDef>): void {
     this.renderOfferModal({
-      title: 'Occult Tattoo Artist — Choose a Brand',
+      title: 'Occult Tattoo Artist — Choose an Ogham Mark',
       titleIcon: 'tile_altar',
-      subtitle: 'Brands are permanent. Collect a set for a powerful bonus.',
+      subtitle: 'Ogham marks are permanent. Collect a set for a powerful bonus.',
       choices, onChoice, reroll,
       buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
     });
@@ -436,9 +436,9 @@ export class UIManager {
   showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, titleOverride?: string, reroll?: RerollCfg<BoonDef>): void {
     const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
     this.renderOfferModal({
-      title: titleOverride ?? `${tierNames[tier]} — Choose a Boon`,
+      title: titleOverride ?? `${tierNames[tier]} — Choose a Geis`,
       titleIcon: 'tile_altar',
-      subtitle: 'Boons stack — pick the same one again to amplify its effect.',
+      subtitle: 'Geasa stack — pick the same one again to amplify its effect.',
       choices, onChoice, reroll,
       buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
     });
