@@ -516,7 +516,7 @@ export class UIManager {
   }
 
   showError(message: string): void {
-    console.error('[RiftCrawler]', message);
+    console.error('[CausewayToEriu]', message);
     this.log(message, 'log-damage', 'ui_warning');
   }
 

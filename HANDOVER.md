@@ -1,8 +1,8 @@
-HANDOVER.md: Tetris-Roguelike Hybrid Engine ("Rift Crawler")
+HANDOVER.md: Tetris-Roguelike Hybrid Engine ("Causeway to Ériu")
 
 1. Project Overview
 1.1 Genre & Core Concept
-"Rift Crawler" is a mobile-first, portrait-oriented, turn-based roguelike/Tetris hybrid. The gameplay space is a classic vertical Tetris grid, but empty space represents an impassable abyss rather than open floor.
+"Causeway to Ériu" is a mobile-first, portrait-oriented, turn-based roguelike/Tetris hybrid. The gameplay space is a classic vertical Tetris grid, but empty space represents an impassable abyss rather than open floor.
 Players construct the physical map in real-time by rotating, shifting, and dropping tetrominoes. These falling pieces act as landing platforms, carrying procedural terrain, hostile monsters, and helpful items that solidify into the permanent dungeon map upon locking.
 
 1.2 Key Mechanics
