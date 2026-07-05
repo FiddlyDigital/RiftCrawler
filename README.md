@@ -1,6 +1,6 @@
 # Rift Crawler
 
-A mobile-first **Tetris-meets-roguelike** hybrid. You play both halves of the board at once: steer falling tetrominoes to **build** the dungeon floor, then move a hero across the tiles you just laid down to **fight, grow stronger, and descend**. Grow strong enough, then deliberately top out the stack to summon the final boss — **Gorgoth the Returned** — and escape the Rift.
+A mobile-first **Tetris-meets-roguelike** hybrid. You play both halves of the board at once: steer falling tetrominoes to **build** the dungeon floor, then move a hero across the tiles you just laid down to **fight, grow stronger, and descend**. Bres the Beautiful has returned from the depths with his army of mutant Fomorians, weaving ancient magic to raise a bridge back to Ériu, the Emerald Isle. Grow strong enough, then deliberately top out the stack to summon him — **Bres the Beautiful** — and escape the Rift.
 
 Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canvas>`; everything else is plain DOM.
 
@@ -26,7 +26,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 
 **Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons**, **brands**, **curses**, and a starting **class**.
 
-**Winning.** There is one win condition: let the tetromino stack reach the ceiling. Instead of dying, the Rift stops producing blocks and summons **Gorgoth the Returned**, a colossal fixed-stat boss who descends slowly from the top of the board. Defeat him and you win. This is a deliberate choice — you gather strength across floors, then commit when ready. (Flee down a ladder mid-fight and his remaining HP is banked, so you can chip him down over multiple attempts.)
+**Winning.** There is one win condition: let the tetromino stack reach the ceiling. Instead of dying, the Rift stops producing blocks and summons **Bres the Beautiful**, a colossal fixed-stat boss who descends slowly from the top of the board as he nears completing his bridge to Ériu. Defeat him and you win. This is a deliberate choice — you gather strength across floors, then commit when ready. (Flee down a ladder mid-fight and his remaining HP is banked, so you can chip him down over multiple attempts.)
 
 **Losing.** Your HP hits zero.
 
@@ -131,7 +131,7 @@ Keyed by monster id. `dataLoader` scales HP/ATK by floor and biome at spawn.
 
 ### `bosses.json`
 The generic boss pool (one appears every 5th floor). Fields: `id`, `displayName`, `visualAsset`, `hpMult`, `atkMult`, `xpValue`, `flavorText`. Base HP/ATK are computed from floor and multiplied.
-*Note:* biome-specific bosses (Crystal Golem, Rift Tyrant) and **Gorgoth** are defined in code because they carry behaviour callbacks (`onHalfHp`, `onDeath`) that data can't express.
+*Note:* biome-specific bosses (Cailleach's Stoneward, Balor's Herald) and **Bres the Beautiful** are defined in code because they carry behaviour callbacks (`onHalfHp`, `onDeath`) that data can't express.
 
 ### `boons.json`, `brands.json`, `modifiers.json` — the effect system
 

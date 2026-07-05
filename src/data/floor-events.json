@@ -2,8 +2,8 @@
   {
     "id": "ancient_shrine",
     "emoji": "tile_altar",
-    "title": "Ancient Shrine",
-    "flavor": "A worn altar pulses with faint magic. Power can be bought — for a price.",
+    "title": "Standing Stone",
+    "flavor": "A lichen-crusted dolmen hums with old power. The Sídhe do not give freely.",
     "options": [
       {
         "label": "Offer HP (20)",
@@ -17,15 +17,15 @@
         "label": "Leave undisturbed",
         "desc": "Nothing happens.",
         "handler": "static_message",
-        "resultMsg": "You leave the shrine undisturbed."
+        "resultMsg": "You leave the stone undisturbed."
       }
     ]
   },
   {
     "id": "healing_spring",
     "emoji": "item_droplet",
-    "title": "Healing Spring",
-    "flavor": "A clear pool bubbles up from the stone floor. Its waters shimmer with life.",
+    "title": "Sacred Well",
+    "flavor": "A holy well bubbles up between the stones, its waters blessed by the old gods.",
     "options": [
       {
         "label": "Drink deeply",
@@ -46,8 +46,8 @@
   {
     "id": "fallen_champion",
     "emoji": "sprite_equip_iron_sword",
-    "title": "Fallen Champion",
-    "flavor": "The corpse of a warrior lies here, still clutching their belongings.",
+    "title": "The Fallen Fian",
+    "flavor": "A warrior of the Fianna lies here, spear still in hand, felled far from Tara.",
     "options": [
       {
         "label": "Take their boon",
@@ -70,8 +70,8 @@
   {
     "id": "dark_bargain",
     "emoji": "fx_arcane",
-    "title": "Dark Bargain",
-    "flavor": "A disembodied voice whispers from the shadows, offering terrible power.",
+    "title": "The Púca's Bargain",
+    "flavor": "A shape shifts in the shadows — the Púca offers a bargain, as it always does, at a price.",
     "options": [
       {
         "label": "Accept the deal",
@@ -86,15 +86,15 @@
         "label": "Refuse the voice",
         "desc": "Nothing happens. Some deals aren't worth making.",
         "handler": "static_message",
-        "resultMsg": "You refuse the dark voice. It fades, frustrated."
+        "resultMsg": "You refuse the Púca's offer. It shrieks and dissolves into mist."
       }
     ]
   },
   {
     "id": "tome_of_knowledge",
     "emoji": "item_book",
-    "title": "Tome of Knowledge",
-    "flavor": "A dusty tome lies open to a marked page, its text glowing faintly.",
+    "title": "The Ogham Stone",
+    "flavor": "Ancient ogham notches catch the light, whispering half-forgotten lore.",
     "options": [
       {
         "label": "Study tactics",
@@ -117,8 +117,8 @@
   {
     "id": "abandoned_cache",
     "emoji": "item_gold_pouch",
-    "title": "Abandoned Cache",
-    "flavor": "A hidden stash behind a loose stone. Someone left in a hurry.",
+    "title": "Fomorian Plunder",
+    "flavor": "A raiders' stash, abandoned in haste. The Fomorians left in a hurry.",
     "options": [
       {
         "label": "Search carefully",
@@ -143,8 +143,8 @@
   {
     "id": "mystic_font",
     "emoji": "special_sacred",
-    "title": "Mystic Font",
-    "flavor": "Runes carved into the floor glow with trapped rift energy.",
+    "title": "Font of Danu",
+    "flavor": "Runes of the Tuatha Dé Danann glow faintly, charged with Otherworld power.",
     "options": [
       {
         "label": "Purify",
@@ -164,8 +164,8 @@
   {
     "id": "cursed_armory",
     "emoji": "sprite_equip_dagger",
-    "title": "Cursed Armory",
-    "flavor": "Weapons of the fallen gleam with dark purpose.",
+    "title": "Fomorian Armory",
+    "flavor": "Barbed iron weapons of the sea-raiders, still stained dark.",
     "options": [
       {
         "label": "Take the cursed blade",
@@ -181,15 +181,15 @@
         "label": "Walk away",
         "desc": "Some power is not worth the price.",
         "handler": "static_message",
-        "resultMsg": "You leave the cursed weapons untouched."
+        "resultMsg": "You leave the Fomorian iron untouched."
       }
     ]
   },
   {
     "id": "rift_scholar",
     "emoji": "item_scroll",
-    "title": "Rift Scholar",
-    "flavor": "A fractured echo of intelligence lingers here.",
+    "title": "Echo of the Fili",
+    "flavor": "A fractured echo of a poet-seer lingers, reciting fragments of forgotten verse.",
     "options": [
       {
         "label": "Learn combat theory",

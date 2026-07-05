@@ -495,7 +495,7 @@ export class Game {
     }
     if (stackTop <= 5) {
       this.gorgothHintShown = true;
-      this.cb.log('The stack climbs high — let it top out to summon GORGOTH THE RETURNED and win the Rift!', 'log-boss', 'ui_warning');
+      this.cb.log('The stack climbs high — let it top out to summon BRES THE BEAUTIFUL and win the Rift!', 'log-boss', 'ui_warning');
     }
   }
 
@@ -554,7 +554,7 @@ export class Game {
     }
   }
 
-  // Called by Crystal Golem onDeath
+  // Called by Cailleach's Stoneward onDeath
   spawnCrystalShards(bx: number, by: number): void {
     const shardHp  = BALANCE.crystalShards.baseHp + this.dungeonLevel * BALANCE.crystalShards.hpPerDungeonLevel;
     const shardAtk = BALANCE.crystalShards.baseAtk + Math.floor(this.dungeonLevel * BALANCE.crystalShards.atkPerDungeonLevel);
@@ -571,13 +571,13 @@ export class Game {
         spawned++;
       }
     }
-    this.cb.log('The Crystal Golem shatters — shards emerge!', 'log-boss', 'sprite_boss_crystal_golem');
+    this.cb.log("Cailleach's Stoneward shatters — shards emerge!", 'log-boss', 'sprite_boss_crystal_golem');
   }
 
-  // Called by Rift Tyrant onHalfHp
+  // Called by Balor's Herald onHalfHp
   triggerGravityBurst(): void {
     this.blockY = Math.max(0, this.blockY - 5);
-    this.cb.log('Rift Tyrant tears the weave — gravity surges!', 'log-boss', 'fx_impact');
+    this.cb.log("Balor's Herald tears the weave — gravity surges!", 'log-boss', 'fx_impact');
     this.cb.onParticle(this.player.x, this.player.y, 'SURGE!', '#aa00ff', undefined, 'fx_impact');
     this.cb.onAudio?.('bossWarn');
   }
@@ -1134,7 +1134,7 @@ export class Game {
         const boss = this.monsters.find(m => m.isGorgoth);
         if (boss) this.gorgothHp = Math.max(1, boss.hp);
         this.gorgothSummoned = false;
-        this.cb.log('You slip down the ladder — Gorgoth\'s wounds will still be there when you face him again.', 'log-perk', 'tile_stairs');
+        this.cb.log('You slip down the ladder — Bres\'s wounds will still be there when you face him again.', 'log-perk', 'tile_stairs');
       }
       this.dungeonLevel++;
       this.floorsDescended++;
@@ -1417,7 +1417,7 @@ export class Game {
     // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
     // so descending floors only ever helps you.
     const gx = Math.floor(CONFIG.COLS / 2);
-    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Gorgoth the Returned', this.gorgothHp, BALANCE.gorgoth.maxHp, BALANCE.gorgoth.atk, BALANCE.gorgoth.xpReward, true, 'gorgoth', 1, 1);
+    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', this.gorgothHp, BALANCE.gorgoth.maxHp, BALANCE.gorgoth.atk, BALANCE.gorgoth.xpReward, true, 'gorgoth', 1, 1);
     boss.combatLevel = BALANCE.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
@@ -1426,7 +1426,7 @@ export class Game {
     // first time he crosses the threshold this run (persists across summons).
     this.activeBossOnHalfHp = (g) => {
       g.gorgothHalfTriggered = true;
-      g.cb.log('GORGOTH ROARS — the Returned claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
+      g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
       for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
         const ax = boss.x + dx, ay = boss.y + dy;
         if (ax >= 0 && ax < CONFIG.COLS && ay >= 0 && ay < CONFIG.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
@@ -1445,12 +1445,12 @@ export class Game {
       }
     }
 
-    this.cb.log('The stack tops out — GORGOTH THE RETURNED looms at the rift\'s edge...', 'log-boss', 'ui_warning');
-    this.cb.onParticle(gx, 0, 'GORGOTH', '#ff1744', 18, 'sprite_boss_gorgoth');
+    this.cb.log('The stack tops out — BRES THE BEAUTIFUL rises to finish his bridge...', 'log-boss', 'ui_warning');
+    this.cb.onParticle(gx, 0, 'BRES', '#ff1744', 18, 'sprite_boss_gorgoth');
 
     this.paused = true;
     this.cb.onBossWarning?.(
-      { char: 'sprite_boss_gorgoth', name: 'Gorgoth the Returned', hpMult: 1, atkMult: 1, xpReward: BALANCE.gorgoth.xpReward, flavorText: 'The rift disgorges what it swallowed.' },
+      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: BALANCE.gorgoth.xpReward, flavorText: 'Beautiful and merciless, returned from the depths to complete the causeway home.' },
       () => { this.paused = false; },
     );
     this.pushUI();
@@ -1460,7 +1460,7 @@ export class Game {
   triggerVictory(): void {
     if (this.won) return;
     this.won = true;
-    this.cb.log('GORGOTH THE RETURNED FALLS — the rift is sealed. You win!', 'log-boss', 'item_trophy');
+    this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
     this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
     this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats());
   }

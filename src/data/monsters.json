@@ -1,7 +1,7 @@
 {
   "rat": {
     "id": "rat",
-    "displayName": "Cave Rat",
+    "displayName": "Bog Rat",
     "visualAsset": "sprite_rat_01",
     "cellTypeId": "MONSTER_RAT",
     "combatLevel": 1,
@@ -14,7 +14,7 @@
   },
   "skeleton": {
     "id": "skeleton",
-    "displayName": "Skeleton Guard",
+    "displayName": "Cairn Wight",
     "visualAsset": "sprite_skel_01",
     "cellTypeId": "MONSTER_SKEL",
     "combatLevel": 2,
@@ -33,7 +33,7 @@
   },
   "goblin_archer": {
     "id": "goblin_archer",
-    "displayName": "Goblin Archer",
+    "displayName": "Fomorian Slinger",
     "visualAsset": "sprite_goblin_archer",
     "cellTypeId": "MONSTER_ARCHER",
     "combatLevel": 2,
@@ -48,7 +48,7 @@
   },
   "cave_slime": {
     "id": "cave_slime",
-    "displayName": "Cave Slime",
+    "displayName": "Peat Ooze",
     "visualAsset": "sprite_cave_slime",
     "cellTypeId": "MONSTER_SLIME",
     "combatLevel": 2,
@@ -62,7 +62,7 @@
   },
   "berserker_orc": {
     "id": "berserker_orc",
-    "displayName": "Berserker Orc",
+    "displayName": "Fomorian Brute",
     "visualAsset": "sprite_berserker_orc",
     "cellTypeId": "MONSTER_ORC",
     "combatLevel": 3,
@@ -76,7 +76,7 @@
   },
   "plague_bat": {
     "id": "plague_bat",
-    "displayName": "Plague Bat",
+    "displayName": "Sluagh Bat",
     "visualAsset": "sprite_plague_bat",
     "cellTypeId": "MONSTER_BAT",
     "combatLevel": 2,

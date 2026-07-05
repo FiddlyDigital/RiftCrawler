@@ -586,7 +586,7 @@ describe('Gorgoth the Returned (endgame)', () => {
 
   it('nudges the player toward the win condition once when the stack is high', () => {
     for (let y = 0; y < 25; y++) game.map[4]![y] = Tile.FLOOR;  // a column reaching the ceiling
-    const hits = (): number => cb.logs.filter(l => l.includes('GORGOTH THE RETURNED and win')).length;
+    const hits = (): number => cb.logs.filter(l => l.includes('BRES THE BEAUTIFUL and win')).length;
     (game as unknown as { maybeHintGorgoth(): void }).maybeHintGorgoth();
     expect(hits()).toBe(1);
     (game as unknown as { maybeHintGorgoth(): void }).maybeHintGorgoth();
@@ -983,6 +983,6 @@ describe('Floor events (JSON-configured)', () => {
     const game = new Game(cb);
     const event = FLOOR_EVENTS.find(e => e.id === 'dark_bargain')!;
     const refuse = event.options[1]!;
-    expect(refuse.apply(game)).toBe("You refuse the dark voice. It fades, frustrated.");
+    expect(refuse.apply(game)).toBe("You refuse the Púca's offer. It shrieks and dissolves into mist.");
   });
 });

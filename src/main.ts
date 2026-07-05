@@ -162,7 +162,7 @@ function startGame(startPaused = false): void {
       stopTick();
       audio.stopAmbient();
       audio.playLevelUp();
-      const { highXp, history } = recordRunEnd(game, 'Defeated Gorgoth the Returned', stats);
+      const { highXp, history } = recordRunEnd(game, 'Defeated Bres the Beautiful', stats);
       trackGameOver(totalXpEarned, floor);
       ui.showVictory(floor, totalXpEarned, highXp, history, stats);
       ui.updateBestScore(highXp);

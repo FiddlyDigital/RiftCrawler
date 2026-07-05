@@ -1,47 +1,47 @@
 [
   {
     "id": "stone_dragon",
-    "displayName": "Stone Dragon",
+    "displayName": "Oilliphéist",
     "visualAsset": "sprite_boss_dragon",
     "hpMult": 5,
     "atkMult": 2,
     "xpValue": 200,
-    "flavorText": "The earth trembles..."
+    "flavorText": "The earth trembles as the great worm surfaces..."
   },
   {
     "id": "bone_king",
-    "displayName": "Bone King",
+    "displayName": "Donn, Lord of the Dead",
     "visualAsset": "sprite_boss_boneking",
     "hpMult": 4,
     "atkMult": 2.5,
     "xpValue": 250,
-    "flavorText": "Death itself walks."
+    "flavorText": "All roads lead to his house in the end."
   },
   {
     "id": "shadow_wraith",
-    "displayName": "Shadow Wraith",
+    "displayName": "The Dullahan",
     "visualAsset": "sprite_boss_wraith",
     "hpMult": 4,
     "atkMult": 2,
     "xpValue": 220,
-    "flavorText": "Cold seeps in..."
+    "flavorText": "Hoofbeats with no rider to guide them. Cold seeps in."
   },
   {
     "id": "vampire_lord",
-    "displayName": "Vampire Lord",
+    "displayName": "Abhartach",
     "visualAsset": "sprite_boss_vampire",
     "hpMult": 5,
     "atkMult": 1.5,
     "xpValue": 230,
-    "flavorText": "Wings blot the light."
+    "flavorText": "No grave has ever managed to hold him."
   },
   {
     "id": "brood_mother",
-    "displayName": "Brood Mother",
+    "displayName": "Caoránach",
     "visualAsset": "sprite_boss_brood",
     "hpMult": 3,
     "atkMult": 3,
     "xpValue": 260,
-    "flavorText": "Thousands of eyes open."
+    "flavorText": "Mother of monsters — thousands of eyes open."
   }
 ]

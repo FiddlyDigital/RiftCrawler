@@ -181,8 +181,8 @@ export class UIManager {
   }
 
   showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
-    this.els['deathTitle']!.innerHTML   = `${spriteIconHTML('item_trophy', 16)}GORGOTH VANQUISHED`;
-    this.els['deathReason']!.textContent = 'You felled Gorgoth the Returned and sealed the rift — the run is won.';
+    this.els['deathTitle']!.innerHTML   = `${spriteIconHTML('item_trophy', 16)}BRES VANQUISHED`;
+    this.els['deathReason']!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
     this.modal.querySelector('.modal-card')?.classList.add('victory');
     this.populateEndModal(floor, totalXpEarned, highXp, history, stats);
   }
