@@ -1,0 +1,29 @@
+[
+  {
+    "id": "rift",
+    "name": "Corrupted Rift",
+    "minFloor": 10,
+    "tileRgb": "100,40,140",
+    "monsterHpMult": 1.0,
+    "gravityPctBonus": -25,
+    "desc": "Reality fractures. Blocks fall 25% faster."
+  },
+  {
+    "id": "cavern",
+    "name": "Crystal Caverns",
+    "minFloor": 5,
+    "tileRgb": "30,90,160",
+    "monsterHpMult": 1.25,
+    "gravityPctBonus": 0,
+    "desc": "Ancient crystals harden foes. Monsters have +25% HP."
+  },
+  {
+    "id": "stone",
+    "name": "Stone Halls",
+    "minFloor": 1,
+    "tileRgb": "",
+    "monsterHpMult": 1.0,
+    "gravityPctBonus": 0,
+    "desc": "Familiar ruins. Standard difficulty."
+  }
+]

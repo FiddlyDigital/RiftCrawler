@@ -2,6 +2,7 @@ import { CONFIG } from '../config';
 import { Tile } from '../types';
 import type { Game } from '../game';
 import { triggerDeath } from './combat';
+import { HAZARD_BALANCE } from '../balance';
 
 export function processHazards(game: Game): void {
   const spikeFirePositions: typeof game.hazards = [];
@@ -9,28 +10,28 @@ export function processHazards(game: Game): void {
   for (const h of game.hazards) {
     if (h.type !== 'spike') continue;
     h.timer--;
-    h.warning = h.timer <= 2;
+    h.warning = h.timer <= HAZARD_BALANCE.spike.warningThreshold;
     if (h.timer <= 0) {
-      h.timer = 5 + Math.floor(Math.random() * 4);
+      h.timer = HAZARD_BALANCE.spike.rearmMinTurns + Math.floor(Math.random() * HAZARD_BALANCE.spike.rearmRandomTurns);
       h.warning = false;
       spikeFirePositions.push(h);
     }
   }
 
   for (const h of spikeFirePositions) {
-    const damage = Math.max(1, game.dungeonLevel * 3);
+    const damage = Math.max(HAZARD_BALANCE.spike.minDamage, game.dungeonLevel * HAZARD_BALANCE.spike.damagePerDungeonLevel);
     if (game.player.x === h.x && game.player.y === h.y) {
       const actual = game.player.takeDamage(damage);
       game.damageTaken += actual;
-      game.cb.log(`⬆️ Spikes fire! -${actual} HP`, 'log-damage');
-      game.cb.onParticle(h.x, h.y, `⬆️ -${actual}`, '#ff5722');
+      game.cb.log(`Spikes fire! -${actual} HP`, 'log-damage', 'trap_spike');
+      game.cb.onParticle(h.x, h.y, `-${actual}`, '#ff5722', undefined, 'trap_spike');
       game.cb.onAudio?.('playerDamage');
       if (game.player.hp <= 0) { triggerDeath(game, 'SPIKED', 'Impaled by floor spikes.'); return; }
     }
     for (const m of game.monsters) {
       if (m.x === h.x && m.y === h.y) {
         m.hp -= damage;
-        game.cb.onParticle(m.x, m.y, `⬆️ -${damage}`, '#ff5722');
+        game.cb.onParticle(m.x, m.y, `-${damage}`, '#ff5722', undefined, 'trap_spike');
       }
     }
     game.monsters = game.monsters.filter(m => m.hp > 0);
@@ -42,17 +43,17 @@ export function checkHazardTrigger(entity: { x: number; y: number }, game: Game,
   if (!h) return;
   if (h.type === 'teleport') {
     if (isPlayer && game.player.teleportImmune) {
-      game.cb.log('🌀 Teleport rune — you resist! (Rift Weaver)', 'log-success');
-      game.cb.onParticle(entity.x, entity.y, '🛡️', '#7e57c2');
+      game.cb.log('Teleport rune — you resist! (Rift Weaver)', 'log-success', 'trap_teleport');
+      game.cb.onParticle(entity.x, entity.y, '', '#7e57c2', undefined, 'sprite_equip_buckler');
       return;
     }
     game.hazards = game.hazards.filter(hz => hz !== h);
     const oldX = entity.x, oldY = entity.y;
     teleportEntity(entity, game);
-    game.cb.onParticle(oldX, oldY, '🌀', '#673ab7');
+    game.cb.onParticle(oldX, oldY, '', '#673ab7', undefined, 'trap_teleport');
     if (isPlayer) {
-      game.cb.log('🌀 Teleport trap! You vanish in a swirl!', 'log-damage');
-      game.cb.onParticle(entity.x, entity.y, '⚡', '#673ab7');
+      game.cb.log('Teleport trap! You vanish in a swirl!', 'log-damage', 'trap_teleport');
+      game.cb.onParticle(entity.x, entity.y, '', '#673ab7', undefined, 'fx_impact');
       game.cb.onAudio?.('teleport');
     }
   }

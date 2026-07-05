@@ -2,42 +2,9 @@ import { CONFIG } from './config';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
 import { getBiomeForFloor } from './content';
+import { MONSTERS } from './dataLoader';
+import { SPRITE_MAP, getSpriteImage } from './sprites';
 import type { Game } from './game';
-import type { SpriteCoord } from './types';
-import spriteMapData from './data/sprite-map.json';
-
-const SPRITE_MAP = spriteMapData as Record<string, unknown>;
-
-const SPRITE_SHEETS: Record<string, string> = {
-  bat: '/sprites/bat.png',
-  brute: '/sprites/brute.png',
-  demon: '/sprites/demon.png',
-  gnoll: '/sprites/gnoll.png',
-  items: '/sprites/items.png',
-  king: '/sprites/king.png',
-  mage: '/sprites/mage.png',
-  rat: '/sprites/rat.png',
-  shopkeeper: '/sprites/shopkeeper.png',
-  skeleton: '/sprites/skeleton.png',
-  slime: '/sprites/slime.png',
-  spinner: '/sprites/spinner.png',
-  tiles: '/sprites/tiles_caves.png',
-  warlock: '/sprites/warlock.png',
-  wraith: '/sprites/wraith.png',
-};
-
-const spriteImages: Map<string, HTMLImageElement> = new Map();
-
-function loadAllSprites(): void {
-  for (const [name, url] of Object.entries(SPRITE_SHEETS)) {
-    const img = new Image();
-    img.onload = () => spriteImages.set(name, img);
-    img.onerror = () => console.warn(`[Sprites] Failed: ${url}`);
-    img.src = url;
-  }
-}
-
-loadAllSprites();
 
 const FADE_FRAMES = 10;
 
@@ -67,8 +34,8 @@ export class Renderer {
     this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
   }
 
-  spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
-    this.particles.spawn(gridX, gridY, text, color, fontSize);
+  spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
+    this.particles.spawn(gridX, gridY, text, color, fontSize, icon);
   }
 
   spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
@@ -93,13 +60,15 @@ export class Renderer {
   }
 
   private drawSprite(key: string, dx: number, dy: number, dw: number, dh: number): boolean {
-    const entry = SPRITE_MAP[key];
-    if (!entry || typeof entry !== 'object') return false;
-    const coord = entry as SpriteCoord;
-    if (!coord.sheet) return false;
-    const img = spriteImages.get(coord.sheet);
+    const coord = SPRITE_MAP[key];
+    if (!coord || !coord.sheet) return false;
+    const img = getSpriteImage(coord.sheet);
     if (!img) return false;
-    this.ctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, dx, dy, dw, dh);
+    // Contain-fit + center so non-square atlas crops don't get squashed.
+    const scale = Math.min(dw / coord.sw, dh / coord.sh);
+    const fw = coord.sw * scale, fh = coord.sh * scale;
+    const fx = dx + (dw - fw) / 2, fy = dy + (dh - fh) / 2;
+    this.ctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, fx, fy, fw, fh);
     return true;
   }
 
@@ -223,7 +192,7 @@ export class Renderer {
     // ── Falling block (always visible) ────────────────────────────────────
     ctx.font = `${TS * 0.7}px Arial`;
     // Preview the terrain an S/L/J/Z piece lays down on lock so it isn't a surprise.
-    const TERRAIN_HINT: Record<string, string> = { S: '🌿', L: '✨', J: '❄️', Z: '⬆️' };
+    const TERRAIN_HINT: Record<string, string> = { S: 'special_swamp', L: 'special_sacred', J: 'special_ice', Z: 'trap_spike' };
     const terrainHint = TERRAIN_HINT[game.currentType];
     for (let r = 0; r < game.blockMatrix.length; r++) {
       for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
@@ -246,19 +215,16 @@ export class Renderer {
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
         ctx.lineWidth = 1;
 
-        const emoji = CELL_EMOJI[cell];
-        if (emoji) {
+        const spriteKey = CELL_SPRITE[cell];
+        if (spriteKey) {
           const inset = 2;
-          if (!this.drawSprite(emoji, tx * TS + inset, ty * TS + inset, TS - 2 * inset, TS - 2 * inset)) {
-            ctx.fillText(emoji, tx * TS + TS / 2, ty * TS + TS / 2);
-          }
+          this.drawSprite(spriteKey, tx * TS + inset, ty * TS + inset, TS - 2 * inset, TS - 2 * inset);
         } else if (terrainHint) {
           // Plain cell of a terrain piece — show what it will become.
-          ctx.font = `${TS * 0.42}px Arial`;
           ctx.globalAlpha = 0.85;
-          ctx.fillText(terrainHint, tx * TS + TS / 2, ty * TS + TS / 2);
+          const hintInset = TS * 0.28;
+          this.drawSprite(terrainHint, tx * TS + hintInset, ty * TS + hintInset, TS - 2 * hintInset, TS - 2 * hintInset);
           ctx.globalAlpha = 1.0;
-          ctx.font = `${TS * 0.7}px Arial`;
         }
       }
     }
@@ -299,48 +265,45 @@ export class Renderer {
         ctx.globalAlpha = visible ? 1.0 : 0.5;
         if (type === Tile.STAIRS) {
           if (visible) this.drawPulseGlow(x, y, '186,104,200');
-          ctx.font = `${TS * 0.7}px Arial`;
-          if (!this.drawSprite('STAIRS', x * TS, y * TS, TS, TS)) ctx.fillText('🪜', x * TS + TS / 2, y * TS + TS / 2);
+          this.drawSprite('tile_stairs', x * TS, y * TS, TS, TS);
         } else if (isMerchant) {
           if (visible) this.drawPulseGlow(x, y, '148,0,211');
-          ctx.font = `${TS * 0.7}px Arial`;
-          if (!this.drawSprite('🎭', x * TS, y * TS, TS, TS)) ctx.fillText('🎭', x * TS + TS / 2, y * TS + TS / 2);
+          this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
         } else if (altar) {
           if (visible) {
             const rgb = altar.tier === 3 ? '255,180,0' : altar.tier === 2 ? '41,182,246' : '156,39,176';
             this.drawPulseGlow(x, y, rgb);
           }
-          ctx.font = `${TS * 0.65}px Arial`;
-          ctx.fillText('⛩️', x * TS + TS / 2, y * TS + TS / 2);
+          const inset = TS * 0.1;
+          this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         }
         ctx.globalAlpha = 1.0;
       }
     }
-    ctx.font = `${TS * 0.7}px Arial`;
 
     // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
-    ctx.font = `${TS * 0.55}px Arial`;
     for (const t of game.specialTiles) {
       if (!game.visibility[t.x]?.[t.y]) continue;
       const sx = t.x * TS, sy = t.y * TS;
+      const inset = TS * 0.22;
       if (t.type === 'swamp') {
         ctx.globalAlpha = 0.45;
         ctx.fillStyle = '#388e3c';
         ctx.fillRect(sx, sy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
-        ctx.fillText('🌿', sx + TS / 2, sy + TS / 2);
+        this.drawSprite('special_swamp', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
       } else if (t.type === 'sacred') {
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = '#ffb74d';
         ctx.fillRect(sx, sy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
-        ctx.fillText('✨', sx + TS / 2, sy + TS / 2);
+        this.drawSprite('special_sacred', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
       } else if (t.type === 'ice') {
         ctx.globalAlpha = 0.50;
         ctx.fillStyle = '#81d4fa';
         ctx.fillRect(sx, sy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
-        ctx.fillText('❄️', sx + TS / 2, sy + TS / 2);
+        this.drawSprite('special_ice', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
       }
       ctx.globalAlpha = 1.0;
     }
@@ -349,24 +312,25 @@ export class Renderer {
     for (const h of game.hazards) {
       if (!game.visibility[h.x]?.[h.y]) continue;
       const hx = h.x * TS, hy = h.y * TS;
+      const inset = TS * 0.22;
       if (h.type === 'spike') {
         ctx.globalAlpha = h.warning ? 0.6 : 0.25;
         ctx.fillStyle = h.warning ? '#ff1744' : '#ff9100';
         ctx.fillRect(hx, hy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.9;
-        ctx.fillText('⬆️', hx + TS / 2, hy + TS / 2);
+        this.drawSprite('trap_spike', hx + inset, hy + inset, TS - 2 * inset, TS - 2 * inset);
         if (h.warning) {
           ctx.font = '5px monospace';
           ctx.fillStyle = '#ff1744';
           ctx.fillText(String(h.timer), hx + TS - 5, hy + 7);
-          ctx.font = `${TS * 0.55}px Arial`;
+          ctx.font = `${TS * 0.7}px Arial`;
         }
       } else if (h.type === 'smoke') {
         ctx.globalAlpha = 0.45;
         ctx.fillStyle = '#546e7a';
         ctx.fillRect(hx, hy, TS - 1, TS - 1);
         ctx.globalAlpha = 0.8;
-        ctx.fillText('💨', hx + TS / 2, hy + TS / 2);
+        this.drawSprite('trap_smoke', hx + inset, hy + inset, TS - 2 * inset, TS - 2 * inset);
       } else if (h.type === 'teleport') {
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = '#7c4dff';
@@ -375,12 +339,11 @@ export class Renderer {
         ctx.save();
         ctx.translate(hx + TS / 2, hy + TS / 2);
         ctx.rotate(performance.now() / 600);
-        ctx.fillText('🌀', 0, 0);
+        this.drawSprite('trap_teleport', -(TS - 2 * inset) / 2, -(TS - 2 * inset) / 2, TS - 2 * inset, TS - 2 * inset);
         ctx.restore();
       }
       ctx.globalAlpha = 1.0;
     }
-    ctx.font = `${TS * 0.7}px Arial`;
 
     // ── Monsters (only if visible) ────────────────────────────────────────
     for (const m of game.monsters) {
@@ -403,9 +366,7 @@ export class Renderer {
         ctx.font = `${TS * 0.7}px Arial`;
       }
 
-      if (!this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS)) {
-        ctx.fillText(m.char, m.x * TS + TS / 2, m.y * TS + TS / 2);
-      }
+      this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS);
 
       if (m.isElite) {
         ctx.strokeStyle = '#ffd700';
@@ -415,9 +376,7 @@ export class Renderer {
       }
 
       if (m.statuses.length > 0) {
-        ctx.font = '7px Arial';
-        ctx.fillText('☠', m.x * TS + TS - 4, m.y * TS + 5);
-        ctx.font = `${TS * 0.7}px Arial`;
+        this.drawSprite('status_poison', m.x * TS + TS - 9, m.y * TS - 2, 9, 9);
       }
 
       if (m.isBoss || m.isElite) {
@@ -445,15 +404,14 @@ export class Renderer {
       ctx.fillStyle = glow;
       ctx.fillRect(game.player.x * TS - TS, game.player.y * TS - TS, TS * 3, TS * 3);
 
-      if (!this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS + idleBob, TS, TS)) {
-        ctx.fillText(game.player.char, px, py);
-      }
+      this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS + idleBob, TS, TS);
 
       if (game.player.statuses.length > 0) {
-        const icons = game.player.statuses.map(s => s.type === 'poison' ? '☠' : '💫').join('');
-        ctx.font = '7px Arial';
-        ctx.fillStyle = '#9c27b0';
-        ctx.fillText(icons, game.player.x * TS + TS / 2, game.player.y * TS - 3);
+        const iconSize = 8;
+        game.player.statuses.forEach((s, i) => {
+          const key = s.type === 'poison' ? 'status_poison' : 'status_stun';
+          this.drawSprite(key, game.player.x * TS + TS / 2 - iconSize - 1 + i * (iconSize + 1), game.player.y * TS - iconSize - 1, iconSize, iconSize);
+        });
       }
     }
 
@@ -568,19 +526,19 @@ export class Renderer {
   }
 }
 
-const CELL_EMOJI: Partial<Record<number, string>> = {
-  [Cell.MONSTER_RAT]:    '🐀',
-  [Cell.MONSTER_SKEL]:   '💀',
-  [Cell.MONSTER_ARCHER]: '👺',
-  [Cell.MONSTER_SLIME]:  '🫧',
-  [Cell.MONSTER_ORC]:    '👹',
-  [Cell.MONSTER_BAT]:    '🦠',
-  [Cell.STAIRS]:         '🪜',
-  [Cell.BOMB]:           '💣',
-  [Cell.MERCHANT]:       '🎭',
-  [Cell.BOSS]:           '⚠️',
-  [Cell.ALTAR]:          '⛩️',
-  [Cell.TRAP_SPIKE]:     '⬆️',
-  [Cell.TRAP_SMOKE]:     '💨',
-  [Cell.TRAP_TELEPORT]:  '🌀',
+const CELL_SPRITE: Partial<Record<number, string>> = {
+  [Cell.MONSTER_RAT]:    MONSTERS['rat']!.char,
+  [Cell.MONSTER_SKEL]:   MONSTERS['skeleton']!.char,
+  [Cell.MONSTER_ARCHER]: MONSTERS['goblin_archer']!.char,
+  [Cell.MONSTER_SLIME]:  MONSTERS['cave_slime']!.char,
+  [Cell.MONSTER_ORC]:    MONSTERS['berserker_orc']!.char,
+  [Cell.MONSTER_BAT]:    MONSTERS['plague_bat']!.char,
+  [Cell.STAIRS]:         'tile_stairs',
+  [Cell.BOMB]:           'fx_impact',
+  [Cell.MERCHANT]:       'tile_merchant',
+  [Cell.BOSS]:           'ui_warning',
+  [Cell.ALTAR]:          'tile_altar',
+  [Cell.TRAP_SPIKE]:     'trap_spike',
+  [Cell.TRAP_SMOKE]:     'trap_smoke',
+  [Cell.TRAP_TELEPORT]:  'trap_teleport',
 };

@@ -1,22 +1,216 @@
 [
-  { "id": "war",   "char": "⚔️", "name": "War",   "setSize": 3, "role": "offense", "desc": "+2 ATK per brand",             "setDesc": "Set: +10 ATK",
-    "onEquip": [{ "stat": "atk", "value": 2 }], "onSet": [{ "stat": "atk", "value": 10 }] },
-  { "id": "cryo",  "char": "❄️", "name": "Cryo",  "setSize": 3, "role": "utility", "desc": "+5% tick slow per brand",     "setDesc": "Set: +25% more tick slow",
-    "onEquip": [{ "stat": "tickSlowPercent", "value": 5 }], "onSet": [{ "stat": "tickSlowPercent", "value": 25 }] },
-  { "id": "sick",  "char": "☠️", "name": "Sick",  "setSize": 3, "role": "offense", "desc": "+8% chance to poison on hit", "setDesc": "Set: 100% poison on hit",
-    "onEquip": [{ "stat": "poisonAttackChance", "value": 0.08, "max": 1.0 }], "onSet": [{ "stat": "poisonAttackChance", "op": "set", "value": 1.0 }] },
-  { "id": "sight", "char": "👁️", "name": "Sight", "setSize": 2, "role": "utility", "desc": "+1 vision radius per brand",  "setDesc": "Set: +2 more vision radius",
-    "onEquip": [{ "stat": "visionRadius", "value": 1 }], "onSet": [{ "stat": "visionRadius", "value": 2 }] },
-  { "id": "speed", "char": "💨", "name": "Speed", "setSize": 2, "role": "utility", "desc": "Collecting the set grants extra move", "setDesc": "Set: move twice per turn",
-    "onEquip": [], "onSet": [{ "stat": "bonusHeroMoves", "value": 1 }] },
-  { "id": "life",  "char": "❤️", "name": "Life",  "setSize": 3, "role": "defense", "desc": "+5 max HP per brand",         "setDesc": "Set: free revive (erases all brands!)",
-    "onEquip": [{ "stat": "maxHp", "value": 5 }, { "stat": "hp", "value": 5 }], "onSet": [{ "stat": "lifeBrandRevive", "op": "set", "value": true }] },
-  { "id": "guard", "char": "🛡️", "name": "Guard", "setSize": 2, "role": "defense", "desc": "+1 damage reduction per brand", "setDesc": "Set: +3 more damage reduction",
-    "onEquip": [{ "stat": "damageReduction", "value": 1 }], "onSet": [{ "stat": "damageReduction", "value": 3 }] },
-  { "id": "leech", "char": "🩸", "name": "Leech", "setSize": 2, "role": "defense", "desc": "+2 HP on kill per brand",     "setDesc": "Set: +5 more HP on kill",
-    "onEquip": [{ "stat": "killHeal", "value": 2 }], "onSet": [{ "stat": "killHeal", "value": 5 }] },
-  { "id": "forge", "char": "🔥", "name": "Forge", "setSize": 3, "role": "offense", "desc": "+2 line-clear damage per brand", "setDesc": "Set: +8 more line-clear damage",
-    "onEquip": [{ "stat": "lineClearDamage", "value": 2 }], "onSet": [{ "stat": "lineClearDamage", "value": 8 }] },
-  { "id": "ghost", "char": "👻", "name": "Ghost", "setSize": 2, "role": "defense", "desc": "+5% dodge chance per brand",  "setDesc": "Set: +20% more dodge",
-    "onEquip": [{ "stat": "dodgeChance", "value": 0.05, "max": 0.75 }], "onSet": [{ "stat": "dodgeChance", "value": 0.2, "max": 0.75 }] }
+  {
+    "id": "war",
+    "char": "sprite_equip_iron_sword",
+    "name": "War",
+    "setSize": 3,
+    "role": "offense",
+    "desc": "+2 ATK per brand",
+    "setDesc": "Set: +10 ATK",
+    "onEquip": [
+      {
+        "stat": "atk",
+        "value": 2
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "atk",
+        "value": 10
+      }
+    ]
+  },
+  {
+    "id": "cryo",
+    "char": "special_ice",
+    "name": "Cryo",
+    "setSize": 3,
+    "role": "utility",
+    "desc": "+5% tick slow per brand",
+    "setDesc": "Set: +25% more tick slow",
+    "onEquip": [
+      {
+        "stat": "tickSlowPercent",
+        "value": 5
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "tickSlowPercent",
+        "value": 25
+      }
+    ]
+  },
+  {
+    "id": "sick",
+    "char": "status_poison",
+    "name": "Sick",
+    "setSize": 3,
+    "role": "offense",
+    "desc": "+8% chance to poison on hit",
+    "setDesc": "Set: 100% poison on hit",
+    "onEquip": [
+      {
+        "stat": "poisonAttackChance",
+        "value": 0.08,
+        "max": 1.0
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "poisonAttackChance",
+        "op": "set",
+        "value": 1.0
+      }
+    ]
+  },
+  {
+    "id": "sight",
+    "char": "fx_arcane",
+    "name": "Sight",
+    "setSize": 2,
+    "role": "utility",
+    "desc": "+1 vision radius per brand",
+    "setDesc": "Set: +2 more vision radius",
+    "onEquip": [
+      {
+        "stat": "visionRadius",
+        "value": 1
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "visionRadius",
+        "value": 2
+      }
+    ]
+  },
+  {
+    "id": "speed",
+    "char": "trap_smoke",
+    "name": "Speed",
+    "setSize": 2,
+    "role": "utility",
+    "desc": "Collecting the set grants extra move",
+    "setDesc": "Set: move twice per turn",
+    "onEquip": [],
+    "onSet": [
+      {
+        "stat": "bonusHeroMoves",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "id": "life",
+    "char": "item_heart",
+    "name": "Life",
+    "setSize": 3,
+    "role": "defense",
+    "desc": "+5 max HP per brand",
+    "setDesc": "Set: free revive (erases all brands!)",
+    "onEquip": [
+      {
+        "stat": "maxHp",
+        "value": 5
+      },
+      {
+        "stat": "hp",
+        "value": 5
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "lifeBrandRevive",
+        "op": "set",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "guard",
+    "char": "sprite_equip_buckler",
+    "name": "Guard",
+    "setSize": 2,
+    "role": "defense",
+    "desc": "+1 damage reduction per brand",
+    "setDesc": "Set: +3 more damage reduction",
+    "onEquip": [
+      {
+        "stat": "damageReduction",
+        "value": 1
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "damageReduction",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "id": "leech",
+    "char": "sprite_blood",
+    "name": "Leech",
+    "setSize": 2,
+    "role": "defense",
+    "desc": "+2 HP on kill per brand",
+    "setDesc": "Set: +5 more HP on kill",
+    "onEquip": [
+      {
+        "stat": "killHeal",
+        "value": 2
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "killHeal",
+        "value": 5
+      }
+    ]
+  },
+  {
+    "id": "forge",
+    "char": "fx_fire",
+    "name": "Forge",
+    "setSize": 3,
+    "role": "offense",
+    "desc": "+2 line-clear damage per brand",
+    "setDesc": "Set: +8 more line-clear damage",
+    "onEquip": [
+      {
+        "stat": "lineClearDamage",
+        "value": 2
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "lineClearDamage",
+        "value": 8
+      }
+    ]
+  },
+  {
+    "id": "ghost",
+    "char": "sprite_boss_wraith",
+    "name": "Ghost",
+    "setSize": 2,
+    "role": "defense",
+    "desc": "+5% dodge chance per brand",
+    "setDesc": "Set: +20% more dodge",
+    "onEquip": [
+      {
+        "stat": "dodgeChance",
+        "value": 0.05,
+        "max": 0.75
+      }
+    ],
+    "onSet": [
+      {
+        "stat": "dodgeChance",
+        "value": 0.2,
+        "max": 0.75
+      }
+    ]
+  }
 ]

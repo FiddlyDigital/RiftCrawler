@@ -10,7 +10,7 @@
     "hpScaleCoefficient": 2.0,
     "atkScaleCoefficient": 1.0,
     "xpValue": 20,
-    "spawnMsg": "👾 Spawn"
+    "spawnMsg": "Spawn"
   },
   "skeleton": {
     "id": "skeleton",
@@ -23,8 +23,13 @@
     "hpScaleCoefficient": 3.0,
     "atkScaleCoefficient": 1.0,
     "xpValue": 35,
-    "spawnMsg": "👾 Spawn",
-    "statusInflict": { "type": "poison", "chance": 0.25, "duration": 3, "power": 3 }
+    "spawnMsg": "Spawn",
+    "statusInflict": {
+      "type": "poison",
+      "chance": 0.25,
+      "duration": 3,
+      "power": 3
+    }
   },
   "goblin_archer": {
     "id": "goblin_archer",
@@ -37,7 +42,7 @@
     "hpScaleCoefficient": 2.5,
     "atkScaleCoefficient": 1.2,
     "xpValue": 30,
-    "spawnMsg": "🏹 Spawn",
+    "spawnMsg": "Spawn",
     "behaviorType": "ranged",
     "attackRange": 3
   },
@@ -52,7 +57,7 @@
     "hpScaleCoefficient": 3.5,
     "atkScaleCoefficient": 0.5,
     "xpValue": 25,
-    "spawnMsg": "🫧 Spawn",
+    "spawnMsg": "Spawn",
     "behaviorType": "healer"
   },
   "berserker_orc": {
@@ -66,7 +71,7 @@
     "hpScaleCoefficient": 4.0,
     "atkScaleCoefficient": 1.5,
     "xpValue": 50,
-    "spawnMsg": "👹 Spawn",
+    "spawnMsg": "Spawn",
     "behaviorType": "berserker"
   },
   "plague_bat": {
@@ -80,9 +85,14 @@
     "hpScaleCoefficient": 2.0,
     "atkScaleCoefficient": 1.0,
     "xpValue": 35,
-    "spawnMsg": "🦠 Spawn",
+    "spawnMsg": "Spawn",
     "behaviorType": "swift",
     "moveSpeed": 2,
-    "statusInflict": { "type": "poison", "chance": 0.5, "duration": 3, "power": 2 }
+    "statusInflict": {
+      "type": "poison",
+      "chance": 0.5,
+      "duration": 3,
+      "power": 2
+    }
   }
 }

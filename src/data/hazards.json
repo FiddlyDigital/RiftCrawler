@@ -1,0 +1,10 @@
+{
+  "spike": {
+    "rearmMinTurns": 5,
+    "rearmRandomTurns": 4,
+    "warningThreshold": 2,
+    "damagePerDungeonLevel": 3,
+    "minDamage": 1,
+    "fieldFixedTimer": 5
+  }
+}

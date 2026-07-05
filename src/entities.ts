@@ -1,10 +1,12 @@
 import { CONFIG } from './config';
+import { SPRITE_MAP, getSpriteImage } from './sprites';
+import { BALANCE } from './balance';
 import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
 export class Player {
   x: number;
   y: number;
-  readonly char = '🧙‍♂️';
+  readonly char = 'sprite_player';
 
   hp: number;
   maxHp: number;
@@ -13,7 +15,7 @@ export class Player {
   // Progression
   xp = 0;
   playerLevel = 1;
-  xpToNext = 50;
+  xpToNext = BALANCE.player.xpToNextStart;
 
   // Perk-granted bonuses
   visionRadius = 4;
@@ -31,15 +33,17 @@ export class Player {
 
   get combatLevel(): number {
     const lvl = this.playerLevel;
-    if (lvl >= 9) return 6;
-    if (lvl >= 7) return 5;
-    if (lvl >= 5) return 4;
-    if (lvl >= 3) return Math.max(this.baseCombatLevel, 3);
+    for (const band of BALANCE.player.combatLevelBands) {
+      if (lvl < band.minPlayerLevel) continue;
+      if (band.combatLevel !== undefined) return band.combatLevel;
+      if (band.combatLevelFloor !== undefined) return Math.max(this.baseCombatLevel, band.combatLevelFloor);
+    }
     return this.baseCombatLevel;
   }
 
   // Class-set multipliers
   lineClearXpMult = 1;  // Architect doubles line-clear XP
+  lineClearDmgMult = 0;  // Cascade: line clears deal lineClearDmgMult×rows×floor dmg
   teleportImmune  = false;  // Rift Weaver resists teleport traps
 
   // Perk-granted bonuses (boons & brands)
@@ -80,9 +84,9 @@ export class Player {
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
-    this.hp = 45;
-    this.maxHp = 45;
-    this.atk = 6;
+    this.hp = BALANCE.player.startingHp;
+    this.maxHp = BALANCE.player.startingHp;
+    this.atk = BALANCE.player.startingAtk;
   }
 
   get totalAtk(): number {
@@ -115,7 +119,7 @@ export class Player {
     if (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
       this.playerLevel++;
-      this.xpToNext = Math.floor(this.xpToNext * 1.5);
+      this.xpToNext = Math.floor(this.xpToNext * BALANCE.player.xpToNextGrowth);
       return true;
     }
     return false;
@@ -185,14 +189,16 @@ export class Particle {
   x = 0;
   y = 0;
   text = '';
+  icon = '';
   color = '';
   life = 0;
   fontSize = 13;
 
-  reset(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
+  reset(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
     this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2 + (Math.random() - 0.5) * CONFIG.TILE_SIZE * 0.4;
     this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4 + Math.random() * CONFIG.TILE_SIZE * 0.3;
     this.text = text;
+    this.icon = icon;
     this.color = color;
     this.life = 1.0;
     this.fontSize = fontSize;
@@ -207,13 +213,30 @@ export class Particle {
     ctx.save();
     ctx.globalAlpha = this.life;
     ctx.font = `bold ${this.fontSize}px monospace`;
-    const tw = ctx.measureText(this.text).width;
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    ctx.strokeText(this.text, this.x - tw / 2, this.y);
-    ctx.fillStyle = this.color;
-    ctx.fillText(this.text, this.x - tw / 2, this.y);
+    const tw = this.text ? ctx.measureText(this.text).width : 0;
+    const iconSize = this.icon ? this.fontSize : 0;
+    const totalW = tw + (this.icon && this.text ? iconSize + 2 : iconSize);
+    let cursorX = this.x - totalW / 2;
+
+    if (this.icon) {
+      const coord = SPRITE_MAP[this.icon];
+      const img = coord && getSpriteImage(coord.sheet);
+      if (img) {
+        const scale = Math.min(iconSize / coord.sw, iconSize / coord.sh);
+        const iw = coord.sw * scale, ih = coord.sh * scale;
+        ctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, cursorX, this.y - ih / 2 - this.fontSize * 0.15, iw, ih);
+      }
+      cursorX += iconSize + (this.text ? 2 : 0);
+    }
+
+    if (this.text) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(this.text, cursorX, this.y);
+      ctx.fillStyle = this.color;
+      ctx.fillText(this.text, cursorX, this.y);
+    }
     ctx.restore();
   }
 }
@@ -226,9 +249,9 @@ export class ParticlePool {
     for (let i = 0; i < size; i++) this.pool.push(new Particle());
   }
 
-  spawn(gridX: number, gridY: number, text: string, color: string, fontSize = 13): void {
+  spawn(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
     const p = this.pool.pop() ?? new Particle();
-    p.reset(gridX, gridY, text, color, fontSize);
+    p.reset(gridX, gridY, text, color, fontSize, icon);
     this.active.push(p);
   }
 

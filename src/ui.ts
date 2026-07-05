@@ -1,4 +1,5 @@
-import { NEXT_PREVIEWS } from './config';
+import { SHAPES } from './config';
+import { spriteIconHTML, escapeHtml, shapePreviewHTML } from './sprites';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, RerollCfg } from './types';
 import type { RunRecord } from './types';
 
@@ -56,10 +57,10 @@ export class UIManager {
     };
   }
 
-  log(text: string, cls: LogClass = 'log-neutral'): void {
+  log(text: string, cls: LogClass = 'log-neutral', icon?: string): void {
     const div = document.createElement('div');
     div.className = `log-entry ${cls}`;
-    div.innerText = text;
+    div.innerHTML = icon ? `${spriteIconHTML(icon, 13, 'sprite-icon log-icon')}${escapeHtml(text)}` : escapeHtml(text);
     this.logPanel.appendChild(div);
     this.logPanel.scrollTop = this.logPanel.scrollHeight;
     if (this.logPanel.children.length > 50) this.logPanel.firstChild?.remove();
@@ -93,11 +94,11 @@ export class UIManager {
       this.lastXpEarned = state.totalXpEarned;
     }
 
-    this.els['nextPreview']!.innerHTML = NEXT_PREVIEWS[state.nextType] ?? '';
+    this.els['nextPreview']!.innerHTML = shapePreviewHTML(SHAPES[state.nextType]);
 
     // Held piece display
     const heldBox = this.els['heldPreview']!;
-    heldBox.innerHTML = state.heldType ? (NEXT_PREVIEWS[state.heldType] ?? '') : '—';
+    heldBox.innerHTML = state.heldType ? shapePreviewHTML(SHAPES[state.heldType]) : '—';
     heldBox.style.opacity = state.canHold ? '1' : '0.35';
 
     // Cursed / blessed piece badge
@@ -105,11 +106,11 @@ export class UIManager {
     if (state.pieceState === 'cursed') {
       psBadge.style.display = '';
       psBadge.style.color = '#ef5350';
-      psBadge.textContent = '⛧ CURSED PIECE';
+      psBadge.innerHTML = `${spriteIconHTML('status_poison', 12)}CURSED PIECE`;
     } else if (state.pieceState === 'blessed') {
       psBadge.style.display = '';
       psBadge.style.color = '#ffd54f';
-      psBadge.textContent = '✨ BLESSED PIECE';
+      psBadge.innerHTML = `${spriteIconHTML('special_sacred', 12)}BLESSED PIECE`;
     } else {
       psBadge.style.display = 'none';
     }
@@ -122,13 +123,13 @@ export class UIManager {
 
     // Status effect tags
     this.els['statusRow']!.innerHTML = state.statuses
-      .map(s => `<span class="status-tag status-${s.type}">${s.type === 'poison' ? '☠️' : '💫'} ${s.type} ${s.duration}</span>`)
+      .map(s => `<span class="status-tag status-${s.type}">${spriteIconHTML(s.type === 'poison' ? 'status_poison' : 'status_stun', 12)}${s.type} ${s.duration}</span>`)
       .join('');
 
     // Active modifier badge
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
-      this.els['activeModifier']!.textContent = `${state.activeModifier.emoji} ${state.activeModifier.name}`;
+      this.els['activeModifier']!.innerHTML = `${spriteIconHTML(state.activeModifier.emoji, 12)}${escapeHtml(state.activeModifier.name)}`;
     } else {
       this.els['activeModifier']!.style.display = 'none';
     }
@@ -136,7 +137,7 @@ export class UIManager {
     // Active class badge
     if (state.activeClass) {
       this.els['activeClass']!.style.display = '';
-      this.els['activeClass']!.textContent = `${state.activeClass.emoji} ${state.activeClass.name}`;
+      this.els['activeClass']!.innerHTML = `${spriteIconHTML(state.activeClass.emoji, 12)}${escapeHtml(state.activeClass.name)}`;
     } else {
       this.els['activeClass']!.style.display = 'none';
     }
@@ -144,7 +145,7 @@ export class UIManager {
     // Biome badge (only show when not on the default biome)
     if (state.biomeName && state.biomeName !== 'Stone Halls') {
       this.els['biomeName']!.style.display = '';
-      this.els['biomeName']!.textContent = `🌐 ${state.biomeName}`;
+      this.els['biomeName']!.textContent = state.biomeName;
     } else {
       this.els['biomeName']!.style.display = 'none';
     }
@@ -156,12 +157,13 @@ export class UIManager {
       const ready = ra.cooldown === 0 && ra.ammo !== 0;
       const ammoText  = ra.ammo !== null ? ` ×${ra.ammo}` : '';
       const cdText    = ra.cooldown > 0 ? ` [${ra.cooldown}t]` : ' [Ready]';
+      const label = `${escapeHtml(ra.name)}${ammoText}${cdText}`;
       this.els['rangedAbility']!.style.display = '';
       this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
       this.els['rangedAbility']!.style.fontSize = '9px';
-      this.els['rangedAbility']!.textContent = `${ra.emoji} ${ra.name}${ammoText}${cdText}  (Q)`;
+      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}  (Q)`;
       if (rangedBtn) {
-        rangedBtn.textContent = `${ra.emoji} ${ra.name}${ammoText}${cdText}`;
+        rangedBtn.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}`;
         rangedBtn.disabled = !ready;
         rangedBtn.style.opacity = ready ? '1' : '0.4';
       }
@@ -179,7 +181,7 @@ export class UIManager {
   }
 
   showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
-    this.els['deathTitle']!.textContent  = '🏆 GORGOTH VANQUISHED';
+    this.els['deathTitle']!.innerHTML   = `${spriteIconHTML('item_trophy', 16)}GORGOTH VANQUISHED`;
     this.els['deathReason']!.textContent = 'You felled Gorgoth the Returned and sealed the rift — the run is won.';
     this.modal.querySelector('.modal-card')?.classList.add('victory');
     this.populateEndModal(floor, totalXpEarned, highXp, history, stats);
@@ -194,13 +196,13 @@ export class UIManager {
     if (stats) {
       this.els['runStatsGrid']!.innerHTML = `
         <div class="run-stats-grid">
-          <div class="stat-cell">☠️ <b>${stats.monstersKilled}</b><br><span>Monsters</span></div>
-          <div class="stat-cell">👑 <b>${stats.bossesKilled}</b><br><span>Bosses</span></div>
-          <div class="stat-cell">🧱 <b>${stats.linesCleared}</b><br><span>Lines</span></div>
-          <div class="stat-cell">💥 <b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
-          <div class="stat-cell">💔 <b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
+          <div class="stat-cell">${spriteIconHTML('status_poison', 14)}<b>${stats.monstersKilled}</b><br><span>Monsters</span></div>
+          <div class="stat-cell">${spriteIconHTML('sprite_boss_boneking', 14)}<b>${stats.bossesKilled}</b><br><span>Bosses</span></div>
+          <div class="stat-cell"><span class="brick-icon"></span><b>${stats.linesCleared}</b><br><span>Lines</span></div>
+          <div class="stat-cell">${spriteIconHTML('fx_impact', 14)}<b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
+          <div class="stat-cell">${spriteIconHTML('item_heart', 14)}<b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
         </div>`;
-      const shareStr = `🗡️ Fl.${floor} · ☠️ ${stats.monstersKilled} kills · 🧱 ${stats.linesCleared} lines · 💥 Best combo ×${stats.biggestCombo + 1} · ✨ ${totalXpEarned.toLocaleString()} XP`;
+      const shareStr = `Fl.${floor} · ${stats.monstersKilled} kills · ${stats.linesCleared} lines · Best combo ×${stats.biggestCombo + 1} · ${totalXpEarned.toLocaleString()} XP`;
       (this.els['shareText'] as HTMLTextAreaElement).value = shareStr;
       this.els['shareContainer']!.style.display = '';
       const copyBtn = document.getElementById('copy-share-btn');
@@ -210,8 +212,8 @@ export class UIManager {
             (this.els['shareText'] as HTMLTextAreaElement).select();
             document.execCommand('copy');
           });
-          copyBtn.textContent = '✅ Copied!';
-          setTimeout(() => { copyBtn.textContent = '📋 Copy Summary'; }, 1800);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy Summary'; }, 1800);
         };
       }
     } else {
@@ -240,7 +242,7 @@ export class UIManager {
     for (const mod of mods) {
       const btn = document.createElement('button');
       btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${mod.emoji}</span><div class="modifier-info"><strong>${mod.name}</strong><span>${mod.desc}</span></div>`;
+      btn.innerHTML = `<span class="modifier-emoji">${spriteIconHTML(mod.emoji, 24)}</span><div class="modifier-info"><strong>${mod.name}</strong><span>${mod.desc}</span></div>`;
       btn.addEventListener('click', () => {
         this.modifierModal.style.display = 'none';
         onSelect(mod.id);
@@ -256,7 +258,7 @@ export class UIManager {
     for (const cls of classes) {
       const btn = document.createElement('button');
       btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${cls.emoji}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span style="color:#555;font-size:9px;">${cls.statPreview}</span></div>`;
+      btn.innerHTML = `<span class="modifier-emoji">${spriteIconHTML(cls.emoji, 24)}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span style="color:#555;font-size:9px;">${cls.statPreview}</span></div>`;
       btn.addEventListener('click', () => {
         this.classModal.style.display = 'none';
         onSelect(cls.id);
@@ -267,7 +269,7 @@ export class UIManager {
   }
 
   showFloorEvent(event: FloorEventDef, onChoice: (index: number) => void): void {
-    (document.getElementById('floor-event-emoji') as HTMLElement).textContent  = event.emoji;
+    (document.getElementById('floor-event-emoji') as HTMLElement).innerHTML  = spriteIconHTML(event.emoji, 28);
     (document.getElementById('floor-event-title') as HTMLElement).textContent  = event.title;
     (document.getElementById('floor-event-flavor') as HTMLElement).textContent = event.flavor;
     const container = document.getElementById('floor-event-choices')!;
@@ -286,7 +288,7 @@ export class UIManager {
   }
 
   showBossWarning(boss: BossDef, onDone: () => void): void {
-    (document.getElementById('boss-warning-emoji') as HTMLElement).textContent = boss.char;
+    (document.getElementById('boss-warning-emoji') as HTMLElement).innerHTML = spriteIconHTML(boss.char, 32);
     (document.getElementById('boss-warning-name')  as HTMLElement).textContent = boss.name.toUpperCase();
     (document.getElementById('boss-warning-flavor') as HTMLElement).textContent = boss.flavorText;
     this.bossWarningModal.style.display = 'flex';
@@ -325,7 +327,7 @@ export class UIManager {
     for (const b of boons) {
       const chip = document.createElement('span');
       chip.className = 'boon-chip';
-      chip.textContent = `${b.char}×${b.stacks}`;
+      chip.innerHTML = `${spriteIconHTML(b.char, 14)}×${b.stacks}`;
       chip.title = `${b.name} ×${b.stacks}`;
       this.bindChipInspect(chip, () => ({
         icon: b.char,
@@ -357,7 +359,7 @@ export class UIManager {
     for (const b of grouped.values()) {
       const chip = document.createElement('span');
       chip.className = 'brand-chip' + (b.setActive ? ' brand-set-active' : '');
-      chip.textContent = `${b.char}×${b.count}`;
+      chip.innerHTML = `${spriteIconHTML(b.char, 14)}×${b.count}`;
       chip.title = `${b.name}${b.setActive ? ' ✓ SET ACTIVE' : ''}`;
       this.bindChipInspect(chip, () => ({
         icon: b.char,
@@ -377,6 +379,7 @@ export class UIManager {
   // gold reroll that redraws the choices in place without closing the modal.
   private renderOfferModal<T extends { char: string; name: string }>(opts: {
     title: string;
+    titleIcon?: string;
     subtitle: string;
     choices: T[];
     buttonInner: (c: T) => string;
@@ -384,7 +387,7 @@ export class UIManager {
     reroll?: RerollCfg<T>;
   }): void {
     const titleEl = document.getElementById('altar-title')!;
-    titleEl.textContent = opts.title;
+    titleEl.innerHTML = opts.titleIcon ? `${spriteIconHTML(opts.titleIcon, 16)}${escapeHtml(opts.title)}` : escapeHtml(opts.title);
     const subEl = document.getElementById('altar-subtitle');
     if (subEl) subEl.textContent = opts.subtitle;
     const container = document.getElementById('altar-choices')!;
@@ -405,9 +408,9 @@ export class UIManager {
         const rb = document.createElement('button');
         rb.className = 'reroll-btn';
         rb.disabled = gold < cost;
-        rb.textContent = gold >= cost
-          ? `🎲 Reroll — ${cost}g (you have ${gold}g)`
-          : `🎲 Reroll — need ${cost - gold} more gold`;
+        rb.innerHTML = gold >= cost
+          ? `${spriteIconHTML('item_dice', 14)}Reroll — ${cost}g (you have ${gold}g)`
+          : `${spriteIconHTML('item_dice', 14)}Reroll — need ${cost - gold} more gold`;
         rb.addEventListener('click', () => {
           const next = opts.reroll!.run();
           if (next) render(next.choices, next.gold, next.cost);
@@ -422,20 +425,22 @@ export class UIManager {
 
   showTattooModal(choices: BrandDef[], onChoice: (i: number) => void, reroll?: RerollCfg<BrandDef>): void {
     this.renderOfferModal({
-      title: '🔱 Occult Tattoo Artist — Choose a Brand',
+      title: 'Occult Tattoo Artist — Choose a Brand',
+      titleIcon: 'tile_altar',
       subtitle: 'Brands are permanent. Collect a set for a powerful bonus.',
       choices, onChoice, reroll,
-      buttonInner: (b) => `<span class="modifier-emoji">${b.char}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
+      buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
     });
   }
 
   showAltarModal(tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, titleOverride?: string, reroll?: RerollCfg<BoonDef>): void {
     const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
     this.renderOfferModal({
-      title: titleOverride ?? `⛩️ ${tierNames[tier]} — Choose a Boon`,
+      title: titleOverride ?? `${tierNames[tier]} — Choose a Boon`,
+      titleIcon: 'tile_altar',
       subtitle: 'Boons stack — pick the same one again to amplify its effect.',
       choices, onChoice, reroll,
-      buttonInner: (b) => `<span class="modifier-emoji">${b.char}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
+      buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
     });
   }
 
@@ -475,7 +480,7 @@ export class UIManager {
   showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
     const el = this.inspectTooltip;
     el.innerHTML = `
-      <div class="inspect-header"><span class="inspect-icon">${info.icon}</span><span class="inspect-title">${info.title}</span></div>
+      <div class="inspect-header"><span class="inspect-icon">${spriteIconHTML(info.icon, 20)}</span><span class="inspect-title">${info.title}</span></div>
       <div class="inspect-lines">${info.lines.map(l => `<div>${l}</div>`).join('')}</div>
     `;
     el.hidden = false;
@@ -510,7 +515,7 @@ export class UIManager {
 
   showError(message: string): void {
     console.error('[RiftCrawler]', message);
-    this.log(`⚠️ ${message}`, 'log-damage');
+    this.log(message, 'log-damage', 'ui_warning');
   }
 
   clearLog(): void { this.logPanel.innerHTML = ''; }

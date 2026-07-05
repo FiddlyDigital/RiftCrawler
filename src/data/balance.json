@@ -1,0 +1,110 @@
+{
+  "player": {
+    "startingHp": 45,
+    "startingAtk": 6,
+    "xpToNextStart": 50,
+    "xpToNextGrowth": 1.5,
+    "combatLevelBands": [
+      {
+        "minPlayerLevel": 9,
+        "combatLevel": 6
+      },
+      {
+        "minPlayerLevel": 7,
+        "combatLevel": 5
+      },
+      {
+        "minPlayerLevel": 5,
+        "combatLevel": 4
+      },
+      {
+        "minPlayerLevel": 3,
+        "combatLevelFloor": 3
+      }
+    ]
+  },
+  "progression": {
+    "tickBaseMs": 3000,
+    "tickMinMs": 400,
+    "tickMsPerDungeonLevel": 100,
+    "lineClearScoreBase": [
+      0,
+      100,
+      300,
+      600,
+      1000
+    ],
+    "lineClearScoreOverflow": 1200
+  },
+  "economy": {
+    "rerollBaseCost": 120,
+    "rerollCostGrowth": 1.6,
+    "bombGoldPerDungeonLevel": 50
+  },
+  "ammo": {
+    "replenishOnDescend": 3,
+    "maxAmmo": 5
+  },
+  "altars": {
+    "vaultTierMinFloorT3": 8,
+    "vaultTierMinFloorT2": 4
+  },
+  "floors": {
+    "bossFloorInterval": 5,
+    "floorEventInterval": 3,
+    "dungeonRoomChance": 0.3
+  },
+  "boss": {
+    "baseHpFloor1": 18,
+    "baseHpPerDungeonLevel": 3,
+    "baseAtkFloor1": 5,
+    "baseAtkPerDungeonLevel": 1,
+    "combatLevel": 5
+  },
+  "gorgoth": {
+    "maxHp": 1400,
+    "atk": 48,
+    "xpReward": 2000,
+    "combatLevel": 6
+  },
+  "crystalShards": {
+    "baseHp": 8,
+    "hpPerDungeonLevel": 2,
+    "baseAtk": 3,
+    "atkPerDungeonLevel": 0.5
+  },
+  "spawnRates": {
+    "cursedPieceChance": 0.08,
+    "blessedPieceChance": 0.04,
+    "stairsForcedAfterBlocks": 12,
+    "stairsRandomChance": 0.10,
+    "bombChance": 0.03,
+    "merchantChance": 0.04,
+    "altarChance": 0.035,
+    "trapWeights": {
+      "spike": 0.02,
+      "smoke": 0.02,
+      "teleport": 0.02
+    },
+    "monsterBaseChance": 0.06,
+    "monsterChancePerDungeonLevel": 0.005,
+    "monsterChanceCap": 0.16,
+    "hauntedMonsterChanceMult": 2,
+    "monsterWeights": {
+      "rat": 0.25,
+      "skeleton": 0.25,
+      "goblin_archer": 0.15,
+      "cave_slime": 0.13,
+      "berserker_orc": 0.11,
+      "plague_bat": 0.11
+    },
+    "oPieceAltarChance": 0.40,
+    "oPieceAltarChanceArchitect": 0.80
+  },
+  "eliteMonsters": {
+    "spawnChance": 0.15,
+    "hpMult": 2.0,
+    "atkMult": 1.5,
+    "combatLevelBonus": 1
+  }
+}

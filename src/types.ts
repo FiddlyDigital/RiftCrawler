@@ -7,6 +7,7 @@ export interface ClassDef {
   name: string;
   tagline: string;
   statPreview: string;
+  tPieceCdReduction: number;
   apply: (player: Player) => void;
 }
 
@@ -168,6 +169,7 @@ export interface RangedAbility {
   cooldownMax: number;
   statusEffect?: 'stun';
   abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
+  params?: Record<string, number | string>;
 }
 
 export interface UIState {
@@ -199,11 +201,11 @@ export type AudioEvent =
   | 'teleport' | 'comboMilestone';
 
 export interface GameCallbacks {
-  log: (text: string, cls: LogClass) => void;
+  log: (text: string, cls: LogClass, icon?: string) => void;
   updateUI: (state: UIState) => void;
   onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats) => void;
   onVictory?: (floor: number, totalXpEarned: number, stats: RunStats) => void;
-  onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number) => void;
+  onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number, icon?: string) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (gold: number) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;

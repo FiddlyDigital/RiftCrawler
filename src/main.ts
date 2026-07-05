@@ -28,7 +28,7 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 function getTickMs(): number {
   return tickMsForLevel(
     game.dungeonLevel,
-    game.player.tickSlowPercent + game.biomeGravityPct + (game.timeDilationTurns > 0 ? 100 : 0),
+    game.player.tickSlowPercent + game.biomeGravityPct + (game.timeDilationTurns > 0 ? game.timeDilationSlowPct : 0),
   );
 }
 
@@ -57,7 +57,7 @@ let manualPaused = false;
 function toggleMute(): void {
   soundOn = audio.toggle();
   saveMute(!soundOn);
-  ui.log(`Sound ${soundOn ? 'on 🔊' : 'off 🔇'}`, 'log-neutral');
+  ui.log(`Sound ${soundOn ? 'on' : 'off'}`, 'log-neutral');
   if (manualPaused) refreshPauseMenu();
 }
 
@@ -140,10 +140,10 @@ function handleAudio(event: AudioEvent, data?: number): void {
 function startGame(startPaused = false): void {
   stopTick();
   game = new Game({
-    log:      (text, cls)          => ui.log(text, cls),
+    log:      (text, cls, icon)    => ui.log(text, cls, icon),
     updateUI: (state)              => ui.updateStats(state),
     onAction: ()                   => resetTick(),
-    onParticle: (x, y, text, col, fontSize) => renderer.spawnParticle(x, y, text, col, fontSize),
+    onParticle: (x, y, text, col, fontSize, icon) => renderer.spawnParticle(x, y, text, col, fontSize, icon),
     onAudio:  (event, data)        => handleAudio(event, data),
     onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
     onCombo:     (mult)            => renderer.showCombo(mult),
@@ -175,7 +175,7 @@ function startGame(startPaused = false): void {
         onChoice(index);
         audio.playPerk();
         startTick();
-      }, '⬆️ LEVEL UP — Choose a Boon');
+      }, 'LEVEL UP — Choose a Boon');
     },
 
     onOpenTattooArtist: (choices, onChoice, reroll) => {

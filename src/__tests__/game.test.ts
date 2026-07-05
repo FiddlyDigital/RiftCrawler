@@ -5,7 +5,8 @@ import type { GameCallbacks } from '../types';
 import { Monster } from '../entities';
 import { killMonster, playerAttackMonster, estimateHitChance } from '../systems/combat';
 import { processMonsterTurns } from '../systems/monsterAI';
-import { BRANDS, BOONS, MODIFIERS, getThreeRandomBoons } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, getThreeRandomBoons } from '../content';
+import { BALANCE, COMBAT_BALANCE, MONSTER_AI, weightedPick } from '../balance';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -36,7 +37,9 @@ describe('rotateMatrix', () => {
   });
 });
 
-// Formula: Math.max(400, 1500 - (level-1)*100), then scaled by slowPercent
+// Formula: Math.max(tickMinMs, tickBaseMs - (level-1)*tickMsPerDungeonLevel), then scaled by slowPercent.
+// These constants now live in src/data/balance.json (progression); the literals
+// below match its current defaults (3000/400/100).
 describe('tickMsForLevel', () => {
   it('returns 3000ms on floor 1 with no slow', () => expect(tickMsForLevel(1, 0)).toBe(3000));
   it('returns 2900ms on floor 2', () => expect(tickMsForLevel(2, 0)).toBe(2900));
@@ -44,6 +47,7 @@ describe('tickMsForLevel', () => {
   it('applies slow perk percentage', () => expect(tickMsForLevel(1, 15)).toBe(Math.floor(3000 * 1.15)));
 });
 
+// lineClearScoreBase/lineClearScoreOverflow now live in src/data/balance.json (progression).
 describe('scoreForLines', () => {
   it('returns 100 for 1 line on floor 1', () => expect(scoreForLines(1, 1)).toBe(100));
   it('scales with dungeon level', () => expect(scoreForLines(1, 3)).toBe(300));
@@ -224,7 +228,7 @@ describe('Game.getInspectInfo', () => {
   });
 
   it('describes a monster on a tile', () => {
-    const monster = new Monster(4, 22, '👹', 'Goblin', 10, 10, 3, 5);
+    const monster = new Monster(4, 22, 'sprite_berserker_orc', 'Goblin', 10, 10, 3, 5);
     game.monsters.push(monster);
     const info = game.getInspectInfo(4, 22);
     expect(info).not.toBeNull();
@@ -253,8 +257,8 @@ describe('Monster clearing & Sacred Brands', () => {
   });
 
   it('killMonster removes only the target from the monster list', () => {
-    const a = new Monster(4, 21, '👹', 'A', 1, 1, 1, 5);
-    const b = new Monster(5, 21, '👹', 'B', 5, 5, 1, 5);
+    const a = new Monster(4, 21, 'sprite_berserker_orc', 'A', 1, 1, 1, 5);
+    const b = new Monster(5, 21, 'sprite_berserker_orc', 'B', 5, 5, 1, 5);
     game.monsters.push(a, b);
     killMonster(a, game);
     expect(game.monsters).not.toContain(a);
@@ -262,7 +266,7 @@ describe('Monster clearing & Sacred Brands', () => {
   });
 
   it('poison kills a monster on tick, clears it, and awards XP', () => {
-    const m = new Monster(4, 21, '👹', 'Goblin', 3, 3, 2, 20);
+    const m = new Monster(4, 21, 'sprite_berserker_orc', 'Goblin', 3, 3, 2, 20);
     m.statuses = [{ type: 'poison', duration: 3, power: 5 }];
     game.monsters.push(m);
     const xpBefore = game.player.totalXpEarned;
@@ -272,7 +276,7 @@ describe('Monster clearing & Sacred Brands', () => {
   });
 
   it('monster poison applies exactly once per tick (no double-application)', () => {
-    const m = new Monster(4, 21, '👹', 'Tank', 20, 20, 1, 5);
+    const m = new Monster(4, 21, 'sprite_berserker_orc', 'Tank', 20, 20, 1, 5);
     m.statuses = [{ type: 'poison', duration: 5, power: 5 }];
     game.monsters.push(m);
     game.autoTick();
@@ -336,7 +340,7 @@ describe('Balance levers', () => {
   // Phase 1
   it('misses chip for graze damage and the pity whiff upgrades to a stronger hit', () => {
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0); // aRoll=dRoll=1 → forced miss
-    const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
+    const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
     const d1 = playerAttackMonster(m, game);
     const d2 = playerAttackMonster(m, game);
@@ -349,7 +353,7 @@ describe('Balance levers', () => {
 
   it('a landed hit resets the miss-pity streak', () => {
     game.player.missStreak = 2;
-    const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
+    const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
     const spyHit = vi.spyOn(Math, 'random').mockReturnValue(0.99); // high aRoll → land
     playerAttackMonster(m, game);
@@ -374,7 +378,7 @@ describe('Balance levers', () => {
     expect(reroll).toBeTypeOf('function');
     const res = reroll!();
     expect(res).not.toBeNull();
-    expect(game.gold).toBe(500 - 120);
+    expect(game.gold).toBe(500 - BALANCE.economy.rerollBaseCost);
     expect(res!.choices).toHaveLength(3);
   });
 
@@ -410,7 +414,7 @@ describe('Balance levers', () => {
   });
 
   it('monster inspect reports the player hit chance', () => {
-    const m = new Monster(4, 22, '👹', 'Goblin', 10, 10, 3, 5);
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'Goblin', 10, 10, 3, 5);
     game.monsters.push(m);
     const info = game.getInspectInfo(4, 22);
     expect(info!.lines.some(l => l.toLowerCase().includes('hit chance'))).toBe(true);
@@ -432,7 +436,7 @@ describe('Descent visibility & interaction priority', () => {
   it('an enemy on an interactable tile blocks it — combat takes priority', () => {
     let altarOpened = false;
     cb.onOpenAltar = () => { altarOpened = true; };
-    const m = new Monster(4, 22, '👹', 'Guard', 500, 500, 3, 5);
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'Guard', 500, 500, 3, 5);
     game.monsters.push(m);
     (game as unknown as { altarTiles: Array<{ x: number; y: number; tier: number }> }).altarTiles.push({ x: 4, y: 22, tier: 1 });
     game.player.atk = 100;
@@ -488,7 +492,7 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(boss!.isBoss).toBe(true);
     expect(boss!.y).toBe(0);                                    // the very top of the arena
     expect(boss!.maxHp).toBeGreaterThanOrEqual(1000);           // huge
-    expect(boss!.combatLevel).toBe(6);                          // D20
+    expect(boss!.combatLevel).toBe(BALANCE.gorgoth.combatLevel);  // D20
     expect(game.map[3]![10]).toBe(Tile.FLOOR);                  // board preserved, not reset
   });
 
@@ -577,7 +581,7 @@ describe('Gorgoth the Returned (endgame)', () => {
     game.summonGorgoth();                     // face him again later
     const boss2 = game.monsters.find(m => m.isGorgoth)!;
     expect(boss2.hp).toBe(600);               // carried his wounds
-    expect(boss2.maxHp).toBe(1400);           // out of full
+    expect(boss2.maxHp).toBe(BALANCE.gorgoth.maxHp);           // out of full
   });
 
   it('nudges the player toward the win condition once when the stack is high', () => {
@@ -603,7 +607,7 @@ describe('Adjacent enemies attack', () => {
   });
 
   it('orthogonally adjacent melee monster hits the player', () => {
-    const m = new Monster(4, 22, '👹', 'G', 80, 80, 10, 5); // directly above, dist 1
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5); // directly above, dist 1
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99); // force a landed hit
     processMonsterTurns(game);
@@ -613,7 +617,7 @@ describe('Adjacent enemies attack', () => {
 
   it('diagonally adjacent melee monster closes and hits within a few turns', () => {
     game.map[5]![22] = Tile.FLOOR;  // open floor so it can step in
-    const m = new Monster(5, 22, '👹', 'G', 80, 80, 10, 5); // diagonal, dist 2
+    const m = new Monster(5, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5); // diagonal, dist 2
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     for (let i = 0; i < 4; i++) processMonsterTurns(game);
@@ -625,7 +629,7 @@ describe('Adjacent enemies attack', () => {
     game.player.x = 4; game.player.y = 10;
     game.map[4]![10] = Tile.FLOOR;  // hero's tile
     game.map[5]![11] = Tile.FLOOR;  // enemy diagonally touching; both approach tiles are void
-    const m = new Monster(5, 11, '👹', 'G', 80, 80, 10, 5);
+    const m = new Monster(5, 11, 'sprite_berserker_orc', 'G', 80, 80, 10, 5);
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     for (let i = 0; i < 3; i++) processMonsterTurns(game);
@@ -705,5 +709,280 @@ describe('JSON-configured effects', () => {
     MODIFIERS.find(m => m.id === 'cursed')!.apply(game);
     expect(game.xpMultiplier).toBe(2);
     expect(game.noLineHeal).toBe(true);
+  });
+});
+
+// ── Data-driven classes + their abilities (JSON effects + ability params) ────
+
+describe('Player classes (JSON-configured)', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('CLASSES loads all 4 classes from JSON in the original order', () => {
+    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'rift_weaver', 'architect', 'cascade']);
+  });
+
+  it('tPieceCdReduction defaults to 2, architect overrides to 4', () => {
+    expect(CLASSES.find(c => c.id === 'architect')!.tPieceCdReduction).toBe(4);
+    expect(CLASSES.find(c => c.id === 'chronomancer')!.tPieceCdReduction).toBe(2);
+    expect(CLASSES.find(c => c.id === 'rift_weaver')!.tPieceCdReduction).toBe(2);
+    expect(CLASSES.find(c => c.id === 'cascade')!.tPieceCdReduction).toBe(2);
+  });
+
+  it('applyClass(chronomancer) sets stats and Time Dilation ability', () => {
+    const hpBefore = game.player.maxHp;
+    game.applyClass('chronomancer');
+    expect(game.activeClassId).toBe('chronomancer');
+    expect(game.player.maxHp).toBe(hpBefore - 5);
+    expect(game.player.tickSlowPercent).toBe(25);
+    expect(game.player.baseCombatLevel).toBe(2);
+    expect(game.player.rangedAbility?.abilityType).toBe('time_dilation');
+    expect(game.player.rangedAbility?.cooldownMax).toBe(14);
+    expect(game.player.rangedAbility?.params).toEqual({ slowTurns: 15, slowPct: 100 });
+  });
+
+  it('applyClass(rift_weaver) sets stats and Gravity Well ability', () => {
+    const hpBefore = game.player.maxHp;
+    const atkBefore = game.player.atk;
+    const visionBefore = game.player.visionRadius;
+    game.applyClass('rift_weaver');
+    expect(game.player.maxHp).toBe(hpBefore - 10);
+    expect(game.player.atk).toBe(atkBefore + 2);
+    expect(game.player.visionRadius).toBe(visionBefore + 2);
+    expect(game.player.teleportImmune).toBe(true);
+    expect(game.player.rangedAbility?.abilityType).toBe('gravity_well');
+    expect(game.player.rangedAbility?.range).toBe(4);
+    expect(game.player.rangedAbility?.params).toEqual({ pullSteps: 2, stunDuration: 1 });
+  });
+
+  it('applyClass(architect) sets stats and Consecrate ability', () => {
+    const hpBefore = game.player.maxHp;
+    const atkBefore = game.player.atk;
+    game.applyClass('architect');
+    expect(game.player.maxHp).toBe(hpBefore + 15);
+    expect(game.player.atk).toBe(atkBefore - 2);
+    expect(game.player.lineClearXpMult).toBe(2);
+    expect(game.player.rangedAbility?.abilityType).toBe('consecrate');
+    expect(game.player.rangedAbility?.params).toEqual({ tileType: 'sacred' });
+  });
+
+  it('applyClass(cascade) sets stats and Overload ability', () => {
+    const hpBefore = game.player.maxHp;
+    const atkBefore = game.player.atk;
+    game.applyClass('cascade');
+    expect(game.player.maxHp).toBe(hpBefore - 20);
+    expect(game.player.atk).toBe(atkBefore + 10);
+    expect(game.player.lineClearDmgMult).toBe(4);
+    expect(game.player.rangedAbility?.abilityType).toBe('overload');
+    expect(game.player.rangedAbility?.params).toEqual({ perKillDmg: 8, perFloorMinDmg: 5 });
+  });
+
+  it('applyClass clamps hp to the new (lower) maxHp instead of leaving it over-full', () => {
+    game.player.hp = game.player.maxHp; // full HP (45)
+    game.applyClass('cascade'); // −20 maxHp
+    expect(game.player.hp).toBe(game.player.maxHp);
+  });
+
+  it('Time Dilation sets timeDilationTurns/timeDilationSlowPct from ability params', () => {
+    game.applyClass('chronomancer');
+    game.handleRangedAttack();
+    // activateTimeDilation sets timeDilationTurns to params.slowTurns (15), but it also
+    // calls advanceTurn() itself, which ticks timeDilationTurns down by 1 in the same action.
+    expect(game.timeDilationTurns).toBe(14);
+    expect(game.timeDilationSlowPct).toBe(100);
+  });
+
+  it('Gravity Well pulls an eligible monster pullSteps tiles toward the player and stuns it', () => {
+    game.applyClass('rift_weaver');
+    // Use a longer stun than the 1-turn default so it survives the monster-turn
+    // processing that happens later in this same action's advanceTurn().
+    game.player.rangedAbility!.params = { pullSteps: 2, stunDuration: 3 };
+    const m = new Monster(game.player.x + 3, game.player.y, 'sprite_berserker_orc', 'Orc', 20, 20, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    game.handleRangedAttack();
+    expect(m.x).toBe(game.player.x + 1); // pulled 2 of the 3 tiles toward the player
+    expect(m.isStunned).toBe(true);
+  });
+
+  it('Overload damage uses perKillDmg × kills, floored by perFloorMinDmg × floor, and resets killsThisFloor', () => {
+    game.applyClass('cascade');
+    game.killsThisFloor = 3; // 8*3=24 > floor(1)*5=5 → dmg should be 24
+    const m = new Monster(game.player.x, game.player.y + 1, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    game.handleRangedAttack();
+    expect(m.hp).toBe(100 - 24);
+    expect(game.killsThisFloor).toBe(0);
+  });
+
+  it('Consecrate falls back to player.visionRadius and stamps the configured tileType', () => {
+    game.applyClass('architect');
+    game.player.visionRadius = 3;
+    game.handleRangedAttack();
+    expect(game.specialTiles.length).toBeGreaterThan(0);
+    expect(game.specialTiles.every(t => t.type === 'sacred')).toBe(true);
+  });
+
+  it('locking a T-piece reduces ranged cooldown by the active class tPieceCdReduction', () => {
+    game.applyClass('architect'); // tPieceCdReduction: 4
+    game.player.rangedCooldown = 10;
+    game.currentType = 'T';
+    game.handleBlockDrop();
+    // lockBlock() applies the T-piece reduction (-4), then advanceTurn()'s normal
+    // per-turn tickRangedCooldown() decrements it by 1 more: 10 - 4 - 1 = 5.
+    expect(game.player.rangedCooldown).toBe(5);
+  });
+
+  it("Cascade's line-clear passive deals lineClearDmgMult × rows × dungeonLevel to visible monsters", () => {
+    game.applyClass('cascade');
+    const m = new Monster(0, 5, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(m.hp).toBe(100 - 4); // lineClearDmgMult(4) × 1 row × dungeonLevel(1)
+  });
+
+  it('no line-clear passive damage fires for classes without lineClearDmgMult', () => {
+    game.applyClass('architect');
+    const m = new Monster(0, 5, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(m.hp).toBe(100);
+  });
+});
+
+// ── Balance config (src/data/*.json via src/balance.ts) ──────────────────────
+
+describe('Balance config', () => {
+  it('weightedPick returns the key whose cumulative range contains the roll', () => {
+    expect(weightedPick({ a: 0.5, b: 0.5 }, 0.3)).toBe('a');
+    expect(weightedPick({ a: 0.5, b: 0.5 }, 0.7)).toBe('b');
+  });
+
+  it('weightedPick returns null once the roll exceeds the total weight', () => {
+    expect(weightedPick({ a: 0.3 }, 0.5)).toBeNull();
+  });
+
+  it('elite scaling is configurable (spawnMonster reads BALANCE.eliteMonsters.hpMult)', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const originalChance = BALANCE.eliteMonsters.spawnChance;
+    const originalMult = BALANCE.eliteMonsters.hpMult;
+    BALANCE.eliteMonsters.spawnChance = 1;
+    BALANCE.eliteMonsters.hpMult = 3;
+    try {
+      (game as unknown as { spawnMonster(key: string, x: number, y: number): void }).spawnMonster('rat', 4, 23);
+      const m = game.monsters[0]!;
+      expect(m.isElite).toBe(true);
+      expect(m.maxHp).toBe(10 * 3); // rat baseHp (10) × the configured elite hpMult
+    } finally {
+      BALANCE.eliteMonsters.spawnChance = originalChance;
+      BALANCE.eliteMonsters.hpMult = originalMult;
+    }
+  });
+
+  it('Gorgoth stats are configurable (summonGorgoth reads BALANCE.gorgoth.maxHp)', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const original = BALANCE.gorgoth.maxHp;
+    BALANCE.gorgoth.maxHp = 999;
+    try {
+      game.summonGorgoth();
+      const boss = game.monsters.find(m => m.isGorgoth)!;
+      expect(boss.maxHp).toBe(999);
+    } finally {
+      BALANCE.gorgoth.maxHp = original;
+    }
+  });
+
+  it('monster AI chase range is configurable (melee monster stays put beyond the configured range)', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const m = new Monster(game.player.x + 3, game.player.y, 'sprite_rat_01', 'Rat', 10, 10, 1, 5);
+    game.monsters.push(m);
+    const original = MONSTER_AI.melee.chaseRange;
+    MONSTER_AI.melee.chaseRange = 1;
+    try {
+      processMonsterTurns(game);
+      expect(m.x).toBe(game.player.x + 3); // out of the shortened chase range — doesn't move
+    } finally {
+      MONSTER_AI.melee.chaseRange = original;
+    }
+  });
+
+  it('combat dice table is configurable (estimateHitChance reacts to a changed die size)', () => {
+    const before = estimateHitChance(2, 2);
+    const original = COMBAT_BALANCE.diceSidesByLevel[2];
+    COMBAT_BALANCE.diceSidesByLevel[2] = 100;
+    try {
+      const after = estimateHitChance(2, 2);
+      expect(after).not.toBe(before);
+    } finally {
+      COMBAT_BALANCE.diceSidesByLevel[2] = original!;
+    }
+  });
+});
+
+// ── Floor events (src/data/floor-events.json via src/dataLoader.ts) ──────────
+
+describe('Floor events (JSON-configured)', () => {
+  it('has all 9 events with a handler-backed apply on every option', () => {
+    expect(FLOOR_EVENTS.length).toBe(9);
+    for (const event of FLOOR_EVENTS) {
+      for (const option of event.options) {
+        expect(typeof option.apply).toBe('function');
+      }
+    }
+  });
+
+  it('abandoned_cache gamble option pays the jackpot on a low roll', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const startGold = game.gold;
+    const event = FLOOR_EVENTS.find(e => e.id === 'abandoned_cache')!;
+    const gamble = event.options[1]!;
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const msg = gamble.apply(game);
+      expect(game.gold).toBe(startGold + 2000);
+      expect(msg).toMatch(/Jackpot/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('abandoned_cache gamble option triggers the trap on a high roll', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const startGold = game.gold;
+    const startHp = game.player.hp;
+    const event = FLOOR_EVENTS.find(e => e.id === 'abandoned_cache')!;
+    const gamble = event.options[1]!;
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    try {
+      const msg = gamble.apply(game);
+      expect(game.gold).toBe(startGold);
+      expect(game.player.hp).toBe(startHp - 30);
+      expect(msg).toMatch(/booby-trapped/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('static_message options return the configured resultMsg', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const event = FLOOR_EVENTS.find(e => e.id === 'dark_bargain')!;
+    const refuse = event.options[1]!;
+    expect(refuse.apply(game)).toBe("You refuse the dark voice. It fades, frustrated.");
   });
 });

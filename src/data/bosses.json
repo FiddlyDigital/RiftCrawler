@@ -1,7 +1,47 @@
 [
-  { "id": "stone_dragon",  "displayName": "Stone Dragon",  "visualAsset": "sprite_boss_dragon",   "hpMult": 5, "atkMult": 2,   "xpValue": 200, "flavorText": "The earth trembles..."   },
-  { "id": "bone_king",     "displayName": "Bone King",     "visualAsset": "sprite_boss_boneking", "hpMult": 4, "atkMult": 2.5, "xpValue": 250, "flavorText": "Death itself walks."     },
-  { "id": "shadow_wraith", "displayName": "Shadow Wraith", "visualAsset": "sprite_boss_wraith",   "hpMult": 4, "atkMult": 2,   "xpValue": 220, "flavorText": "Cold seeps in..."       },
-  { "id": "vampire_lord",  "displayName": "Vampire Lord",  "visualAsset": "sprite_boss_vampire",  "hpMult": 5, "atkMult": 1.5, "xpValue": 230, "flavorText": "Wings blot the light."  },
-  { "id": "brood_mother",  "displayName": "Brood Mother",  "visualAsset": "sprite_boss_brood",    "hpMult": 3, "atkMult": 3,   "xpValue": 260, "flavorText": "Thousands of eyes open." }
+  {
+    "id": "stone_dragon",
+    "displayName": "Stone Dragon",
+    "visualAsset": "sprite_boss_dragon",
+    "hpMult": 5,
+    "atkMult": 2,
+    "xpValue": 200,
+    "flavorText": "The earth trembles..."
+  },
+  {
+    "id": "bone_king",
+    "displayName": "Bone King",
+    "visualAsset": "sprite_boss_boneking",
+    "hpMult": 4,
+    "atkMult": 2.5,
+    "xpValue": 250,
+    "flavorText": "Death itself walks."
+  },
+  {
+    "id": "shadow_wraith",
+    "displayName": "Shadow Wraith",
+    "visualAsset": "sprite_boss_wraith",
+    "hpMult": 4,
+    "atkMult": 2,
+    "xpValue": 220,
+    "flavorText": "Cold seeps in..."
+  },
+  {
+    "id": "vampire_lord",
+    "displayName": "Vampire Lord",
+    "visualAsset": "sprite_boss_vampire",
+    "hpMult": 5,
+    "atkMult": 1.5,
+    "xpValue": 230,
+    "flavorText": "Wings blot the light."
+  },
+  {
+    "id": "brood_mother",
+    "displayName": "Brood Mother",
+    "visualAsset": "sprite_boss_brood",
+    "hpMult": 3,
+    "atkMult": 3,
+    "xpValue": 260,
+    "flavorText": "Thousands of eyes open."
+  }
 ]
