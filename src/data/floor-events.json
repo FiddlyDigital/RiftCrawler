@@ -5,8 +5,20 @@
     "title": "Ancient Shrine",
     "flavor": "A worn altar pulses with faint magic. Power can be bought — for a price.",
     "options": [
-      { "label": "Offer HP (20)", "desc": "Sacrifice 20 HP for a random boon.", "handler": "shrine_offer_hp", "params": { "hpCost": 20 } },
-      { "label": "Leave undisturbed", "desc": "Nothing happens.", "handler": "static_message", "resultMsg": "You leave the shrine undisturbed." }
+      {
+        "label": "Offer HP (20)",
+        "desc": "Sacrifice 20 HP for a random boon.",
+        "handler": "shrine_offer_hp",
+        "params": {
+          "hpCost": 20
+        }
+      },
+      {
+        "label": "Leave undisturbed",
+        "desc": "Nothing happens.",
+        "handler": "static_message",
+        "resultMsg": "You leave the shrine undisturbed."
+      }
     ]
   },
   {
@@ -15,8 +27,20 @@
     "title": "Healing Spring",
     "flavor": "A clear pool bubbles up from the stone floor. Its waters shimmer with life.",
     "options": [
-      { "label": "Drink deeply", "desc": "Restore to full HP.", "handler": "spring_full_heal" },
-      { "label": "Fill your flask", "desc": "Heal 25 HP and gain +1 regen per tick.", "handler": "spring_fill_flask", "params": { "healAmount": 25, "regenBonus": 1 } }
+      {
+        "label": "Drink deeply",
+        "desc": "Restore to full HP.",
+        "handler": "spring_full_heal"
+      },
+      {
+        "label": "Fill your flask",
+        "desc": "Heal 25 HP and gain +1 regen per tick.",
+        "handler": "spring_fill_flask",
+        "params": {
+          "healAmount": 25,
+          "regenBonus": 1
+        }
+      }
     ]
   },
   {
@@ -25,8 +49,22 @@
     "title": "Fallen Champion",
     "flavor": "The corpse of a warrior lies here, still clutching their belongings.",
     "options": [
-      { "label": "Take their boon", "desc": "Absorb the power of a fallen hero.", "handler": "champion_take_boon", "params": { "tierBreakFloor": 5 } },
-      { "label": "Take their rations", "desc": "Heal 35 HP.", "handler": "champion_rations", "params": { "healAmount": 35 } }
+      {
+        "label": "Take their boon",
+        "desc": "Absorb the power of a fallen hero.",
+        "handler": "champion_take_boon",
+        "params": {
+          "tierBreakFloor": 5
+        }
+      },
+      {
+        "label": "Take their rations",
+        "desc": "Heal 35 HP.",
+        "handler": "champion_rations",
+        "params": {
+          "healAmount": 35
+        }
+      }
     ]
   },
   {
@@ -35,8 +73,21 @@
     "title": "Dark Bargain",
     "flavor": "A disembodied voice whispers from the shadows, offering terrible power.",
     "options": [
-      { "label": "Accept the deal", "desc": "+12 ATK, −25 Max HP.", "handler": "bargain_accept", "params": { "atkBonus": 12, "hpCost": 25 } },
-      { "label": "Refuse the voice", "desc": "Nothing happens. Some deals aren't worth making.", "handler": "static_message", "resultMsg": "You refuse the dark voice. It fades, frustrated." }
+      {
+        "label": "Accept the deal",
+        "desc": "+12 ATK, −25 Max HP.",
+        "handler": "bargain_accept",
+        "params": {
+          "atkBonus": 12,
+          "hpCost": 25
+        }
+      },
+      {
+        "label": "Refuse the voice",
+        "desc": "Nothing happens. Some deals aren't worth making.",
+        "handler": "static_message",
+        "resultMsg": "You refuse the dark voice. It fades, frustrated."
+      }
     ]
   },
   {
@@ -45,8 +96,22 @@
     "title": "Tome of Knowledge",
     "flavor": "A dusty tome lies open to a marked page, its text glowing faintly.",
     "options": [
-      { "label": "Study tactics", "desc": "Gain 150 XP.", "handler": "tome_tactics", "params": { "xpGain": 150 } },
-      { "label": "Learn from lore", "desc": "+2 vision radius permanently.", "handler": "tome_lore", "params": { "visionBonus": 2 } }
+      {
+        "label": "Study tactics",
+        "desc": "Gain 150 XP.",
+        "handler": "tome_tactics",
+        "params": {
+          "xpGain": 150
+        }
+      },
+      {
+        "label": "Learn from lore",
+        "desc": "+2 vision radius permanently.",
+        "handler": "tome_lore",
+        "params": {
+          "visionBonus": 2
+        }
+      }
     ]
   },
   {
@@ -55,8 +120,24 @@
     "title": "Abandoned Cache",
     "flavor": "A hidden stash behind a loose stone. Someone left in a hurry.",
     "options": [
-      { "label": "Search carefully", "desc": "Gain 800 gold.", "handler": "cache_search", "params": { "gold": 800 } },
-      { "label": "Grab quickly", "desc": "50/50: gain 2000 gold OR trigger a trap (−30 HP).", "handler": "cache_gamble", "params": { "successChance": 0.5, "jackpotGold": 2000, "trapDamage": 30 } }
+      {
+        "label": "Search carefully",
+        "desc": "Gain 800 gold.",
+        "handler": "cache_search",
+        "params": {
+          "gold": 800
+        }
+      },
+      {
+        "label": "Grab quickly",
+        "desc": "50/50: gain 2000 gold OR trigger a trap (−30 HP).",
+        "handler": "cache_gamble",
+        "params": {
+          "successChance": 0.5,
+          "jackpotGold": 2000,
+          "trapDamage": 30
+        }
+      }
     ]
   },
   {
@@ -65,8 +146,19 @@
     "title": "Mystic Font",
     "flavor": "Runes carved into the floor glow with trapped rift energy.",
     "options": [
-      { "label": "Purify", "desc": "Cure all status effects and gain poison immunity.", "handler": "font_purify" },
-      { "label": "Empower", "desc": "+2 ATK permanently.", "handler": "font_empower", "params": { "atkBonus": 2 } }
+      {
+        "label": "Purify",
+        "desc": "Cure all status effects and gain poison immunity.",
+        "handler": "font_purify"
+      },
+      {
+        "label": "Empower",
+        "desc": "+2 ATK permanently.",
+        "handler": "font_empower",
+        "params": {
+          "atkBonus": 2
+        }
+      }
     ]
   },
   {
@@ -75,8 +167,22 @@
     "title": "Cursed Armory",
     "flavor": "Weapons of the fallen gleam with dark purpose.",
     "options": [
-      { "label": "Take the cursed blade", "desc": "+8 ATK — but suffer 3 turns of poison.", "handler": "armory_cursed_blade", "params": { "atkBonus": 8, "poisonDuration": 3, "poisonPower": 4 } },
-      { "label": "Walk away", "desc": "Some power is not worth the price.", "handler": "static_message", "resultMsg": "You leave the cursed weapons untouched." }
+      {
+        "label": "Take the cursed blade",
+        "desc": "+8 ATK — but suffer 3 turns of poison.",
+        "handler": "armory_cursed_blade",
+        "params": {
+          "atkBonus": 8,
+          "poisonDuration": 3,
+          "poisonPower": 4
+        }
+      },
+      {
+        "label": "Walk away",
+        "desc": "Some power is not worth the price.",
+        "handler": "static_message",
+        "resultMsg": "You leave the cursed weapons untouched."
+      }
     ]
   },
   {
@@ -85,8 +191,24 @@
     "title": "Rift Scholar",
     "flavor": "A fractured echo of intelligence lingers here.",
     "options": [
-      { "label": "Learn combat theory", "desc": "+50 XP and +1 combat level.", "handler": "scholar_combat_theory", "params": { "xpGain": 50, "combatLevelBonus": 1 } },
-      { "label": "Absorb passive wisdom", "desc": "+3 vision, +1 HP regen/tick permanently.", "handler": "scholar_wisdom", "params": { "visionBonus": 3, "regenBonus": 1 } }
+      {
+        "label": "Learn combat theory",
+        "desc": "+50 XP and +1 combat level.",
+        "handler": "scholar_combat_theory",
+        "params": {
+          "xpGain": 50,
+          "combatLevelBonus": 1
+        }
+      },
+      {
+        "label": "Absorb passive wisdom",
+        "desc": "+3 vision, +1 HP regen/tick permanently.",
+        "handler": "scholar_wisdom",
+        "params": {
+          "visionBonus": 3,
+          "regenBonus": 1
+        }
+      }
     ]
   }
 ]

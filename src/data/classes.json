@@ -7,9 +7,20 @@
     "statPreview": "−5 HP  gravity 25% slower  D6 dice  Time Dilation (Q, +100 slow/15t, cd 14)",
     "tPieceCdReduction": 2,
     "effects": [
-      { "stat": "maxHp", "value": -5, "min": 10 },
-      { "stat": "tickSlowPercent", "value": 25 },
-      { "stat": "baseCombatLevel", "op": "set", "value": 2 }
+      {
+        "stat": "maxHp",
+        "value": -5,
+        "min": 10
+      },
+      {
+        "stat": "tickSlowPercent",
+        "value": 25
+      },
+      {
+        "stat": "baseCombatLevel",
+        "op": "set",
+        "value": 2
+      }
     ],
     "ability": {
       "name": "Time Dilation",
@@ -18,7 +29,10 @@
       "range": 0,
       "damageMult": 0,
       "cooldownMax": 14,
-      "params": { "slowTurns": 15, "slowPct": 100 }
+      "params": {
+        "slowTurns": 15,
+        "slowPct": 100
+      }
     }
   },
   {
@@ -29,11 +43,29 @@
     "statPreview": "−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  Gravity Well (Q, 4-tile pull×2+stun, cd 8)",
     "tPieceCdReduction": 2,
     "effects": [
-      { "stat": "maxHp", "value": -10, "min": 10 },
-      { "stat": "atk", "value": 2 },
-      { "stat": "visionRadius", "value": 2 },
-      { "stat": "teleportImmune", "op": "set", "value": true },
-      { "stat": "baseCombatLevel", "op": "set", "value": 3 }
+      {
+        "stat": "maxHp",
+        "value": -10,
+        "min": 10
+      },
+      {
+        "stat": "atk",
+        "value": 2
+      },
+      {
+        "stat": "visionRadius",
+        "value": 2
+      },
+      {
+        "stat": "teleportImmune",
+        "op": "set",
+        "value": true
+      },
+      {
+        "stat": "baseCombatLevel",
+        "op": "set",
+        "value": 3
+      }
     ],
     "ability": {
       "name": "Gravity Well",
@@ -42,7 +74,10 @@
       "range": 4,
       "damageMult": 0,
       "cooldownMax": 8,
-      "params": { "pullSteps": 2, "stunDuration": 1 }
+      "params": {
+        "pullSteps": 2,
+        "stunDuration": 1
+      }
     }
   },
   {
@@ -53,11 +88,29 @@
     "statPreview": "+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  Consecrate (Q, vision-wide, cd 10)",
     "tPieceCdReduction": 4,
     "effects": [
-      { "stat": "maxHp", "value": 15 },
-      { "stat": "hp", "value": 15 },
-      { "stat": "atk", "value": -2, "min": 1 },
-      { "stat": "lineClearXpMult", "op": "set", "value": 2 },
-      { "stat": "baseCombatLevel", "op": "set", "value": 3 }
+      {
+        "stat": "maxHp",
+        "value": 15
+      },
+      {
+        "stat": "hp",
+        "value": 15
+      },
+      {
+        "stat": "atk",
+        "value": -2,
+        "min": 1
+      },
+      {
+        "stat": "lineClearXpMult",
+        "op": "set",
+        "value": 2
+      },
+      {
+        "stat": "baseCombatLevel",
+        "op": "set",
+        "value": 3
+      }
     ],
     "ability": {
       "name": "Consecrate",
@@ -66,7 +119,9 @@
       "range": 0,
       "damageMult": 0,
       "cooldownMax": 10,
-      "params": { "tileType": "sacred" }
+      "params": {
+        "tileType": "sacred"
+      }
     }
   },
   {
@@ -77,10 +132,25 @@
     "statPreview": "−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  Overload (Q, 8×kills min floor×5, cd 12)",
     "tPieceCdReduction": 2,
     "effects": [
-      { "stat": "maxHp", "value": -20, "min": 10 },
-      { "stat": "atk", "value": 10 },
-      { "stat": "baseCombatLevel", "op": "set", "value": 4 },
-      { "stat": "lineClearDmgMult", "op": "set", "value": 4 }
+      {
+        "stat": "maxHp",
+        "value": -20,
+        "min": 10
+      },
+      {
+        "stat": "atk",
+        "value": 10
+      },
+      {
+        "stat": "baseCombatLevel",
+        "op": "set",
+        "value": 4
+      },
+      {
+        "stat": "lineClearDmgMult",
+        "op": "set",
+        "value": 4
+      }
     ],
     "ability": {
       "name": "Overload",
@@ -89,7 +159,10 @@
       "range": 0,
       "damageMult": 0,
       "cooldownMax": 12,
-      "params": { "perKillDmg": 8, "perFloorMinDmg": 5 }
+      "params": {
+        "perKillDmg": 8,
+        "perFloorMinDmg": 5
+      }
     }
   }
 ]

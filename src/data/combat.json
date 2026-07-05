@@ -1,9 +1,34 @@
 {
-  "diceSidesByLevel": [0, 4, 6, 8, 10, 12, 20],
-  "outcomeMultipliers": { "miss": 0, "weak": 0.5, "normal": 1.0, "power": 1.5, "critical": 2.0 },
-  "marginThresholds": { "weakMax": 2, "normalMax": 5 },
+  "diceSidesByLevel": [
+    0,
+    4,
+    6,
+    8,
+    10,
+    12,
+    20
+  ],
+  "outcomeMultipliers": {
+    "miss": 0,
+    "weak": 0.5,
+    "normal": 1.0,
+    "power": 1.5,
+    "critical": 2.0
+  },
+  "marginThresholds": {
+    "weakMax": 2,
+    "normalMax": 5
+  },
   "missPityStreak": 2,
   "grazeDamagePct": 0.25,
-  "critStun": { "duration": 1, "power": 0 },
-  "rewards": { "goldOnKill": 80, "goldOnBossKill": 500, "eliteGoldBonusPerFloor": 150, "healOnKill": 3 }
+  "critStun": {
+    "duration": 1,
+    "power": 0
+  },
+  "rewards": {
+    "goldOnKill": 80,
+    "goldOnBossKill": 500,
+    "eliteGoldBonusPerFloor": 150,
+    "healOnKill": 3
+  }
 }

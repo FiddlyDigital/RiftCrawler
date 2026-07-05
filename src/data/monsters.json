@@ -24,7 +24,12 @@
     "atkScaleCoefficient": 1.0,
     "xpValue": 35,
     "spawnMsg": "Spawn",
-    "statusInflict": { "type": "poison", "chance": 0.25, "duration": 3, "power": 3 }
+    "statusInflict": {
+      "type": "poison",
+      "chance": 0.25,
+      "duration": 3,
+      "power": 3
+    }
   },
   "goblin_archer": {
     "id": "goblin_archer",
@@ -83,6 +88,11 @@
     "spawnMsg": "Spawn",
     "behaviorType": "swift",
     "moveSpeed": 2,
-    "statusInflict": { "type": "poison", "chance": 0.5, "duration": 3, "power": 2 }
+    "statusInflict": {
+      "type": "poison",
+      "chance": 0.5,
+      "duration": 3,
+      "power": 2
+    }
   }
 }
