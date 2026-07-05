@@ -224,7 +224,7 @@ describe('Game.getInspectInfo', () => {
   });
 
   it('describes a monster on a tile', () => {
-    const monster = new Monster(4, 22, '👹', 'Goblin', 10, 10, 3, 5);
+    const monster = new Monster(4, 22, 'sprite_berserker_orc', 'Goblin', 10, 10, 3, 5);
     game.monsters.push(monster);
     const info = game.getInspectInfo(4, 22);
     expect(info).not.toBeNull();
@@ -253,8 +253,8 @@ describe('Monster clearing & Sacred Brands', () => {
   });
 
   it('killMonster removes only the target from the monster list', () => {
-    const a = new Monster(4, 21, '👹', 'A', 1, 1, 1, 5);
-    const b = new Monster(5, 21, '👹', 'B', 5, 5, 1, 5);
+    const a = new Monster(4, 21, 'sprite_berserker_orc', 'A', 1, 1, 1, 5);
+    const b = new Monster(5, 21, 'sprite_berserker_orc', 'B', 5, 5, 1, 5);
     game.monsters.push(a, b);
     killMonster(a, game);
     expect(game.monsters).not.toContain(a);
@@ -262,7 +262,7 @@ describe('Monster clearing & Sacred Brands', () => {
   });
 
   it('poison kills a monster on tick, clears it, and awards XP', () => {
-    const m = new Monster(4, 21, '👹', 'Goblin', 3, 3, 2, 20);
+    const m = new Monster(4, 21, 'sprite_berserker_orc', 'Goblin', 3, 3, 2, 20);
     m.statuses = [{ type: 'poison', duration: 3, power: 5 }];
     game.monsters.push(m);
     const xpBefore = game.player.totalXpEarned;
@@ -272,7 +272,7 @@ describe('Monster clearing & Sacred Brands', () => {
   });
 
   it('monster poison applies exactly once per tick (no double-application)', () => {
-    const m = new Monster(4, 21, '👹', 'Tank', 20, 20, 1, 5);
+    const m = new Monster(4, 21, 'sprite_berserker_orc', 'Tank', 20, 20, 1, 5);
     m.statuses = [{ type: 'poison', duration: 5, power: 5 }];
     game.monsters.push(m);
     game.autoTick();
@@ -336,7 +336,7 @@ describe('Balance levers', () => {
   // Phase 1
   it('misses chip for graze damage and the pity whiff upgrades to a stronger hit', () => {
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0); // aRoll=dRoll=1 → forced miss
-    const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
+    const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
     const d1 = playerAttackMonster(m, game);
     const d2 = playerAttackMonster(m, game);
@@ -349,7 +349,7 @@ describe('Balance levers', () => {
 
   it('a landed hit resets the miss-pity streak', () => {
     game.player.missStreak = 2;
-    const m = new Monster(5, 21, '👹', 'Dummy', 100, 100, 1, 5);
+    const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
     const spyHit = vi.spyOn(Math, 'random').mockReturnValue(0.99); // high aRoll → land
     playerAttackMonster(m, game);
@@ -410,7 +410,7 @@ describe('Balance levers', () => {
   });
 
   it('monster inspect reports the player hit chance', () => {
-    const m = new Monster(4, 22, '👹', 'Goblin', 10, 10, 3, 5);
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'Goblin', 10, 10, 3, 5);
     game.monsters.push(m);
     const info = game.getInspectInfo(4, 22);
     expect(info!.lines.some(l => l.toLowerCase().includes('hit chance'))).toBe(true);
@@ -432,7 +432,7 @@ describe('Descent visibility & interaction priority', () => {
   it('an enemy on an interactable tile blocks it — combat takes priority', () => {
     let altarOpened = false;
     cb.onOpenAltar = () => { altarOpened = true; };
-    const m = new Monster(4, 22, '👹', 'Guard', 500, 500, 3, 5);
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'Guard', 500, 500, 3, 5);
     game.monsters.push(m);
     (game as unknown as { altarTiles: Array<{ x: number; y: number; tier: number }> }).altarTiles.push({ x: 4, y: 22, tier: 1 });
     game.player.atk = 100;
@@ -603,7 +603,7 @@ describe('Adjacent enemies attack', () => {
   });
 
   it('orthogonally adjacent melee monster hits the player', () => {
-    const m = new Monster(4, 22, '👹', 'G', 80, 80, 10, 5); // directly above, dist 1
+    const m = new Monster(4, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5); // directly above, dist 1
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99); // force a landed hit
     processMonsterTurns(game);
@@ -613,7 +613,7 @@ describe('Adjacent enemies attack', () => {
 
   it('diagonally adjacent melee monster closes and hits within a few turns', () => {
     game.map[5]![22] = Tile.FLOOR;  // open floor so it can step in
-    const m = new Monster(5, 22, '👹', 'G', 80, 80, 10, 5); // diagonal, dist 2
+    const m = new Monster(5, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5); // diagonal, dist 2
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     for (let i = 0; i < 4; i++) processMonsterTurns(game);
@@ -625,7 +625,7 @@ describe('Adjacent enemies attack', () => {
     game.player.x = 4; game.player.y = 10;
     game.map[4]![10] = Tile.FLOOR;  // hero's tile
     game.map[5]![11] = Tile.FLOOR;  // enemy diagonally touching; both approach tiles are void
-    const m = new Monster(5, 11, '👹', 'G', 80, 80, 10, 5);
+    const m = new Monster(5, 11, 'sprite_berserker_orc', 'G', 80, 80, 10, 5);
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     for (let i = 0; i < 3; i++) processMonsterTurns(game);

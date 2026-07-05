@@ -1,4 +1,3 @@
-import visualRegistryData from './data/visual-registry.json';
 import monstersData       from './data/monsters.json';
 import bossesData         from './data/bosses.json';
 import shapesData         from './data/shapes.json';
@@ -9,14 +8,6 @@ import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef,
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
-
-// ── Visual registry ───────────────────────────────────────────────────────────
-
-export const VISUAL_REGISTRY: Record<string, string> = visualRegistryData as Record<string, string>;
-
-function vis(assetId: string): string {
-  return VISUAL_REGISTRY[assetId] ?? '❓';
-}
 
 // ── Declarative effect resolver (JSON-configured boons / brands / modifiers) ───
 // Boons/brands/modifiers describe their effects as data; these apply them.
@@ -73,10 +64,6 @@ interface RawBoss {
   hpMult: number; atkMult: number; xpValue: number; flavorText: string;
 }
 
-interface RawShape {
-  matrix: number[][]; color: string; preview: string;
-}
-
 // ── Cell type ID → CellValue ──────────────────────────────────────────────────
 
 const CELL_MAP: Record<string, CellValue> = {
@@ -94,7 +81,7 @@ export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(
   Object.entries(monstersData as Record<string, RawMonster>).map(([key, raw]) => [
     key,
     {
-      char:         vis(raw.visualAsset),
+      char:         raw.visualAsset,
       name:         raw.displayName,
       combatLevel:  raw.combatLevel ?? 2,
       baseHp:       raw.baseHp,
@@ -125,7 +112,7 @@ export const MONSTER_DEFS: MonsterDef[] = Object.values(MONSTERS);
 
 export const BOSSES: BossDef[] = [
   ...(bossesData as RawBoss[]).map(raw => ({
-    char:       vis(raw.visualAsset),
+    char:       raw.visualAsset,
     name:       raw.displayName,
     hpMult:     raw.hpMult,
     atkMult:    raw.atkMult,
@@ -135,7 +122,7 @@ export const BOSSES: BossDef[] = [
   // Biome-specific bosses — never appear outside their biome
   {
     biomeId:    'cavern',
-    char:       '💎',
+    char:       'sprite_boss_crystal_golem',
     name:       'Crystal Golem',
     hpMult:     4.5,
     atkMult:    2.0,
@@ -145,7 +132,7 @@ export const BOSSES: BossDef[] = [
   },
   {
     biomeId:    'rift',
-    char:       '👁️',
+    char:       'sprite_boss_rift_tyrant',
     name:       'Rift Tyrant',
     hpMult:     5.0,
     atkMult:    2.5,
@@ -265,66 +252,62 @@ export interface ShapeDef {
 
 export const SHAPES = shapesData as Record<ShapeKey, ShapeDef>;
 
-export const NEXT_PREVIEWS: Record<ShapeKey, string> = Object.fromEntries(
-  Object.entries(shapesData as Record<ShapeKey, RawShape>).map(([k, v]) => [k, v.preview])
-) as Record<ShapeKey, string>;
-
 // ── Starting classes ──────────────────────────────────────────────────────────
 
 export const CLASSES: ClassDef[] = [
   {
     id: 'chronomancer',
-    emoji: '⌛',
+    emoji: 'class_chronomancer',
     name: 'Chronomancer',
     tagline: 'Bend time to your will. Slow the rift, outlast everything.',
-    statPreview: '−5 HP  gravity 25% slower  D6 dice  ⌛ Time Dilation (Q, +100 slow/15t, cd 14)',
+    statPreview: '−5 HP  gravity 25% slower  D6 dice  Time Dilation (Q, +100 slow/15t, cd 14)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 5); p.hp = Math.min(p.hp, p.maxHp);
       p.tickSlowPercent += 25;
       p.baseCombatLevel = 2;
-      p.rangedAbility = { name: 'Time Dilation', emoji: '⌛', range: 0, damageMult: 0, cooldownMax: 14, abilityType: 'time_dilation' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Time Dilation', emoji: 'class_chronomancer', range: 0, damageMult: 0, cooldownMax: 14, abilityType: 'time_dilation' } satisfies RangedAbility;
     },
   },
   {
     id: 'rift_weaver',
-    emoji: '🌀',
+    emoji: 'class_rift_weaver',
     name: 'Rift Weaver',
     tagline: 'Command spatial forces. Pull enemies to their doom.',
-    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  🌀 Gravity Well (Q, 4-tile pull×2+stun, cd 8)',
+    statPreview: '−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  Gravity Well (Q, 4-tile pull×2+stun, cd 8)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 10); p.hp = Math.min(p.hp, p.maxHp);
       p.atk += 2;
       p.visionRadius += 2;
       p.teleportImmune = true;
       p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Gravity Well', emoji: '🌀', range: 4, damageMult: 0, cooldownMax: 8, abilityType: 'gravity_well' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Gravity Well', emoji: 'trap_teleport', range: 4, damageMult: 0, cooldownMax: 8, abilityType: 'gravity_well' } satisfies RangedAbility;
     },
   },
   {
     id: 'architect',
-    emoji: '🏗️',
+    emoji: 'class_architect',
     name: 'The Architect',
     tagline: 'Master the Tetris layer. Every clear is your weapon.',
-    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  ✨ Consecrate (Q, vision-wide, cd 10)',
+    statPreview: '+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  Consecrate (Q, vision-wide, cd 10)',
     apply: (p: Player) => {
       p.maxHp += 15; p.hp += 15;
       p.atk = Math.max(1, p.atk - 2);
       p.lineClearXpMult = 2;
       p.baseCombatLevel = 3;
-      p.rangedAbility = { name: 'Consecrate', emoji: '✨', range: 0, damageMult: 0, cooldownMax: 10, abilityType: 'consecrate' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Consecrate', emoji: 'special_sacred', range: 0, damageMult: 0, cooldownMax: 10, abilityType: 'consecrate' } satisfies RangedAbility;
     },
   },
   {
     id: 'cascade',
-    emoji: '💥',
+    emoji: 'class_cascade',
     name: 'Cascade',
     tagline: 'Stack kills, then unleash. Pure explosive potential.',
-    statPreview: '−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  💥 Overload (Q, 8×kills min floor×5, cd 12)',
+    statPreview: '−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  Overload (Q, 8×kills min floor×5, cd 12)',
     apply: (p: Player) => {
       p.maxHp = Math.max(10, p.maxHp - 20); p.hp = Math.min(p.hp, p.maxHp);
       p.atk += 10;
       p.baseCombatLevel = 4;
-      p.rangedAbility = { name: 'Overload', emoji: '💥', range: 0, damageMult: 0, cooldownMax: 12, abilityType: 'overload' } satisfies RangedAbility;
+      p.rangedAbility = { name: 'Overload', emoji: 'fx_impact', range: 0, damageMult: 0, cooldownMax: 12, abilityType: 'overload' } satisfies RangedAbility;
     },
   },
 ];
@@ -371,7 +354,7 @@ export function getBiomeForFloor(floor: number): BiomeDef {
 export const FLOOR_EVENTS: FloorEventDef[] = [
   {
     id: 'ancient_shrine',
-    emoji: '🏛️',
+    emoji: 'tile_altar',
     title: 'Ancient Shrine',
     flavor: 'A worn altar pulses with faint magic. Power can be bought — for a price.',
     options: [
@@ -384,7 +367,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
           const pool = [...BOONS_BY_TIER[1], ...BOONS_BY_TIER[2]];
           const boon = pool[Math.floor(Math.random() * pool.length)]!;
           game.player.addBoon(boon);
-          return `The shrine grants: ${boon.char} ${boon.name}! (${boon.desc})`;
+          return `The shrine grants: ${boon.name}! (${boon.desc})`;
         },
       },
       {
@@ -396,7 +379,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
   },
   {
     id: 'healing_spring',
-    emoji: '💧',
+    emoji: 'item_droplet',
     title: 'Healing Spring',
     flavor: 'A clear pool bubbles up from the stone floor. Its waters shimmer with life.',
     options: [
@@ -421,7 +404,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
   },
   {
     id: 'fallen_champion',
-    emoji: '⚔️',
+    emoji: 'sprite_equip_iron_sword',
     title: 'Fallen Champion',
     flavor: 'The corpse of a warrior lies here, still clutching their belongings.',
     options: [
@@ -448,7 +431,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
   },
   {
     id: 'dark_bargain',
-    emoji: '👁️',
+    emoji: 'fx_arcane',
     title: 'Dark Bargain',
     flavor: 'A disembodied voice whispers from the shadows, offering terrible power.',
     options: [
@@ -471,7 +454,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
   },
   {
     id: 'tome_of_knowledge',
-    emoji: '📖',
+    emoji: 'item_book',
     title: 'Tome of Knowledge',
     flavor: 'A dusty tome lies open to a marked page, its text glowing faintly.',
     options: [
@@ -481,7 +464,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
         apply: (game) => {
           const levelled = game.player.gainXP(150);
           if (levelled) {
-            game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
+            game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
             game.openLevelUpBoons();
           }
           return `You absorb the battle tactics. +150 XP`;
@@ -499,7 +482,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
   },
   {
     id: 'abandoned_cache',
-    emoji: '💰',
+    emoji: 'item_gold_pouch',
     title: 'Abandoned Cache',
     flavor: 'A hidden stash behind a loose stone. Someone left in a hurry.',
     options: [
@@ -517,18 +500,18 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
         apply: (game) => {
           if (Math.random() < 0.5) {
             game.gold += 2000;
-            return '🎉 Jackpot! +2000 gold!';
+            return 'Jackpot! +2000 gold!';
           }
           const dmg = game.player.takeDamage(30);
           game.damageTaken += dmg;
-          return `💥 It was booby-trapped! −${dmg} HP`;
+          return `It was booby-trapped! −${dmg} HP`;
         },
       },
     ],
   },
   {
     id: 'mystic_font',
-    emoji: '✨',
+    emoji: 'special_sacred',
     title: 'Mystic Font',
     flavor: 'Runes carved into the floor glow with trapped rift energy.',
     options: [
@@ -557,7 +540,7 @@ export const FLOOR_EVENTS: FloorEventDef[] = [
 FLOOR_EVENTS.push(
   {
     id: 'cursed_armory',
-    emoji: '🗡️',
+    emoji: 'sprite_equip_dagger',
     title: 'Cursed Armory',
     flavor: 'Weapons of the fallen gleam with dark purpose.',
     options: [
@@ -579,7 +562,7 @@ FLOOR_EVENTS.push(
   },
   {
     id: 'rift_scholar',
-    emoji: '📜',
+    emoji: 'item_scroll',
     title: 'Rift Scholar',
     flavor: 'A fractured echo of intelligence lingers here.',
     options: [
@@ -590,7 +573,7 @@ FLOOR_EVENTS.push(
           const levelled = game.player.gainXP(50);
           game.player.baseCombatLevel += 1;
           if (levelled) {
-            game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
+            game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
             game.openLevelUpBoons();
           }
           return 'Combat mastery expands. +50 XP, +1 combat level.';

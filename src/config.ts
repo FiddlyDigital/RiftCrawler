@@ -4,5 +4,5 @@ export const CONFIG = {
   TILE_SIZE: 17,
 } as const;
 
-export { SHAPES, NEXT_PREVIEWS } from './dataLoader';
+export { SHAPES } from './dataLoader';
 export type { ShapeKey, ShapeDef } from './dataLoader';

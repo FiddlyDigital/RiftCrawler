@@ -9,7 +9,7 @@ export function applyStatusEffects(game: Game): void {
       if (dmg > 0) {
         game.player.hp = Math.max(0, game.player.hp - dmg);
         game.damageTaken += dmg;
-        game.cb.onParticle(game.player.x, game.player.y, `☠ -${dmg}`, '#9c27b0');
+        game.cb.onParticle(game.player.x, game.player.y, `-${dmg}`, '#9c27b0', undefined, 'status_poison');
         game.cb.onAudio?.('poison');
         game.cb.log(`Poison deals ${dmg} damage!`, 'log-damage');
         if (game.player.hp <= 0) { triggerDeath(game, 'HERO DEFEATED', 'Succumbed to poison.'); return; }
@@ -27,7 +27,7 @@ export function applyStatusEffects(game: Game): void {
     for (const s of m.statuses) {
       if (s.type === 'poison') {
         m.hp -= s.power;
-        game.cb.onParticle(m.x, m.y, `☠ -${s.power}`, '#9c27b0');
+        game.cb.onParticle(m.x, m.y, `-${s.power}`, '#9c27b0', undefined, 'status_poison');
         if (m.hp <= 0) break;
       }
       if (s.duration > 1) nextM.push({ ...s, duration: s.duration - 1 });

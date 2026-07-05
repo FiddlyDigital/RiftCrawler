@@ -6,6 +6,7 @@ import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusE
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
+import { spriteIconHTML } from './sprites';
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
 
@@ -424,14 +425,15 @@ export class Game {
         const tileType =
           this.currentType === 'S' ? 'swamp' :
           this.currentType === 'J' ? 'ice' : 'sacred';
-        const msgs = { swamp: '🌿 Swamp — monsters take 1 dmg/turn!', sacred: '✨ Sacred ground — Wait here for bonus heal!', ice: '❄️ Ice — entities slide across!' };
+        const msgs = { swamp: 'Swamp — monsters take 1 dmg/turn!', sacred: 'Sacred ground — Wait here for bonus heal!', ice: 'Ice — entities slide across!' };
+        const icons = { swamp: 'special_swamp', sacred: 'special_sacred', ice: 'special_ice' };
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
               !this.tattooTiles.some(t => t.x === fc.x && t.y === fc.y)) {
             this.specialTiles.push({ x: fc.x, y: fc.y, type: tileType as SpecialTile['type'] });
           }
         }
-        this.cb.log(msgs[tileType as keyof typeof msgs]!, 'log-tetris');
+        this.cb.log(msgs[tileType as keyof typeof msgs]!, 'log-tetris', icons[tileType as keyof typeof icons]);
       } else if (this.currentType === 'Z') {
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
@@ -439,11 +441,11 @@ export class Game {
             this.hazards.push({ x: fc.x, y: fc.y, type: 'spike', timer: 5, warning: false });
           }
         }
-        this.cb.log('⬆️ Spike Field — fires every 5 ticks!', 'log-tetris');
+        this.cb.log('Spike Field — fires every 5 ticks!', 'log-tetris', 'trap_spike');
       } else if (this.currentType === 'T' && this.player.rangedCooldown > 0) {
         const cdReduce = this.activeClassId === 'architect' ? 4 : 2;
         this.player.rangedCooldown = Math.max(0, this.player.rangedCooldown - cdReduce);
-        this.cb.log('💜 Arcane resonance — ranged cooldown reduced!', 'log-perk');
+        this.cb.log('Arcane resonance — ranged cooldown reduced!', 'log-perk', 'fx_arcane');
       }
     }
 
@@ -457,8 +459,8 @@ export class Game {
       if (eligible.length > 0) {
         const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
         this.specialTiles.push({ x: fc.x, y: fc.y, type: 'sacred' });
-        this.cb.log('✨ A blessed rift — holy ground consecrated!', 'log-perk');
-        this.cb.onParticle(fc.x, fc.y, '✨ BLESSED!', '#ffb74d');
+        this.cb.log('A blessed rift — holy ground consecrated!', 'log-perk', 'special_sacred');
+        this.cb.onParticle(fc.x, fc.y, 'BLESSED!', '#ffb74d', undefined, 'special_sacred');
       }
     }
 
@@ -487,7 +489,7 @@ export class Game {
     }
     if (stackTop <= 5) {
       this.gorgothHintShown = true;
-      this.cb.log('⚠️ The stack climbs high — let it top out to summon GORGOTH THE RETURNED and win the Rift!', 'log-boss');
+      this.cb.log('The stack climbs high — let it top out to summon GORGOTH THE RETURNED and win the Rift!', 'log-boss', 'ui_warning');
     }
   }
 
@@ -523,7 +525,7 @@ export class Game {
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const hp  = isElite ? baseHp * 2 : baseHp;
     const atk = isElite ? Math.floor(baseAtk * 1.5) : baseAtk;
-    const name = isElite ? `⭐ ${def.name}` : def.name;
+    const name = isElite ? `Elite ${def.name}` : def.name;
     const m = new Monster(
       tx, ty, def.char, name, hp, hp, atk, def.xpReward,
       false,
@@ -539,10 +541,10 @@ export class Game {
     }
     this.monsters.push(m);
     if (isElite) {
-      this.cb.onParticle(tx, ty, '⭐ ELITE!', '#ffd700');
-      this.cb.log(`⭐ Elite ${def.name} stalks out of the dark!`, 'log-boss');
+      this.cb.onParticle(tx, ty, 'ELITE!', '#ffd700', undefined, 'special_sacred');
+      this.cb.log(`Elite ${def.name} stalks out of the dark!`, 'log-boss', 'special_sacred');
     } else {
-      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373');
+      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373', undefined, def.char);
     }
   }
 
@@ -556,21 +558,21 @@ export class Game {
       if (spawned >= 2) break;
       const sx = bx + dx, sy = by + dy;
       if (this.isValidMove(sx, sy) && !this.getMonsterAt(sx, sy)) {
-        const shard = new Monster(sx, sy, '🔷', 'Crystal Shard', shardHp, shardHp, shardAtk, 30);
+        const shard = new Monster(sx, sy, 'sprite_crystal_shard', 'Crystal Shard', shardHp, shardHp, shardAtk, 30);
         shard.combatLevel = 3;
         this.monsters.push(shard);
-        this.cb.onParticle(sx, sy, '💎', '#80d8ff');
+        this.cb.onParticle(sx, sy, '', '#80d8ff', undefined, 'sprite_crystal_shard');
         spawned++;
       }
     }
-    this.cb.log('💎 The Crystal Golem shatters — shards emerge!', 'log-boss');
+    this.cb.log('The Crystal Golem shatters — shards emerge!', 'log-boss', 'sprite_boss_crystal_golem');
   }
 
   // Called by Rift Tyrant onHalfHp
   triggerGravityBurst(): void {
     this.blockY = Math.max(0, this.blockY - 5);
-    this.cb.log('⚡ Rift Tyrant tears the weave — gravity surges!', 'log-boss');
-    this.cb.onParticle(this.player.x, this.player.y, '⚡ SURGE!', '#aa00ff');
+    this.cb.log('Rift Tyrant tears the weave — gravity surges!', 'log-boss', 'fx_impact');
+    this.cb.onParticle(this.player.x, this.player.y, 'SURGE!', '#aa00ff', undefined, 'fx_impact');
     this.cb.onAudio?.('bossWarn');
   }
 
@@ -616,18 +618,18 @@ export class Game {
       this.colors[altarX]![midY] = altarColor;
       this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
       this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
-      this.cb.log(`💰 A Treasure Vault lies to the ${side} — guarded.`, 'log-perk');
+      this.cb.log(`A Treasure Vault lies to the ${side} — guarded.`, 'log-perk', 'item_gold_pouch');
     } else {
       const positions: Array<[number, number]> = [[0, 0], [1, 0], [0, 1]];
       for (const [pdx, pdy] of positions) {
         this.spawnMonster(this.getRandomMonsterKey(), roomX + pdx, roomY + pdy);
       }
-      this.cb.log(`☠️ A Monster Den lurks to the ${side}...`, 'log-damage');
+      this.cb.log(`A Monster Den lurks to the ${side}...`, 'log-damage', 'status_poison');
     }
   }
 
   private triggerBomb(cx: number, cy: number): void {
-    this.cb.log('💣 BOOM! Bomb block detonated!', 'log-tetris');
+    this.cb.log('BOOM! Bomb block detonated!', 'log-tetris', 'fx_impact');
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const x = cx + dx, y = cy + dy;
@@ -639,7 +641,7 @@ export class Game {
         this.altarTiles = this.altarTiles.filter(a => !(a.x === x && a.y === y));
         this.hazards = this.hazards.filter(h => !(h.x === x && h.y === y));
         this.specialTiles = this.specialTiles.filter(t => !(t.x === x && t.y === y));
-        this.cb.onParticle(x, y, '💥', '#ff6b35');
+        this.cb.onParticle(x, y, '', '#ff6b35', undefined, 'fx_impact');
       }
     }
     this.gold += Math.floor(50 * this.dungeonLevel);
@@ -669,8 +671,8 @@ export class Game {
       this.activeBossOnHalfHp = bossDef.onHalfHp ?? null;
       this.activeBossOnDeath   = bossDef.onDeath  ?? null;
       this.bossHalfHpTriggered = false;
-      this.cb.log(`⚠️ ${bossDef.flavorText} ${bossDef.name} descends!`, 'log-boss');
-      this.cb.onParticle(tx, ty, '⚠️ BOSS', '#ff0000');
+      this.cb.log(`${bossDef.flavorText} ${bossDef.name} descends!`, 'log-boss', 'ui_warning');
+      this.cb.onParticle(tx, ty, 'BOSS', '#ff0000', undefined, 'ui_warning');
       // Boss cinematic pause
       this.paused = true;
       this.cb.onBossWarning?.(bossDef, () => { this.paused = false; });
@@ -734,7 +736,7 @@ export class Game {
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
         goldAdded = Math.floor(goldAdded * mult);
-        this.cb.log(`🔥 COMBO x${this.comboCount + 1}! +${goldAdded} Gold`, 'log-combo');
+        this.cb.log(`COMBO x${this.comboCount + 1}! +${goldAdded} Gold`, 'log-combo', 'fx_fire');
         this.cb.onCombo?.(this.comboCount + 1);
         if (this.comboCount >= 2) this.cb.onAudio?.('comboMilestone', this.comboCount + 1);
       }
@@ -746,7 +748,7 @@ export class Game {
       this.cb.onParticle(this.player.x, this.player.y, `+${xpGain}XP`, '#ce93d8', 14);
       const levelled = this.player.gainXP(Math.floor(xpGain * this.xpMultiplier));
       if (levelled) {
-        this.cb.log(`✨ LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk');
+        this.cb.log(`LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk', 'special_sacred');
         this.openLevelUpBoons();
       }
 
@@ -755,7 +757,7 @@ export class Game {
         for (const m of this.monsters) {
           if (this.visibility[m.x]?.[m.y]) {
             m.hp -= this.player.lineClearDamage;
-            this.cb.onParticle(m.x, m.y, `-${this.player.lineClearDamage}🔥`, '#ff6b35');
+            this.cb.onParticle(m.x, m.y, `-${this.player.lineClearDamage}`, '#ff6b35', undefined, 'fx_fire');
           }
         }
         this.monsters = this.monsters.filter(m => m.hp > 0);
@@ -767,7 +769,7 @@ export class Game {
         for (const m of this.monsters) {
           if (this.visibility[m.x]?.[m.y]) {
             m.hp -= dmg;
-            this.cb.onParticle(m.x, m.y, `💥-${dmg}`, '#ff6d00', 14);
+            this.cb.onParticle(m.x, m.y, `-${dmg}`, '#ff6d00', 14, 'fx_impact');
           }
         }
         this.monsters = this.monsters.filter(m => m.hp > 0);
@@ -778,7 +780,7 @@ export class Game {
         const aoeDmg = Math.floor(this.player.lineClearAoeDmgMult * this.dungeonLevel);
         for (const m of this.monsters) {
           m.hp -= aoeDmg;
-          this.cb.onParticle(m.x, m.y, `☄️-${aoeDmg}`, '#ff6d00');
+          this.cb.onParticle(m.x, m.y, `-${aoeDmg}`, '#ff6d00', undefined, 'fx_impact');
         }
         this.monsters = this.monsters.filter(m => m.hp > 0);
       }
@@ -958,7 +960,7 @@ export class Game {
     if (!cls) return;
     cls.apply(this.player);
     this.activeClassId = id;
-    this.cb.log(`Playing as ${cls.emoji} ${cls.name}: ${cls.tagline}`, 'log-perk');
+    this.cb.log(`Playing as ${cls.name}: ${cls.tagline}`, 'log-perk', cls.emoji);
     this.pushUI();
   }
 
@@ -974,7 +976,7 @@ export class Game {
     if (!mod) return;
     mod.apply(this);
     this.activeModifierId = id;
-    this.cb.log(`Rift Curse active: ${mod.emoji} ${mod.name} — ${mod.desc}`, 'log-perk');
+    this.cb.log(`Rift Curse active: ${mod.name} — ${mod.desc}`, 'log-perk', mod.emoji);
     this.pushUI();
   }
 
@@ -990,7 +992,7 @@ export class Game {
         ? (['body', 'left_arm', 'right_arm', 'legs', 'head'] as const)[this.player.brands.length]!
         : 'body' as const;
       this.player.addBrand(slot, choices[index]!);
-      this.cb.log(`🔱 ${choices[index]!.name} Brand tattooed on ${slot.replace('_', ' ')}!`, 'log-perk');
+      this.cb.log(`${choices[index]!.name} Brand tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
@@ -1124,7 +1126,7 @@ export class Game {
         const boss = this.monsters.find(m => m.isGorgoth);
         if (boss) this.gorgothHp = Math.max(1, boss.hp);
         this.gorgothSummoned = false;
-        this.cb.log('🪜 You slip down the ladder — Gorgoth\'s wounds will still be there when you face him again.', 'log-perk');
+        this.cb.log('You slip down the ladder — Gorgoth\'s wounds will still be there when you face him again.', 'log-perk', 'tile_stairs');
       }
       this.dungeonLevel++;
       this.floorsDescended++;
@@ -1140,7 +1142,7 @@ export class Game {
         this.paused = true;
         this.cb.onFloorEvent(event, (index) => {
           const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-          this.cb.log(msg, 'log-perk');
+          this.cb.log(msg, 'log-perk', event.emoji);
           this.paused = false;
           this.cb.onAction();
         });
@@ -1165,7 +1167,7 @@ export class Game {
     if (this.specialTiles.some(t => t.type === 'sacred' && t.x === this.player.x && t.y === this.player.y)) {
       const bonus = this.player.heal(2);
       if (bonus > 0) {
-        this.cb.onParticle(this.player.x, this.player.y, `+${bonus}✨`, '#ffb74d');
+        this.cb.onParticle(this.player.x, this.player.y, `+${bonus}`, '#ffb74d', undefined, 'special_sacred');
         this.cb.log('Sacred ground — blessed rest!', 'log-success');
       }
     }
@@ -1185,7 +1187,7 @@ export class Game {
       return;
     }
     if (this.player.rangedCooldown > 0) {
-      this.cb.log(`${ability.emoji} ${ability.name} on cooldown (${this.player.rangedCooldown} turns).`, 'log-neutral');
+      this.cb.log(`${ability.name} on cooldown (${this.player.rangedCooldown} turns).`, 'log-neutral', ability.emoji);
       return;
     }
 
@@ -1206,7 +1208,7 @@ export class Game {
 
     const target = this.findRangedTarget(ability.range);
     if (!target) {
-      this.cb.log(`${ability.emoji} No target in range (${ability.range} tiles).`, 'log-neutral');
+      this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
       return;
     }
 
@@ -1257,7 +1259,7 @@ export class Game {
           const nx = m.x + dx, ny = m.y + dy;
           if (this.map[nx]?.[ny] === Tile.FLOOR && !this.getMonsterAt(nx, ny)) {
             m.x = nx; m.y = ny; moved.add(m);
-            this.cb.onParticle(nx, ny, '🌀', '#7e57c2');
+            this.cb.onParticle(nx, ny, '', '#7e57c2', undefined, 'trap_teleport');
             break;
           }
         }
@@ -1267,7 +1269,7 @@ export class Game {
       if (!m.isStunned) m.statuses.push({ type: 'stun', duration: 1, power: 0 });
     }
     this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`🌀 Gravity Well! ${moved.size} monster(s) pulled & stunned.`, 'log-perk');
+    this.cb.log(`Gravity Well! ${moved.size} monster(s) pulled & stunned.`, 'log-perk', 'trap_teleport');
     this.advanceTurn();
   }
 
@@ -1284,8 +1286,8 @@ export class Game {
       }
     }
     this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`✨ Sacred Grounds! ${count} tiles consecrated.`, 'log-perk');
-    this.cb.onParticle(this.player.x, this.player.y, '✨ HOLY', '#fff176', 18);
+    this.cb.log(`Sacred Grounds! ${count} tiles consecrated.`, 'log-perk', 'special_sacred');
+    this.cb.onParticle(this.player.x, this.player.y, 'HOLY', '#fff176', 18, 'special_sacred');
     this.advanceTurn();
   }
 
@@ -1294,13 +1296,13 @@ export class Game {
     const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
     for (const m of targets) {
       m.hp -= dmg;
-      this.cb.onParticle(m.x, m.y, `💥-${dmg}`, '#ff6d00', 16);
+      this.cb.onParticle(m.x, m.y, `-${dmg}`, '#ff6d00', 16, 'fx_impact');
     }
     const killed = targets.filter(m => m.hp <= 0);
     this.monsters = this.monsters.filter(m => m.hp > 0);
     for (const m of killed) killMonster(m, this);
-    this.cb.log(`💥 Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills × 8, min floor×5).`, 'log-combo');
-    this.cb.onParticle(this.player.x, this.player.y, '💥 BOOM!', '#ff6d00', 18);
+    this.cb.log(`Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills × 8, min floor×5).`, 'log-combo', 'fx_impact');
+    this.cb.onParticle(this.player.x, this.player.y, 'BOOM!', '#ff6d00', 18, 'fx_impact');
     this.killsThisFloor = 0;
     this.player.rangedCooldown = ability.cooldownMax;
     this.advanceTurn();
@@ -1321,7 +1323,7 @@ export class Game {
     return inRange[0] ?? null;
   }
 
-  private emitProjectileTrail(tx: number, ty: number, emoji: string): void {
+  private emitProjectileTrail(tx: number, ty: number, icon: string): void {
     // Bresenham path from player to target, emit a dot particle at each step
     let x = this.player.x, y = this.player.y;
     const dx = Math.abs(tx - x), dy = Math.abs(ty - y);
@@ -1333,7 +1335,7 @@ export class Game {
       if (e2 < dx)  { err += dx; y += sy; }
       if (x !== tx || y !== ty) this.cb.onParticle(x, y, '·', '#ffcc02');
     }
-    this.cb.onParticle(tx, ty, emoji, '#ffcc02');
+    this.cb.onParticle(tx, ty, '', '#ffcc02', undefined, icon);
   }
 
   handleBlockHold(): void {
@@ -1389,7 +1391,7 @@ export class Game {
     // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
     // so descending floors only ever helps you.
     const gx = Math.floor(CONFIG.COLS / 2);
-    const boss = new Monster(gx, 0, '🗿', 'Gorgoth the Returned', this.gorgothHp, GORGOTH_MAX_HP, 48, 2000, true, 'gorgoth', 1, 1);
+    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Gorgoth the Returned', this.gorgothHp, GORGOTH_MAX_HP, 48, 2000, true, 'gorgoth', 1, 1);
     boss.combatLevel = 6;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
@@ -1398,7 +1400,7 @@ export class Game {
     // first time he crosses the threshold this run (persists across summons).
     this.activeBossOnHalfHp = (g) => {
       g.gorgothHalfTriggered = true;
-      g.cb.log('🗿 GORGOTH ROARS — the Returned claw their way up!', 'log-boss');
+      g.cb.log('GORGOTH ROARS — the Returned claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
       for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
         const ax = boss.x + dx, ay = boss.y + dy;
         if (ax >= 0 && ax < CONFIG.COLS && ay >= 0 && ay < CONFIG.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
@@ -1417,12 +1419,12 @@ export class Game {
       }
     }
 
-    this.cb.log('☠️ The stack tops out — GORGOTH THE RETURNED looms at the rift\'s edge...', 'log-boss');
-    this.cb.onParticle(gx, 0, '🗿 GORGOTH', '#ff1744', 18);
+    this.cb.log('The stack tops out — GORGOTH THE RETURNED looms at the rift\'s edge...', 'log-boss', 'ui_warning');
+    this.cb.onParticle(gx, 0, 'GORGOTH', '#ff1744', 18, 'sprite_boss_gorgoth');
 
     this.paused = true;
     this.cb.onBossWarning?.(
-      { char: '🗿', name: 'Gorgoth the Returned', hpMult: 1, atkMult: 1, xpReward: 2000, flavorText: 'The rift disgorges what it swallowed.' },
+      { char: 'sprite_boss_gorgoth', name: 'Gorgoth the Returned', hpMult: 1, atkMult: 1, xpReward: 2000, flavorText: 'The rift disgorges what it swallowed.' },
       () => { this.paused = false; },
     );
     this.pushUI();
@@ -1432,8 +1434,8 @@ export class Game {
   triggerVictory(): void {
     if (this.won) return;
     this.won = true;
-    this.cb.log('🏆 GORGOTH THE RETURNED FALLS — the rift is sealed. You win!', 'log-boss');
-    this.cb.onParticle(this.player.x, this.player.y, '🏆 VICTORY', '#ffd54f', 20);
+    this.cb.log('GORGOTH THE RETURNED FALLS — the rift is sealed. You win!', 'log-boss', 'item_trophy');
+    this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
     this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats());
   }
 
@@ -1483,7 +1485,7 @@ export class Game {
         `ATK ${this.player.totalAtk}  DEF ${this.player.totalDef}`,
         `Lv.${this.player.playerLevel}`,
       ];
-      if (this.player.boons.length > 0) lines.push(`Boons: ${this.player.boons.map(b => `${b.def.char}×${b.stacks}`).join(' ')}`);
+      if (this.player.boons.length > 0) lines.push(`Boons: ${this.player.boons.map(b => `${spriteIconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
       return { icon: this.player.char, title: 'You', lines };
     }
 
@@ -1497,42 +1499,42 @@ export class Game {
         `Type: ${monster.behaviorType}`,
       ];
       if (monster.statuses.length > 0) lines.push(`Status: ${monster.statuses.map(s => s.type).join(', ')}`);
-      return { icon: monster.char, title: monster.isBoss ? `👑 ${monster.name}` : monster.name, lines };
+      return { icon: monster.char, title: monster.name, lines };
     }
 
     const hazard = this.getHazardAt(x, y);
     if (hazard) {
       if (hazard.type === 'spike') {
-        const line = hazard.warning ? `⚠️ Firing in ${hazard.timer}!` : `Arms in ${hazard.timer} turns`;
-        return { icon: '⬆️', title: 'Spike Trap', lines: [line] };
+        const line = hazard.warning ? `Firing in ${hazard.timer}!` : `Arms in ${hazard.timer} turns`;
+        return { icon: 'trap_spike', title: 'Spike Trap', lines: [line] };
       }
       if (hazard.type === 'smoke') {
-        return { icon: '💨', title: 'Smoke Cloud', lines: ['Limits vision while standing inside'] };
+        return { icon: 'trap_smoke', title: 'Smoke Cloud', lines: ['Limits vision while standing inside'] };
       }
       if (hazard.type === 'teleport') {
-        return { icon: '🌀', title: 'Teleport Rune', lines: ['Warps whoever steps on it to a random floor tile'] };
+        return { icon: 'trap_teleport', title: 'Teleport Rune', lines: ['Warps whoever steps on it to a random floor tile'] };
       }
     }
 
     if (this.map[x]![y] === Tile.STAIRS) {
-      return { icon: '🪜', title: 'Stairs', lines: ['Descend to the next floor'] };
+      return { icon: 'tile_stairs', title: 'Stairs', lines: ['Descend to the next floor'] };
     }
 
     if (this.isTattooTile(x, y)) {
-      return { icon: '🎭', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Sacred Brand'] };
+      return { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Sacred Brand'] };
     }
 
     const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
     if (altarInfo) {
       const tierName = altarInfo.tier === 3 ? 'Grand Altar (Tier III)' : altarInfo.tier === 2 ? 'Ruined Altar (Tier II)' : 'Minor Altar (Tier I)';
-      return { icon: '⛩️', title: tierName, lines: ['Step on to choose a stackable boon'] };
+      return { icon: 'tile_altar', title: tierName, lines: ['Step on to choose a stackable boon'] };
     }
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);
     if (special) {
-      if (special.type === 'swamp')  return { icon: '🌿', title: 'Swamp',           lines: ['Deals 1 dmg/turn to monsters'] };
-      if (special.type === 'sacred') return { icon: '✨', title: 'Sacred Ground',   lines: ['Wait here for +2 bonus HP per rest'] };
-      if (special.type === 'ice')    return { icon: '❄️', title: 'Ice',             lines: ['Slide uncontrollably in direction of travel'] };
+      if (special.type === 'swamp')  return { icon: 'special_swamp',  title: 'Swamp',         lines: ['Deals 1 dmg/turn to monsters'] };
+      if (special.type === 'sacred') return { icon: 'special_sacred', title: 'Sacred Ground', lines: ['Wait here for +2 bonus HP per rest'] };
+      if (special.type === 'ice')    return { icon: 'special_ice',    title: 'Ice',           lines: ['Slide uncontrollably in direction of travel'] };
     }
 
     return null;

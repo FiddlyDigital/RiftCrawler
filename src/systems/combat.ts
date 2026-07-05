@@ -6,8 +6,8 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
   if (game.player.deathwardCharges > 0) {
     game.player.deathwardCharges--;
     game.player.hp = Math.max(1, Math.floor(game.player.maxHp * 0.30));
-    game.cb.log('💀 Deathward activates — pulled back from the brink!', 'log-success');
-    game.cb.onParticle?.(game.player.x, game.player.y, '💀 REVIVED', '#b71c1c', 16);
+    game.cb.log('Deathward activates — pulled back from the brink!', 'log-success', 'status_poison');
+    game.cb.onParticle?.(game.player.x, game.player.y, 'REVIVED', '#b71c1c', 16, 'status_poison');
     return;
   }
   // Life Brand: free revive but erases all brands
@@ -16,8 +16,8 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
     const brandCount = game.player.brands.length;
     game.player.brands = [];
     game.player.hp = Math.max(1, Math.floor(game.player.maxHp * 0.30));
-    game.cb.log(`❤️ Life Brand activates — ${brandCount} brands consumed, death averted!`, 'log-perk');
-    game.cb.onParticle?.(game.player.x, game.player.y, '❤️ REVIVED', '#e53935', 16);
+    game.cb.log(`Life Brand activates — ${brandCount} brands consumed, death averted!`, 'log-perk', 'item_heart');
+    game.cb.onParticle?.(game.player.x, game.player.y, 'REVIVED', '#e53935', 16, 'item_heart');
     return;
   }
   game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats());
@@ -127,7 +127,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     game.cb.onParticle(monster.x, monster.y, `-${dmg}`, '#ff9100', 16);
   } else {
     game.cb.log(`CRITICAL on ${monster.name}! (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-combo');
-    game.cb.onParticle(monster.x, monster.y, '💥 CRIT!', '#ffd54f', 18);
+    game.cb.onParticle(monster.x, monster.y, 'CRIT!', '#ffd54f', 18, 'fx_impact');
     if (!monster.isStunned) {
       monster.statuses.push({ type: 'stun', duration: 1, power: 0 });
       game.cb.log(`${monster.name} is stunned!`, 'log-success');
@@ -138,7 +138,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
   if (dmg > 0 && game.player.poisonAttackChance > 0 && Math.random() < game.player.poisonAttackChance) {
     if (!monster.statuses.some(s => s.type === 'poison')) {
       monster.statuses.push({ type: 'poison', duration: 3, power: 3 });
-      game.cb.log(`☠️ Poisoned ${monster.name}!`, 'log-success');
+      game.cb.log(`Poisoned ${monster.name}!`, 'log-success', 'status_poison');
     }
   }
 
@@ -189,7 +189,7 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
   // Thornweave Core: reflect damage back to attacker
   if (game.player.thornDamage > 0 && actual > 0) {
     m.hp -= game.player.thornDamage;
-    game.cb.onParticle(m.x, m.y, `🌵-${game.player.thornDamage}`, '#66bb6a');
+    game.cb.onParticle(m.x, m.y, `-${game.player.thornDamage}`, '#66bb6a', undefined, 'special_swamp');
     if (m.hp <= 0) {
       killMonster(m, game);
       return;
@@ -231,7 +231,7 @@ export function killMonster(m: Monster, game: Game): void {
   game.monsters = game.monsters.filter(x => x !== m);
   const levelled = game.player.gainXP(Math.floor(m.xpReward * game.xpMultiplier));
   if (levelled) {
-    game.cb.log(`✨ LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk');
+    game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
     game.openLevelUpBoons();
   }
   const killHeal = game.player.heal(game.player.killHeal);
@@ -242,14 +242,14 @@ export function killMonster(m: Monster, game: Game): void {
     game.player.killAtkFloorBonus += game.player.killAtkBonus;
   }
   if (m.isBoss) {
-    game.cb.log(`⚔️ BOSS SLAIN: ${m.name}!`, 'log-boss');
-    game.cb.onParticle(m.x, m.y, '🏆 BOSS!', '#ffd54f');
+    game.cb.log(`BOSS SLAIN: ${m.name}!`, 'log-boss', 'sprite_equip_iron_sword');
+    game.cb.onParticle(m.x, m.y, 'BOSS!', '#ffd54f', undefined, 'item_trophy');
   } else {
     if (m.isElite) {
       const bonus = 150 * game.dungeonLevel;
       game.gold += bonus;
-      game.cb.onParticle(m.x, m.y, `+${bonus}💰`, '#ffd700');
-      game.cb.log(`⭐ Elite vanquished! +${bonus} gold.`, 'log-perk');
+      game.cb.onParticle(m.x, m.y, `+${bonus}`, '#ffd700', undefined, 'item_gold_pouch');
+      game.cb.log(`Elite vanquished! +${bonus} gold.`, 'log-perk', 'special_sacred');
     }
     const healBonus = game.player.heal(3);
     if (healBonus > 0) {

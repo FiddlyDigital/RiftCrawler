@@ -1,21 +1,21 @@
 [
-  { "id": "whetstone",     "char": "⚔️",  "name": "Whetstone",     "tier": 1, "role": "offense", "desc": "+2 ATK per stack",              "effects": [{ "stat": "atk", "value": 2 }] },
-  { "id": "vital_crystal", "char": "❤️",  "name": "Vital Crystal", "tier": 1, "role": "defense", "desc": "+8 Max HP per stack",           "effects": [{ "stat": "maxHp", "value": 8 }, { "stat": "hp", "value": 8 }] },
-  { "id": "iron_scale",    "char": "🛡️",  "name": "Iron Scale",    "tier": 1, "role": "defense", "desc": "+1 damage reduction per stack", "effects": [{ "stat": "damageReduction", "value": 1 }] },
-  { "id": "mending_drip",  "char": "💧",  "name": "Mending Drip",  "tier": 1, "role": "defense", "desc": "+0.5 HP regen/tick per stack",  "effects": [{ "stat": "regenPerTick", "value": 0.5 }] },
-  { "id": "sight_shard",   "char": "👁️",  "name": "Sight Shard",   "tier": 1, "role": "utility", "desc": "+1 vision radius per stack",    "effects": [{ "stat": "visionRadius", "value": 1 }] },
-  { "id": "gravity_well",  "char": "⏳",  "name": "Gravity Well",  "tier": 1, "role": "utility", "desc": "5% slower gravity per stack",   "effects": [{ "stat": "tickSlowPercent", "value": 5 }] },
-  { "id": "iron_ward",     "char": "🧪",  "name": "Iron Ward",     "tier": 1, "role": "defense", "desc": "Immune to poison",              "effects": [{ "stat": "poisonImmune", "op": "set", "value": true }] },
+  { "id": "whetstone",     "char": "sprite_equip_iron_sword", "name": "Whetstone",     "tier": 1, "role": "offense", "desc": "+2 ATK per stack",              "effects": [{ "stat": "atk", "value": 2 }] },
+  { "id": "vital_crystal", "char": "item_heart",              "name": "Vital Crystal", "tier": 1, "role": "defense", "desc": "+8 Max HP per stack",           "effects": [{ "stat": "maxHp", "value": 8 }, { "stat": "hp", "value": 8 }] },
+  { "id": "iron_scale",    "char": "sprite_equip_buckler",    "name": "Iron Scale",    "tier": 1, "role": "defense", "desc": "+1 damage reduction per stack", "effects": [{ "stat": "damageReduction", "value": 1 }] },
+  { "id": "mending_drip",  "char": "item_droplet",            "name": "Mending Drip",  "tier": 1, "role": "defense", "desc": "+0.5 HP regen/tick per stack",  "effects": [{ "stat": "regenPerTick", "value": 0.5 }] },
+  { "id": "sight_shard",   "char": "fx_arcane",               "name": "Sight Shard",   "tier": 1, "role": "utility", "desc": "+1 vision radius per stack",    "effects": [{ "stat": "visionRadius", "value": 1 }] },
+  { "id": "gravity_well",  "char": "class_chronomancer",      "name": "Gravity Well",  "tier": 1, "role": "utility", "desc": "5% slower gravity per stack",   "effects": [{ "stat": "tickSlowPercent", "value": 5 }] },
+  { "id": "iron_ward",     "char": "sprite_potion",           "name": "Iron Ward",     "tier": 1, "role": "defense", "desc": "Immune to poison",              "effects": [{ "stat": "poisonImmune", "op": "set", "value": true }] },
 
-  { "id": "bloodtap",   "char": "🩸", "name": "Bloodtap Core",  "tier": 2, "role": "defense", "desc": "+3 HP on kill per stack",              "effects": [{ "stat": "killHeal", "value": 3 }] },
-  { "id": "thornweave", "char": "🌵", "name": "Thornweave Core", "tier": 2, "role": "offense", "desc": "+3 thorn dmg to attacker per stack",   "effects": [{ "stat": "thornDamage", "value": 3 }] },
-  { "id": "riftblast",  "char": "💥", "name": "Riftblast Core", "tier": 2, "role": "offense", "desc": "+4 line-clear monster dmg per stack",  "effects": [{ "stat": "lineClearDamage", "value": 4 }] },
-  { "id": "ghost_step", "char": "🌀", "name": "Ghost Step",     "tier": 2, "role": "defense", "desc": "+10% dodge (max 75%) per stack",       "effects": [{ "stat": "dodgeChance", "value": 0.1, "max": 0.75 }] },
-  { "id": "cruelty",    "char": "⚡", "name": "Cruelty Core",   "tier": 2, "role": "offense", "desc": "+1 ATK per kill this floor (per stack)", "effects": [{ "stat": "killAtkBonus", "value": 1 }] },
-  { "id": "void_loop",  "char": "🔮", "name": "Void Loop",      "tier": 2, "role": "offense", "desc": "Every Nth attack crits (N decreases per stack)", "special": "void_loop" },
+  { "id": "bloodtap",   "char": "sprite_blood",   "name": "Bloodtap Core",  "tier": 2, "role": "defense", "desc": "+3 HP on kill per stack",              "effects": [{ "stat": "killHeal", "value": 3 }] },
+  { "id": "thornweave", "char": "special_swamp",  "name": "Thornweave Core", "tier": 2, "role": "offense", "desc": "+3 thorn dmg to attacker per stack",   "effects": [{ "stat": "thornDamage", "value": 3 }] },
+  { "id": "riftblast",  "char": "fx_impact",      "name": "Riftblast Core", "tier": 2, "role": "offense", "desc": "+4 line-clear monster dmg per stack",  "effects": [{ "stat": "lineClearDamage", "value": 4 }] },
+  { "id": "ghost_step", "char": "trap_teleport",  "name": "Ghost Step",     "tier": 2, "role": "defense", "desc": "+10% dodge (max 75%) per stack",       "effects": [{ "stat": "dodgeChance", "value": 0.1, "max": 0.75 }] },
+  { "id": "cruelty",    "char": "fx_impact",      "name": "Cruelty Core",   "tier": 2, "role": "offense", "desc": "+1 ATK per kill this floor (per stack)", "effects": [{ "stat": "killAtkBonus", "value": 1 }] },
+  { "id": "void_loop",  "char": "sprite_charm",   "name": "Void Loop",      "tier": 2, "role": "offense", "desc": "Every Nth attack crits (N decreases per stack)", "special": "void_loop" },
 
-  { "id": "annihilation", "char": "☄️", "name": "Annihilation Rune", "tier": 3, "role": "offense", "desc": "Line clears deal floor×4 dmg to ALL monsters per stack", "effects": [{ "stat": "lineClearAoeDmgMult", "value": 4 }] },
-  { "id": "deathward",    "char": "💀", "name": "Deathward Rune",    "tier": 3, "role": "defense", "desc": "Survive a killing blow once per floor per stack",         "effects": [{ "stat": "deathwardCharges", "value": 1 }] },
-  { "id": "rift_tide",    "char": "🌊", "name": "Rift Tide",         "tier": 3, "role": "utility", "desc": "20% slower gravity, +0.3× line-clear XP per stack",      "effects": [{ "stat": "tickSlowPercent", "value": 20 }, { "stat": "lineClearXpMult", "value": 0.3 }] },
-  { "id": "void_prism",   "char": "🌌", "name": "Void Prism",        "tier": 3, "role": "offense", "desc": "+1 ATK & +2 HP per distinct boon per stack", "effects": [] }
+  { "id": "annihilation", "char": "fx_impact",           "name": "Annihilation Rune", "tier": 3, "role": "offense", "desc": "Line clears deal floor×4 dmg to ALL monsters per stack", "effects": [{ "stat": "lineClearAoeDmgMult", "value": 4 }] },
+  { "id": "deathward",    "char": "status_poison",       "name": "Deathward Rune",    "tier": 3, "role": "defense", "desc": "Survive a killing blow once per floor per stack",         "effects": [{ "stat": "deathwardCharges", "value": 1 }] },
+  { "id": "rift_tide",    "char": "item_droplet",        "name": "Rift Tide",         "tier": 3, "role": "utility", "desc": "20% slower gravity, +0.3× line-clear XP per stack",      "effects": [{ "stat": "tickSlowPercent", "value": 20 }, { "stat": "lineClearXpMult", "value": 0.3 }] },
+  { "id": "void_prism",   "char": "special_sacred",      "name": "Void Prism",        "tier": 3, "role": "offense", "desc": "+1 ATK & +2 HP per distinct boon per stack", "effects": [] }
 ]
