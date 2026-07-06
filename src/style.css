@@ -75,6 +75,18 @@ body {
 }
 #pause-btn:hover, #pause-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
 
+/* Floating fullscreen-toggle button, sits just left of the pause button */
+#fullscreen-btn {
+  position: absolute; top: 8px; right: 44px; z-index: 5;
+  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
+  color: #cfcfe0; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+#fullscreen-btn:hover, #fullscreen-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
+#fullscreen-btn.is-active { border-color: var(--block-accent); color: var(--block-accent); }
+
 /* Settings toggle rows in the pause menu */
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;

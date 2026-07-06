@@ -113,6 +113,38 @@ function restartRun(): void {
   });
 }
 
+// ── Fullscreen ───────────────────────────────────────────────────────────────
+
+const fullscreenBtn = document.getElementById('fullscreen-btn') as HTMLButtonElement | null;
+const fullscreenTarget = document.getElementById('game-wrapper') ?? document.documentElement;
+
+function isFullscreenActive(): boolean {
+  return document.fullscreenElement != null;
+}
+
+function updateFullscreenButton(): void {
+  if (!fullscreenBtn) return;
+  const active = isFullscreenActive();
+  fullscreenBtn.classList.toggle('is-active', active);
+  fullscreenBtn.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+  fullscreenBtn.title = active ? 'Exit fullscreen' : 'Enter fullscreen';
+}
+
+async function toggleFullscreen(): Promise<void> {
+  try {
+    if (isFullscreenActive()) await document.exitFullscreen();
+    else await fullscreenTarget.requestFullscreen();
+  } catch {
+    // Denied (no user gesture, unsupported context, etc.) — fail silently.
+  }
+}
+
+if (fullscreenBtn && document.fullscreenEnabled) {
+  fullscreenBtn.hidden = false;
+  fullscreenBtn.addEventListener('click', () => { void toggleFullscreen(); });
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+}
+
 // ── Audio event router ───────────────────────────────────────────────────────
 
 function handleAudio(event: AudioEvent, data?: number): void {
