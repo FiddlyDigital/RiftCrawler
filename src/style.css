@@ -48,7 +48,7 @@ body {
 #game-wrapper {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
     "canvas sidebar"
     "controls controls";
@@ -61,6 +61,7 @@ body {
   grid-area: canvas;
   display: flex; align-items: center; justify-content: center;
   min-height: 0;
+  align-self: stretch;  /* force full grid-row height, matching #sidebar-panel */
   position: relative;  /* anchor for the floating pause button */
 }
 
@@ -109,7 +110,8 @@ canvas {
 
 #sidebar-panel {
   grid-area: sidebar;
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; min-height: 0;
+  align-self: stretch;  /* force full grid-row height — some engines don't stretch a flex item by default */
   justify-content: space-between; background-color: var(--panel-color);
   border: 1px solid var(--border-color); border-radius: 6px;
   padding: 5px; box-sizing: border-box; font-size: 11px; gap: 4px;
@@ -541,11 +543,15 @@ canvas {
 @media (min-width: 640px) {
   #game-wrapper {
     max-width: none;
-    grid-template-columns: 1fr 260px;
-    grid-template-rows: 1fr auto;
+    /* "auto" (not 1fr) lets the canvas column shrink-to-fit the canvas's own
+       rendered width, so justify-content can center the whole canvas+sidebar
+       block instead of the canvas floating inside an edge-to-edge column. */
+    grid-template-columns: auto 260px;
+    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas:
       "canvas sidebar"
       "canvas controls";
+    justify-content: center;
     padding: 12px;
     gap: 12px;
   }
@@ -561,7 +567,8 @@ canvas {
   }
 
   #sidebar-panel {
-    height: auto !important;
+    /* Stretch (grid default) to fill the "sidebar" row exactly, so
+       sidebar + controls together sum to precisely the canvas's height. */
     font-size: 13px;
     overflow-y: auto;
   }
@@ -584,7 +591,7 @@ canvas {
   #game-wrapper {
     max-width: none;
     grid-template-columns: 1fr 200px;
-    grid-template-rows: 1fr;
+    grid-template-rows: minmax(0, 1fr);
     grid-template-areas: "canvas sidebar";
   }
 
@@ -596,7 +603,6 @@ canvas {
   }
 
   #sidebar-panel {
-    height: auto !important;
     font-size: 12px;
   }
 }
