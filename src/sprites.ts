@@ -7,9 +7,12 @@ import type { SpriteCoord } from './types';
 const { _comment: _unused, ...spriteMapEntries } = spriteMapData as Record<string, unknown>;
 export const SPRITE_MAP = spriteMapEntries as Record<string, SpriteCoord>;
 
-// Every sprite is cropped from this single sheet — see src/data/sprite-map.json.
+// Every sprite is cropped from one of these sheets — see src/data/sprite-map.json.
 export const SPRITE_SHEETS: Record<string, string> = {
-  atlas: '/sprites/atlas.png',
+  monsters: '/sprites/monsters.png',
+  rogues:   '/sprites/rogues.png',
+  items:    '/sprites/items.png',
+  tiles:    '/sprites/tiles.png',
 };
 
 const spriteImages: Map<string, HTMLImageElement> = new Map();
