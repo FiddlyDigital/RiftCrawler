@@ -33,7 +33,10 @@ export default defineConfig({
         background_color: '#08090a',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        // "." (not "/") so it resolves relative to the manifest's own URL —
+        // works whether this is served from the domain root (Cloudflare
+        // Pages) or a subpath (GitHub Pages project sites, via --base).
+        start_url: '.',
         icons: [
           { src: 'icons/icon-192.svg', sizes: 'any', type: 'image/svg+xml' },
           { src: 'icons/icon-512.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
