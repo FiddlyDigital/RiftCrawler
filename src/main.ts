@@ -7,6 +7,7 @@ import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMo
 import { trackGameStart, trackGameOver, trackInstall, trackError } from './analytics';
 import { formatCrashInfo, shouldReport } from './errorReporting';
 import { audio } from './audio';
+import { vibrate, setHapticsEnabled } from './haptics';
 import type { AudioEvent } from './types';
 
 const ui       = new UIManager();
@@ -65,6 +66,7 @@ let soundOn = !loadMute();
 // No stored preference → follow the OS reduced-motion setting.
 let reducedMotion = loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 renderer.setReducedMotion(reducedMotion);
+setHapticsEnabled(!reducedMotion);
 let manualPaused = false;
 
 function toggleMute(): void {
@@ -77,6 +79,7 @@ function toggleMute(): void {
 function toggleReducedMotion(): void {
   reducedMotion = !reducedMotion;
   renderer.setReducedMotion(reducedMotion);
+  setHapticsEnabled(!reducedMotion);
   saveReducedMotion(reducedMotion);
   ui.log(`Reduced motion ${reducedMotion ? 'on' : 'off'}`, 'log-neutral');
   if (manualPaused) refreshPauseMenu();
@@ -166,42 +169,102 @@ const drawerToggleBtn = document.getElementById('drawer-toggle-btn') as HTMLButt
 const sidebarPanel     = document.getElementById('sidebar-panel');
 const sidebarBackdrop  = document.getElementById('sidebar-backdrop');
 
+// True only when the drawer itself paused the game, so closing it doesn't
+// steal control from some other pause source (pause menu, altar, etc.).
+let drawerPausedGame = false;
+
 function isDrawerOpen(): boolean {
   return sidebarPanel?.classList.contains('drawer-open') ?? false;
+}
+
+// The toggle button (and the whole drawer treatment) only exists in the
+// mobile CSS — hidden via display:none on desktop/landscape.
+function isDrawerUIActive(): boolean {
+  return !!drawerToggleBtn && drawerToggleBtn.offsetParent !== null;
 }
 
 function openDrawer(): void {
   sidebarPanel?.classList.add('drawer-open');
   sidebarBackdrop?.classList.add('visible');
   if (drawerToggleBtn) { drawerToggleBtn.textContent = '✕'; drawerToggleBtn.setAttribute('aria-label', 'Close menu'); }
+  // Reading the sidebar shouldn't cost the player HP — pause the run while
+  // it's open, unless something else already owns the pause state.
+  if (!manualPaused && !game.paused && game.player.hp > 0) {
+    drawerPausedGame = true;
+    game.paused = true;
+    stopTick();
+  }
 }
 
 function closeDrawer(): void {
   sidebarPanel?.classList.remove('drawer-open');
   sidebarBackdrop?.classList.remove('visible');
   if (drawerToggleBtn) { drawerToggleBtn.textContent = '☰'; drawerToggleBtn.setAttribute('aria-label', 'Open menu'); }
+  if (drawerPausedGame) {
+    drawerPausedGame = false;
+    if (!manualPaused && game.player.hp > 0) { game.paused = false; startTick(); }
+  }
 }
 
 drawerToggleBtn?.addEventListener('click', () => { isDrawerOpen() ? closeDrawer() : openDrawer(); });
 sidebarBackdrop?.addEventListener('click', closeDrawer);
 
+// ── Drawer swipe gestures (mobile) ───────────────────────────────────────────
+// Edge-swipe in from the right screen edge opens the drawer; swiping right
+// on the open drawer closes it — the standard mobile drawer idiom.
+
+const DRAWER_EDGE_ZONE       = 24; // px from the right screen edge that starts an "open" gesture
+const DRAWER_SWIPE_THRESHOLD = 50; // px of horizontal movement to count as a swipe
+
+let edgeSwipeStartX: number | null = null;
+
+document.addEventListener('touchstart', (e) => {
+  edgeSwipeStartX = null;
+  if (!isDrawerUIActive() || isDrawerOpen()) return;
+  if ((e.target as Element)?.closest('[data-action]')) return; // don't hijack D-pad presses
+  const t = e.touches[0];
+  if (t && t.clientX > window.innerWidth - DRAWER_EDGE_ZONE) edgeSwipeStartX = t.clientX;
+}, { passive: true });
+
+document.addEventListener('touchend', (e) => {
+  if (edgeSwipeStartX === null) return;
+  const t = e.changedTouches[0];
+  if (t && edgeSwipeStartX - t.clientX > DRAWER_SWIPE_THRESHOLD) openDrawer();
+  edgeSwipeStartX = null;
+}, { passive: true });
+
+let drawerSwipeStartX: number | null = null;
+
+sidebarPanel?.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  drawerSwipeStartX = t ? t.clientX : null;
+}, { passive: true });
+
+sidebarPanel?.addEventListener('touchend', (e) => {
+  if (drawerSwipeStartX === null) return;
+  const t = e.changedTouches[0];
+  if (t && t.clientX - drawerSwipeStartX > DRAWER_SWIPE_THRESHOLD) closeDrawer();
+  drawerSwipeStartX = null;
+}, { passive: true });
+
 // ── Audio event router ───────────────────────────────────────────────────────
 
 function handleAudio(event: AudioEvent, data?: number): void {
   switch (event) {
-    case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); break;
+    case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); vibrate(5); break;
     case 'blockRotate':  audio.playBlockRotate();      break;
     case 'blockMove':    audio.playBlockMove();        break;
     case 'hit':             audio.playHit();              break;
-    case 'playerDamage':    audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); break;
+    case 'playerDamage':    audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); vibrate(25); break;
     case 'kill':            audio.playKill();             break;
     case 'lineClear':
       audio.playLineClear(data ?? 1);
       renderer.triggerShake(data && data >= 4 ? 5 : 3, data && data >= 4 ? 8 : 5);
+      vibrate(data && data >= 4 ? 25 : 15);
       break;
     case 'descend':         audio.playDescend();          break;
     case 'poison':          audio.playPoison();           break;
-    case 'bossWarn':        audio.playBossWarn();         break;
+    case 'bossWarn':        audio.playBossWarn();         vibrate([40, 60, 40, 60, 50]); break;
     case 'teleport':        audio.playTeleport();         break;
     case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
   }

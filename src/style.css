@@ -37,12 +37,18 @@ html, body {
   width: 100%; margin: 0; padding: 0;
   background-color: var(--bg-color);
 }
+/* 100dvh accounts for mobile browser chrome (URL bar) collapsing/expanding;
+   the 100% above is the fallback for browsers that don't support dvh. */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+}
 
 body {
   color: var(--text-color);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex; flex-direction: column; align-items: center;
   user-select: none; -webkit-user-select: none; touch-action: none;
+  -webkit-touch-callout: none; /* no iOS long-press callout on hold-to-repeat buttons */
 }
 
 #game-wrapper {
@@ -66,12 +72,13 @@ body {
   position: relative;  /* anchor for the floating pause button */
 }
 
-/* Floating pause / settings button over the canvas */
+/* Floating pause / settings button over the canvas — 40px, close to the
+   44px touch-target guideline (was 30px, too easy to mis-tap on mobile). */
 #pause-btn {
   position: absolute; top: 8px; right: 8px; z-index: 5;
-  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  width: 40px; height: 40px; border-radius: 8px; line-height: 1;
   background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
-  color: #cfcfe0; font-size: 15px; cursor: pointer;
+  color: #cfcfe0; font-size: 17px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
@@ -79,10 +86,10 @@ body {
 
 /* Floating fullscreen-toggle button, sits just left of the pause button */
 #fullscreen-btn {
-  position: absolute; top: 8px; right: 44px; z-index: 5;
-  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  position: absolute; top: 8px; right: 54px; z-index: 5;
+  width: 40px; height: 40px; border-radius: 8px; line-height: 1;
   background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
-  color: #cfcfe0; font-size: 14px; cursor: pointer;
+  color: #cfcfe0; font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
@@ -92,9 +99,9 @@ body {
 /* Floating drawer-toggle button (mobile) — mirrors #pause-btn, sits top-left */
 #drawer-toggle-btn {
   position: absolute; top: 8px; left: 8px; z-index: 5;
-  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  width: 40px; height: 40px; border-radius: 8px; line-height: 1;
   background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
-  color: #cfcfe0; font-size: 15px; cursor: pointer;
+  color: #cfcfe0; font-size: 17px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
@@ -104,7 +111,7 @@ body {
    visible over the canvas even while the sidebar drawer is closed. A short
    vertical column tucked under the top-right buttons, not a long bar. */
 #hud-strip {
-  position: absolute; top: 44px; right: 8px; z-index: 4;
+  position: absolute; top: 54px; right: 8px; z-index: 4;
   display: flex; flex-direction: column; align-items: stretch; gap: 5px;
   background: rgba(10,10,18,.62); border: 1px solid var(--border-color);
   border-radius: 6px; padding: 5px 6px; box-sizing: border-box;
