@@ -51,7 +51,10 @@ body {
   grid-template-rows: 1fr;
   grid-template-areas: "canvas";
   width: 100%; max-width: 100%; height: 100%;
-  box-sizing: border-box; padding: 0; gap: 0;
+  box-sizing: border-box;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+           max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  gap: 0;
   margin: 0 auto;
 }
 
@@ -316,11 +319,15 @@ canvas {
 /* G · D-pad tactile press */
 .dpad-btn {
   position: relative; overflow: hidden;
-  background-color: rgba(20,20,32,.5); border: 1px solid rgba(37,37,56,.8); color: #fff;
+  background-color: rgba(20,20,32,.35); border: 1px solid rgba(255,255,255,.14); color: #fff;
   font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;
   display: flex; justify-content: center; align-items: center;
-  transition: transform .07s ease, box-shadow .07s ease, background-color .07s ease;
+  /* Discrete/translucent at rest on mobile; a real press pops it to full
+     opacity for tactile feedback (reset in the desktop breakpoint below). */
+  opacity: .5;
+  transition: transform .07s ease, box-shadow .07s ease, background-color .07s ease, opacity .1s ease;
 }
+.dpad-btn:active { opacity: 1; }
 .dpad-btn::after {
   content: ''; position: absolute; top: 50%; left: 50%; width: 0; height: 0;
   background: rgba(255,255,255,0.55); border-radius: 50%;
@@ -652,6 +659,7 @@ canvas {
 
   .dpad-btn {
     background-color: #141420;
+    opacity: 1;
   }
 
   .dpad-grid {
