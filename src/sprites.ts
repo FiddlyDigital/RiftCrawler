@@ -8,11 +8,14 @@ const { _comment: _unused, ...spriteMapEntries } = spriteMapData as Record<strin
 export const SPRITE_MAP = spriteMapEntries as Record<string, SpriteCoord>;
 
 // Every sprite is cropped from one of these sheets — see src/data/sprite-map.json.
+// Paths are built from BASE_URL (not hardcoded "/...") so they still resolve
+// correctly when served from a subpath, e.g. GitHub Pages project sites.
+const base = import.meta.env.BASE_URL;
 export const SPRITE_SHEETS: Record<string, string> = {
-  monsters: '/sprites/monsters.png',
-  rogues:   '/sprites/rogues.png',
-  items:    '/sprites/items.png',
-  tiles:    '/sprites/tiles.png',
+  monsters: `${base}sprites/monsters.png`,
+  rogues:   `${base}sprites/rogues.png`,
+  items:    `${base}sprites/items.png`,
+  tiles:    `${base}sprites/tiles.png`,
 };
 
 const spriteImages: Map<string, HTMLImageElement> = new Map();
