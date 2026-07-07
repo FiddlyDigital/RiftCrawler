@@ -1,5 +1,6 @@
 import type { Game } from '../game';
 import { triggerDeath, killMonster } from './combat';
+import { pctOf } from '../entities';
 
 export function applyStatusEffects(game: Game): void {
   const next: typeof game.player.statuses = [];
@@ -41,8 +42,10 @@ export function applyStatusEffects(game: Game): void {
 }
 
 export function applyRegen(game: Game): void {
-  if (game.player.regenPerTick > 0) {
-    const gained = game.player.heal(game.player.regenPerTick);
+  // regenPerTick is a fraction of maxHp (e.g. 0.02 = 2%/tick), not a flat number.
+  const amt = pctOf(game.player.maxHp, game.player.regenPerTick);
+  if (amt > 0) {
+    const gained = game.player.heal(amt);
     if (gained > 0) game.cb.onParticle(game.player.x, game.player.y, `+${gained}`, '#2e7d32');
   }
 }

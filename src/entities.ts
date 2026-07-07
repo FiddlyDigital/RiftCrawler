@@ -3,6 +3,16 @@ import { SPRITE_MAP, getSpriteImage } from './sprites';
 import { BALANCE } from './balance';
 import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
+// Many boon/brand effects are stored as a fraction of a reference stat
+// (maxHp for defense/sustain, atk for offense) rather than a flat number, so
+// they keep scaling as that reference stat grows over a run. This converts
+// the fraction into a whole-number amount, guaranteeing at least 1 whenever
+// the fraction is nonzero so a small early-game percentage doesn't round
+// away to nothing.
+export function pctOf(base: number, fraction: number): number {
+  return fraction > 0 ? Math.max(1, Math.round(base * fraction)) : 0;
+}
+
 export class Player {
   x: number;
   y: number;
@@ -96,8 +106,10 @@ export class Player {
     return this.atk;
   }
 
+  // damageReduction is a fraction of maxHp (e.g. 0.1 = 10%), not a flat
+  // number — see pctOf().
   get totalDef(): number {
-    return this.damageReduction;
+    return pctOf(this.maxHp, this.damageReduction);
   }
 
   get brandsCapped(): boolean {
