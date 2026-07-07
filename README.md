@@ -1,5 +1,7 @@
 # Causeway to Ériu
 
+**[▶ Play it live](https://fiddlydigital.github.io/RiftCrawler/)**
+
 A mobile-first **Tetris-meets-roguelike** hybrid. You play both halves of the board at once: steer falling tetrominoes to **build** the dungeon floor, then move a hero across the tiles you just laid down to **fight, grow stronger, and descend**. Bres the Beautiful has returned from the depths with his army of mutant Fomorians, weaving ancient magic to raise a bridge back to Ériu, the Emerald Isle. Grow strong enough, then deliberately top out the stack to summon him — **Bres the Beautiful** — and escape the Rift.
 
 Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canvas>`; everything else is plain DOM.
