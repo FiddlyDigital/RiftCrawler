@@ -95,11 +95,11 @@ export class Renderer {
     this.ctx.fillRect(px - TS * 1.1, py - TS * 1.1, TS * 2.2, TS * 2.2);
   }
 
-  start(game: Game): void {
+  start(game: Game, onError?: (err: unknown) => void): void {
     cancelAnimationFrame(this.rafId);
     const loop = (): void => {
       if (!game.active) return;
-      try { this.draw(game); } catch (err) { console.error('[Renderer]', err); }
+      try { this.draw(game); } catch (err) { console.error('[Renderer]', err); onError?.(err); }
       this.rafId = requestAnimationFrame(loop);
     };
     this.rafId = requestAnimationFrame(loop);

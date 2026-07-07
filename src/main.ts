@@ -4,7 +4,8 @@ import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
 import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion } from './storage';
-import { trackGameStart, trackGameOver, trackInstall } from './analytics';
+import { trackGameStart, trackGameOver, trackInstall, trackError } from './analytics';
+import { formatCrashInfo, shouldReport } from './errorReporting';
 import { audio } from './audio';
 import type { AudioEvent } from './types';
 
@@ -14,6 +15,25 @@ const renderer = new Renderer(canvas);
 
 let game: Game;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
+
+// ── Fatal-error recovery ─────────────────────────────────────────────────────
+// A single safety net for the tick loop, the render loop, and anything else
+// (input handlers, async work) that throws uncaught — reports once and shows
+// a recovery modal rather than leaving a frozen game with no explanation.
+
+function handleFatalError(err: unknown, context: string): void {
+  const info = formatCrashInfo(err, context);
+  console.error(`[Fatal:${info.context}]`, err);
+  trackError(info.context, info.message);
+  if (!shouldReport()) return;  // already showing the crash modal for an earlier error
+  stopTick();
+  game.active = false;  // the renderer's RAF loop checks this and stops itself
+  ui.showCrash(info.message);
+}
+
+window.addEventListener('error', (e) => handleFatalError(e.error ?? e.message, 'window'));
+window.addEventListener('unhandledrejection', (e) => handleFatalError(e.reason, 'promise'));
+document.getElementById('crash-reload')?.addEventListener('click', () => location.reload());
 
 // ── Tick management ──────────────────────────────────────────────────────────
 
@@ -27,8 +47,9 @@ function getTickMs(): number {
 function startTick(): void {
   stopTick();
   tickTimer = setInterval(() => {
-    if (!game.paused && game.player.hp > 0) game.autoTick();
-    else if (game.player.hp <= 0) stopTick();
+    if (!game.paused && game.player.hp > 0) {
+      try { game.autoTick(); } catch (err) { handleFatalError(err, 'tick'); }
+    } else if (game.player.hp <= 0) stopTick();
   }, getTickMs());
 }
 
@@ -241,7 +262,7 @@ function startGame(startPaused = false): void {
   });
 
   if (startPaused) game.paused = true;
-  renderer.start(game);
+  renderer.start(game, (err) => handleFatalError(err, 'render'));
   if (!startPaused) startTick();
   trackGameStart(1);
 }

@@ -1,12 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
 import { Cell, Tile } from '../types';
-import type { GameCallbacks } from '../types';
+import type { GameCallbacks, HazardTile } from '../types';
 import { Monster } from '../entities';
 import { killMonster, playerAttackMonster, monsterAttackPlayer, estimateHitChance, triggerDeath } from '../systems/combat';
 import { processMonsterTurns } from '../systems/monsterAI';
+import { processHazards, checkHazardTrigger, teleportEntity } from '../systems/hazards';
+import { applyStatusEffects, applyRegen, applyAuraStun } from '../systems/statusEffects';
 import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, getThreeRandomBoons } from '../content';
-import { BALANCE, COMBAT_BALANCE, MONSTER_AI, weightedPick } from '../balance';
+import { BALANCE, COMBAT_BALANCE, MONSTER_AI, HAZARD_BALANCE, weightedPick } from '../balance';
+import { TIER_COLORS } from '../colors';
+import { SPRITE_MAP, SPRITE_SHEETS, spriteIconHTML } from '../sprites';
+import { formatCrashInfo, shouldReport, resetCrashState } from '../errorReporting';
+import { trackEvent, trackGameStart, trackGameOver, trackInstall, trackError } from '../analytics';
+import {
+  getHighXp, recordRunEnd, loadHistory,
+  saveMute, loadMute, saveReducedMotion, loadReducedMotion,
+} from '../storage';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -1056,5 +1066,337 @@ describe('Floor events (JSON-configured)', () => {
     const event = FLOOR_EVENTS.find(e => e.id === 'dark_bargain')!;
     const refuse = event.options[1]!;
     expect(refuse.apply(game)).toBe("You refuse the Púca's offer. It shrieks and dissolves into mist.");
+  });
+});
+
+// ── Hazards (previously untested) ─────────────────────────────────────────────
+
+describe('Hazards', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('a spike hazard fires when its timer expires, damages whoever stands on it, and rearms', () => {
+    const h: HazardTile = { x: 4, y: 20, type: 'spike', timer: 1, warning: false };
+    game.hazards.push(h);
+    game.player.x = 4; game.player.y = 20;
+    const hpBefore = game.player.hp;
+    processHazards(game);
+    const expectedDmg = spikeDamageFor(game.dungeonLevel);
+    expect(game.player.hp).toBe(hpBefore - expectedDmg);
+    expect(cb.logs.some(l => l.includes('Spikes fire!'))).toBe(true);
+    // Rearmed within [rearmMinTurns, rearmMinTurns + rearmRandomTurns)
+    expect(h.timer).toBeGreaterThanOrEqual(HAZARD_BALANCE.spike.rearmMinTurns);
+    expect(h.timer).toBeLessThan(HAZARD_BALANCE.spike.rearmMinTurns + HAZARD_BALANCE.spike.rearmRandomTurns);
+    expect(h.warning).toBe(false);
+  });
+
+  it('a spike hazard counts down and sets the warning flag near expiry, without firing early', () => {
+    const h: HazardTile = { x: 4, y: 20, type: 'spike', timer: HAZARD_BALANCE.spike.warningThreshold + 1, warning: false };
+    game.hazards.push(h);
+    const hpBefore = game.player.hp;
+    processHazards(game);
+    expect(h.timer).toBe(HAZARD_BALANCE.spike.warningThreshold);
+    expect(h.warning).toBe(true);
+    expect(game.player.hp).toBe(hpBefore); // hasn't fired yet
+  });
+
+  it('a spike hazard damages a monster standing on it and clears it on death', () => {
+    const h: HazardTile = { x: 5, y: 21, type: 'spike', timer: 1, warning: false };
+    game.hazards.push(h);
+    const m = new Monster(5, 21, 'sprite_berserker_orc', 'Target', 1, 1, 1, 5);
+    game.monsters.push(m);
+    processHazards(game);
+    expect(game.monsters).not.toContain(m);
+  });
+
+  it('teleport hazard moves the player to a different floor tile, logs it, and is consumed', () => {
+    // Clear a small deterministic floor so the destination is predictable-ish (just "somewhere else").
+    for (let x = 0; x < 3; x++) game.map[x]![10] = Tile.FLOOR;
+    game.player.x = 0; game.player.y = 10;
+    const hazard: HazardTile = { x: 0, y: 10, type: 'teleport', timer: 0, warning: false };
+    game.hazards.push(hazard);
+    checkHazardTrigger(game.player, game, true);
+    expect(game.hazards).not.toContain(hazard);
+    expect(cb.logs.some(l => l.includes('Teleport trap!'))).toBe(true);
+  });
+
+  it('teleportImmune (Rift Weaver) resists the teleport trap — hazard stays, player stays put', () => {
+    for (let x = 0; x < 3; x++) game.map[x]![10] = Tile.FLOOR;
+    game.player.x = 0; game.player.y = 10;
+    game.player.teleportImmune = true;
+    const hazard: HazardTile = { x: 0, y: 10, type: 'teleport', timer: 0, warning: false };
+    game.hazards.push(hazard);
+    checkHazardTrigger(game.player, game, true);
+    expect(game.hazards).toContain(hazard);
+    expect(game.player.x).toBe(0);
+    expect(game.player.y).toBe(10);
+    expect(cb.logs.some(l => l.includes('you resist'))).toBe(true);
+  });
+
+  it('teleportEntity lands on an unoccupied floor tile, never the void', () => {
+    game.map[1]![15] = Tile.FLOOR;
+    game.map[2]![15] = Tile.FLOOR;
+    const entity = { x: 9, y: 24 };
+    teleportEntity(entity, game);
+    expect(game.map[entity.x]![entity.y]).toBe(Tile.FLOOR);
+  });
+});
+
+// Small local helper mirroring processHazards' damage formula, so the spike
+// test above doesn't hardcode a number that'd silently drift from balance.json.
+function spikeDamageFor(dungeonLevel: number): number {
+  return Math.max(HAZARD_BALANCE.spike.minDamage, dungeonLevel * HAZARD_BALANCE.spike.damagePerDungeonLevel);
+}
+
+// ── Status effects (previously untested) ──────────────────────────────────────
+
+describe('Status effects', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+  });
+
+  it('poison damages the player each tick and counts down duration', () => {
+    game.player.statuses = [{ type: 'poison', duration: 3, power: 5 }];
+    const hpBefore = game.player.hp;
+    applyStatusEffects(game);
+    expect(game.player.hp).toBe(hpBefore - 5);
+    expect(game.player.statuses).toHaveLength(1);
+    expect(game.player.statuses[0]!.duration).toBe(2);
+  });
+
+  it('a status wears off and is removed once duration reaches zero', () => {
+    game.player.statuses = [{ type: 'poison', duration: 1, power: 5 }];
+    applyStatusEffects(game);
+    expect(game.player.statuses).toHaveLength(0);
+    expect(cb.logs.some(l => l.includes('wore off'))).toBe(true);
+  });
+
+  it('poisonImmune blocks poison damage entirely (status still ticks down)', () => {
+    game.player.poisonImmune = true;
+    game.player.statuses = [{ type: 'poison', duration: 3, power: 5 }];
+    const hpBefore = game.player.hp;
+    applyStatusEffects(game);
+    expect(game.player.hp).toBe(hpBefore);
+  });
+
+  it('monster poison damages and, on death, awards a kill (XP) through the normal kill path', () => {
+    const m = new Monster(4, 21, 'sprite_berserker_orc', 'Poisoned', 3, 3, 1, 20);
+    m.statuses = [{ type: 'poison', duration: 2, power: 5 }];
+    game.monsters.push(m);
+    const xpBefore = game.player.totalXpEarned;
+    applyStatusEffects(game);
+    expect(game.monsters).not.toContain(m);
+    expect(game.player.totalXpEarned).toBe(xpBefore + 20);
+  });
+
+  it('applyRegen heals the player by regenPerTick, clamped to maxHp', () => {
+    game.player.regenPerTick = 5;
+    game.player.hp = game.player.maxHp - 2;
+    applyRegen(game);
+    expect(game.player.hp).toBe(game.player.maxHp);
+  });
+
+  it('applyAuraStun stuns monsters within radius and leaves distant ones alone', () => {
+    game.player.auraStunRadius = 2;
+    game.player.x = 4; game.player.y = 20;
+    const near = new Monster(5, 20, 'sprite_berserker_orc', 'Near', 10, 10, 1, 5);   // dist 1
+    const far  = new Monster(9, 20, 'sprite_berserker_orc', 'Far',  10, 10, 1, 5);   // dist 5
+    game.monsters.push(near, far);
+    applyAuraStun(game);
+    expect(near.isStunned).toBe(true);
+    expect(far.isStunned).toBe(false);
+  });
+});
+
+// ── colors.ts (tier color source of truth) ────────────────────────────────────
+
+describe('TIER_COLORS', () => {
+  it('defines a valid rgb + bg pair for all three altar tiers', () => {
+    for (const tier of [1, 2, 3] as const) {
+      const c = TIER_COLORS[tier];
+      expect(c.rgb).toMatch(/^\d{1,3},\d{1,3},\d{1,3}$/);
+      expect(c.bg).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+});
+
+// ── Sprite map validity (regression guard for the 32rogues pack swap) ─────────
+
+describe('SPRITE_MAP', () => {
+  const SHEET_DIMENSIONS: Record<string, { w: number; h: number }> = {
+    monsters: { w: 384, h: 416 },
+    rogues:   { w: 224, h: 224 },
+    items:    { w: 352, h: 832 },
+    tiles:    { w: 544, h: 832 },
+  };
+
+  it('every entry references a registered sheet with in-bounds, non-negative coordinates', () => {
+    for (const [key, coord] of Object.entries(SPRITE_MAP)) {
+      expect(SPRITE_SHEETS[coord.sheet], `${key}: unregistered sheet "${coord.sheet}"`).toBeDefined();
+      const dims = SHEET_DIMENSIONS[coord.sheet];
+      expect(dims, `${key}: unknown sheet dimensions for "${coord.sheet}"`).toBeDefined();
+      expect(coord.sx, `${key}.sx`).toBeGreaterThanOrEqual(0);
+      expect(coord.sy, `${key}.sy`).toBeGreaterThanOrEqual(0);
+      expect(coord.sx + coord.sw, `${key}: sx+sw exceeds sheet width`).toBeLessThanOrEqual(dims!.w);
+      expect(coord.sy + coord.sh, `${key}: sy+sh exceeds sheet height`).toBeLessThanOrEqual(dims!.h);
+    }
+  });
+
+  it('spriteIconHTML degrades gracefully with no DOM (Node test env) instead of throwing', () => {
+    expect(() => spriteIconHTML('sprite_player')).not.toThrow();
+    expect(spriteIconHTML('sprite_player')).toBe('');
+    expect(spriteIconHTML('totally_bogus_key_that_does_not_exist')).toBe('');
+  });
+});
+
+// ── errorReporting (crash-recovery helpers) ───────────────────────────────────
+
+describe('errorReporting', () => {
+  afterEach(() => resetCrashState());
+
+  it('formatCrashInfo extracts a message from an Error and tags it with context', () => {
+    expect(formatCrashInfo(new Error('boom'), 'tick')).toEqual({ message: 'boom', context: 'tick' });
+  });
+
+  it('formatCrashInfo coerces non-Error thrown values to a string', () => {
+    expect(formatCrashInfo('raw string throw', 'window')).toEqual({ message: 'raw string throw', context: 'window' });
+    expect(formatCrashInfo(42, 'promise')).toEqual({ message: '42', context: 'promise' });
+  });
+
+  it('shouldReport is a one-shot latch until reset', () => {
+    expect(shouldReport()).toBe(true);
+    expect(shouldReport()).toBe(false);
+    expect(shouldReport()).toBe(false);
+    resetCrashState();
+    expect(shouldReport()).toBe(true);
+  });
+});
+
+// ── analytics (no-ops safely without a browser window) ────────────────────────
+
+describe('analytics', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('trackEvent no-ops without throwing when there is no window at all', () => {
+    expect(() => trackEvent('game_start', { floor: 1 })).not.toThrow();
+  });
+
+  it('trackEvent no-ops without throwing when window.plausible is not loaded', () => {
+    vi.stubGlobal('window', {});
+    expect(() => trackEvent('game_start', { floor: 1 })).not.toThrow();
+  });
+
+  it('trackEvent forwards to window.plausible with props wrapped', () => {
+    const plausible = vi.fn();
+    vi.stubGlobal('window', { plausible });
+    trackEvent('game_start', { floor: 3 });
+    expect(plausible).toHaveBeenCalledWith('game_start', { props: { floor: 3 } });
+  });
+
+  it('trackGameStart/trackGameOver/trackInstall/trackError send the expected event shape', () => {
+    const plausible = vi.fn();
+    vi.stubGlobal('window', { plausible });
+
+    trackGameStart(1);
+    expect(plausible).toHaveBeenLastCalledWith('game_start', { props: { floor: 1 } });
+
+    trackGameOver(150, 5);
+    expect(plausible).toHaveBeenLastCalledWith('game_over', { props: { xp: 150, floor: 5 } });
+
+    trackInstall();
+    expect(plausible).toHaveBeenLastCalledWith('pwa_install', undefined);
+
+    trackError('tick', 'boom');
+    expect(plausible).toHaveBeenLastCalledWith('error', { props: { context: 'tick', message: 'boom' } });
+  });
+});
+
+// ── storage.ts (localStorage persistence + graceful degradation) ─────────────
+
+class MemoryStorage implements Storage {
+  private store = new Map<string, string>();
+  get length(): number { return this.store.size; }
+  clear(): void { this.store.clear(); }
+  getItem(key: string): string | null { return this.store.has(key) ? this.store.get(key)! : null; }
+  key(index: number): string | null { return Array.from(this.store.keys())[index] ?? null; }
+  removeItem(key: string): void { this.store.delete(key); }
+  setItem(key: string, value: string): void { this.store.set(key, value); }
+}
+
+describe('storage', () => {
+  beforeEach(() => { vi.stubGlobal('localStorage', new MemoryStorage()); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('getHighXp defaults to 0 with nothing stored', () => {
+    expect(getHighXp()).toBe(0);
+  });
+
+  it('recordRunEnd persists high XP (max of previous and this run) and is readable back', () => {
+    const game = new Game(makeCallbacks());
+    game.player.totalXpEarned = 500;
+    game.dungeonLevel = 7;
+    const { highXp, history } = recordRunEnd(game, 'TEST DEATH', undefined);
+    expect(highXp).toBe(500);
+    expect(history[0]).toMatchObject({ totalXpEarned: 500, floor: 7, cause: 'TEST DEATH' });
+    expect(getHighXp()).toBe(500);
+
+    // A worse run afterward doesn't lower the recorded high score.
+    const game2 = new Game(makeCallbacks());
+    game2.player.totalXpEarned = 100;
+    game2.dungeonLevel = 2;
+    const second = recordRunEnd(game2, 'WORSE RUN', undefined);
+    expect(second.highXp).toBe(500);
+  });
+
+  it('run history is capped at 5 entries, most recent first', () => {
+    for (let i = 0; i < 6; i++) {
+      const game = new Game(makeCallbacks());
+      game.player.totalXpEarned = i;
+      game.dungeonLevel = i + 1;
+      recordRunEnd(game, `RUN ${i}`, undefined);
+    }
+    const history = loadHistory();
+    expect(history).toHaveLength(5);
+    expect(history[0]!.cause).toBe('RUN 5');  // most recent unshifted to the front
+  });
+
+  it('mute preference round-trips through localStorage', () => {
+    expect(loadMute()).toBe(false);
+    saveMute(true);
+    expect(loadMute()).toBe(true);
+    saveMute(false);
+    expect(loadMute()).toBe(false);
+  });
+
+  it('reduced-motion preference is null (no stored pref) until explicitly saved', () => {
+    expect(loadReducedMotion()).toBeNull();
+    saveReducedMotion(true);
+    expect(loadReducedMotion()).toBe(true);
+    saveReducedMotion(false);
+    expect(loadReducedMotion()).toBe(false);
+  });
+
+  it('corrupted JSON in storage falls back to defaults instead of throwing', () => {
+    localStorage.setItem('riftcrawler_v2', 'not valid json{');
+    expect(() => getHighXp()).not.toThrow();
+    expect(getHighXp()).toBe(0);
+  });
+
+  it('a throwing localStorage (private browsing / quota) is swallowed, not propagated', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new Error('quota exceeded'); },
+      setItem: () => { throw new Error('quota exceeded'); },
+    });
+    expect(() => saveMute(true)).not.toThrow();
+    expect(() => loadMute()).not.toThrow();
   });
 });

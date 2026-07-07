@@ -12,6 +12,7 @@ export class UIManager {
   private readonly floorEventModal: HTMLElement;
   private readonly inspectTooltip: HTMLElement;
   private readonly altarModal: HTMLElement;
+  private readonly crashModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
   private lastXpEarned = -1;
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
@@ -25,6 +26,7 @@ export class UIManager {
     this.floorEventModal   = document.getElementById('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.altarModal        = document.getElementById('altar-modal')!;
+    this.crashModal        = document.getElementById('crash-modal')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
       xpTotal:          document.getElementById('stat-xp-total')!,
@@ -237,6 +239,12 @@ export class UIManager {
   }
 
   hideDeath(): void { this.modal.style.display = 'none'; }
+
+  showCrash(message: string): void {
+    const detail = document.getElementById('crash-detail');
+    if (detail) detail.textContent = message;
+    this.crashModal.style.display = 'flex';
+  }
 
   showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
     const container = document.getElementById('modifier-choices')!;

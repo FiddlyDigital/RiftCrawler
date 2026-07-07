@@ -9,6 +9,7 @@ declare global {
 }
 
 export function trackEvent(name: string, props?: Record<string, string | number>): void {
+  if (typeof window === 'undefined') return;  // no-op outside a browser (also makes this testable in Node)
   window.plausible?.(name, props ? { props } : undefined);
 }
 
@@ -22,4 +23,8 @@ export function trackGameOver(xp: number, floor: number): void {
 
 export function trackInstall(): void {
   trackEvent('pwa_install');
+}
+
+export function trackError(context: string, message: string): void {
+  trackEvent('error', { context, message });
 }
