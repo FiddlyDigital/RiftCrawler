@@ -5,20 +5,20 @@
     "name": "War",
     "setSize": 3,
     "role": "offense",
-    "desc": "+5% ATK per mark",
-    "setDesc": "Set: +20% more ATK",
+    "desc": "+10% ATK per mark",
+    "setDesc": "Set: ATK doubled",
     "onEquip": [
       {
         "stat": "atk",
         "op": "mul",
-        "value": 1.05
+        "value": 1.1
       }
     ],
     "onSet": [
       {
         "stat": "atk",
         "op": "mul",
-        "value": 1.20
+        "value": 2.0
       }
     ]
   },
@@ -113,18 +113,18 @@
     "name": "Life",
     "setSize": 3,
     "role": "defense",
-    "desc": "+6% Max HP per mark",
+    "desc": "+8% Max HP per mark",
     "setDesc": "Set: free revive (erases all marks!)",
     "onEquip": [
       {
         "stat": "maxHp",
         "op": "mul",
-        "value": 1.06
+        "value": 1.08
       },
       {
         "stat": "hp",
         "op": "mul",
-        "value": 1.06
+        "value": 1.08
       }
     ],
     "onSet": [
@@ -141,20 +141,20 @@
     "name": "Guard",
     "setSize": 2,
     "role": "defense",
-    "desc": "+3% Max HP damage reduction per mark (max 65%)",
-    "setDesc": "Set: +8% more damage reduction",
+    "desc": "Block 3% of Max HP from every hit per mark (max 40%)",
+    "setDesc": "Set: block 8% more",
     "onEquip": [
       {
         "stat": "damageReduction",
         "value": 0.03,
-        "max": 0.65
+        "max": 0.4
       }
     ],
     "onSet": [
       {
         "stat": "damageReduction",
         "value": 0.08,
-        "max": 0.65
+        "max": 0.4
       }
     ]
   },
@@ -165,7 +165,7 @@
     "setSize": 2,
     "role": "defense",
     "desc": "+3% Max HP heal on kill per mark (max 60%)",
-    "setDesc": "Set: +12% more HP on kill",
+    "setDesc": "Set: +15% more HP on kill",
     "onEquip": [
       {
         "stat": "killHeal",
@@ -176,7 +176,7 @@
     "onSet": [
       {
         "stat": "killHeal",
-        "value": 0.12,
+        "value": 0.15,
         "max": 0.6
       }
     ]
@@ -187,20 +187,20 @@
     "name": "Forge",
     "setSize": 3,
     "role": "offense",
-    "desc": "+4% ATK line-clear damage per mark (max 200%)",
-    "setDesc": "Set: +25% more line-clear damage",
+    "desc": "+10% ATK line-clear damage per mark (max 300%)",
+    "setDesc": "Set: +100% more line-clear damage",
     "onEquip": [
       {
         "stat": "lineClearDamage",
-        "value": 0.04,
-        "max": 2.0
+        "value": 0.1,
+        "max": 3.0
       }
     ],
     "onSet": [
       {
         "stat": "lineClearDamage",
-        "value": 0.25,
-        "max": 2.0
+        "value": 1.0,
+        "max": 3.0
       }
     ]
   },

@@ -74,11 +74,12 @@
     "id": "ironclad",
     "emoji": "sprite_equip_buckler",
     "name": "Ironclad",
-    "desc": "+3 Damage Reduction, −3 ATK",
+    "desc": "Block 7% of Max HP from every hit, −3 ATK",
     "effects": [
       {
         "stat": "damageReduction",
-        "value": 3
+        "value": 0.07,
+        "max": 0.4
       },
       {
         "stat": "atk",

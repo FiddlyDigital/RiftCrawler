@@ -5,12 +5,12 @@
     "name": "Whetstone",
     "tier": 1,
     "role": "offense",
-    "desc": "+5% ATK per stack",
+    "desc": "+20% ATK per stack",
     "effects": [
       {
         "stat": "atk",
         "op": "mul",
-        "value": 1.05
+        "value": 1.2
       }
     ]
   },
@@ -20,17 +20,17 @@
     "name": "Vital Crystal",
     "tier": 1,
     "role": "defense",
-    "desc": "+5% Max HP per stack",
+    "desc": "+15% Max HP per stack",
     "effects": [
       {
         "stat": "maxHp",
         "op": "mul",
-        "value": 1.05
+        "value": 1.15
       },
       {
         "stat": "hp",
         "op": "mul",
-        "value": 1.05
+        "value": 1.15
       }
     ]
   },
@@ -40,12 +40,12 @@
     "name": "Iron Scale",
     "tier": 1,
     "role": "defense",
-    "desc": "+2% Max HP damage reduction per stack (max 65%)",
+    "desc": "Block 2% of Max HP from every hit per stack (max 40%)",
     "effects": [
       {
         "stat": "damageReduction",
         "value": 0.02,
-        "max": 0.65
+        "max": 0.4
       }
     ]
   },
@@ -55,12 +55,12 @@
     "name": "Mending Drip",
     "tier": 1,
     "role": "defense",
-    "desc": "+1% Max HP regen/tick per stack (max 30%)",
+    "desc": "+2% Max HP regen/tick per stack (max 15%)",
     "effects": [
       {
         "stat": "regenPerTick",
-        "value": 0.01,
-        "max": 0.3
+        "value": 0.02,
+        "max": 0.15
       }
     ]
   },
@@ -113,11 +113,11 @@
     "name": "Bloodtap Core",
     "tier": 2,
     "role": "defense",
-    "desc": "+2% Max HP heal on kill per stack (max 60%)",
+    "desc": "+6% Max HP heal on kill per stack (max 60%)",
     "effects": [
       {
         "stat": "killHeal",
-        "value": 0.02,
+        "value": 0.06,
         "max": 0.6
       }
     ]
@@ -128,12 +128,12 @@
     "name": "Thornweave Core",
     "tier": 2,
     "role": "offense",
-    "desc": "+4% ATK reflected to attacker per stack (max 100%)",
+    "desc": "+30% ATK reflected to attacker per stack (max 150%)",
     "effects": [
       {
         "stat": "thornDamage",
-        "value": 0.04,
-        "max": 1.0
+        "value": 0.3,
+        "max": 1.5
       }
     ]
   },
@@ -143,12 +143,12 @@
     "name": "Riftblast Core",
     "tier": 2,
     "role": "offense",
-    "desc": "+5% ATK line-clear monster dmg per stack (max 200%)",
+    "desc": "+50% ATK line-clear monster dmg per stack (max 300%)",
     "effects": [
       {
         "stat": "lineClearDamage",
-        "value": 0.05,
-        "max": 2.0
+        "value": 0.5,
+        "max": 3.0
       }
     ]
   },
