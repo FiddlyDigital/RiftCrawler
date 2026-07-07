@@ -181,13 +181,15 @@ export class UIManager {
       this.els['rangedAbility']!.style.fontSize = '9px';
       this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}  (Q)`;
       if (rangedBtn) {
-        rangedBtn.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}`;
+        // Short generic label (not the ability name) so the button stays as
+        // narrow as the Hold button — full detail lives in the sidebar badge.
+        rangedBtn.innerHTML = `${spriteIconHTML(ra.emoji, 12)}Special`;
         rangedBtn.disabled = !ready;
         rangedBtn.style.opacity = ready ? '1' : '0.4';
       }
     } else {
       this.els['rangedAbility']!.style.display = 'none';
-      if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Q — No ability'; }
+      if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Special'; }
     }
   }
 
