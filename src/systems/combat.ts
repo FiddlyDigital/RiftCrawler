@@ -1,5 +1,6 @@
 import type { Game } from '../game';
 import type { Monster } from '../entities';
+import { pctOf } from '../entities';
 import { COMBAT_BALANCE, numOr } from '../balance';
 
 export function triggerDeath(game: Game, title: string, reason: string): void {
@@ -201,10 +202,11 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
   game.cb.onParticle(game.player.x, game.player.y, `-${actual}`, '#ef5350', 16);
   game.cb.onAudio?.('playerDamage');
 
-  // Thornweave Core: reflect damage back to attacker
-  if (game.player.thornDamage > 0 && actual > 0) {
-    m.hp -= game.player.thornDamage;
-    game.cb.onParticle(m.x, m.y, `-${game.player.thornDamage}`, '#66bb6a', undefined, 'special_swamp');
+  // Thornweave Core: reflect a % of ATK back to attacker
+  const thornDmg = pctOf(game.player.atk, game.player.thornDamage);
+  if (thornDmg > 0 && actual > 0) {
+    m.hp -= thornDmg;
+    game.cb.onParticle(m.x, m.y, `-${thornDmg}`, '#66bb6a', undefined, 'special_swamp');
     if (m.hp <= 0) {
       killMonster(m, game);
       return;
@@ -249,12 +251,14 @@ export function killMonster(m: Monster, game: Game): void {
     game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
     game.openLevelUpBoons();
   }
-  const killHeal = game.player.heal(game.player.killHeal);
+  // Leech/Bloodtap: heal a % of maxHp on kill
+  const killHeal = game.player.heal(pctOf(game.player.maxHp, game.player.killHeal));
   if (killHeal > 0) game.cb.onParticle(game.player.x, game.player.y, `+${killHeal} HP`, '#69f0ae');
-  // Cruelty Core: gain ATK per kill (tracked for reset on floor change)
-  if (game.player.killAtkBonus > 0) {
-    game.player.atk += game.player.killAtkBonus;
-    game.player.killAtkFloorBonus += game.player.killAtkBonus;
+  // Cruelty Core: gain a % of ATK per kill (tracked for reset on floor change)
+  const atkGain = pctOf(game.player.atk, game.player.killAtkBonus);
+  if (atkGain > 0) {
+    game.player.atk += atkGain;
+    game.player.killAtkFloorBonus += atkGain;
   }
   if (m.isBoss) {
     game.cb.log(`BOSS SLAIN: ${m.name}!`, 'log-boss', 'sprite_equip_iron_sword');

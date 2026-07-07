@@ -1,6 +1,6 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile } from './types';
-import { Player, Monster } from './entities';
+import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
@@ -760,12 +760,13 @@ export class Game {
         this.openLevelUpBoons();
       }
 
-      // Perk: line clears deal damage to all visible monsters
-      if (this.player.lineClearDamage > 0) {
+      // Perk: line clears deal a % of ATK as damage to all visible monsters
+      const lineClearDmg = pctOf(this.player.atk, this.player.lineClearDamage);
+      if (lineClearDmg > 0) {
         for (const m of this.monsters) {
           if (this.visibility[m.x]?.[m.y]) {
-            m.hp -= this.player.lineClearDamage;
-            this.cb.onParticle(m.x, m.y, `-${this.player.lineClearDamage}`, '#ff6b35', undefined, 'fx_fire');
+            m.hp -= lineClearDmg;
+            this.cb.onParticle(m.x, m.y, `-${lineClearDmg}`, '#ff6b35', undefined, 'fx_fire');
           }
         }
         this.monsters = this.monsters.filter(m => m.hp > 0);
@@ -1522,8 +1523,8 @@ export class Game {
 
     if (this.player.x === x && this.player.y === y) {
       const lines = [
-        `HP ${this.player.hp}/${this.player.maxHp}`,
-        `ATK ${this.player.totalAtk}  DEF ${this.player.totalDef}`,
+        `HP ${Math.round(this.player.hp)}/${Math.round(this.player.maxHp)}`,
+        `ATK ${Math.round(this.player.totalAtk)}  DEF ${this.player.totalDef}`,
         `Lv.${this.player.playerLevel}`,
       ];
       if (this.player.boons.length > 0) lines.push(`Geasa: ${this.player.boons.map(b => `${spriteIconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
@@ -1590,8 +1591,10 @@ export class Game {
     const activeCls = CLASSES.find(c => c.id === this.activeClassId);
     const biome = getBiomeForFloor(this.dungeonLevel);
     this.cb.updateUI({
-      hp: this.player.hp,
-      maxHp: this.player.maxHp,
+      // atk/maxHp/hp can carry fractional precision internally (percentage
+      // boons compound on them) — round only here, at the display boundary.
+      hp: Math.round(this.player.hp),
+      maxHp: Math.round(this.player.maxHp),
       floor: this.dungeonLevel,
       totalXpEarned: this.player.totalXpEarned,
       gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),

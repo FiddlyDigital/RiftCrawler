@@ -132,12 +132,12 @@ describe('Game', () => {
     expect(gained).toBe(10);
   });
 
-  it('player takeDamage is reduced by armor defence', () => {
+  it('player takeDamage is reduced by armor defence (a % of maxHp)', () => {
     game.player.hp = 30;
-    game.player.damageReduction = 2;
-    const actual = game.player.takeDamage(5);
-    expect(actual).toBe(3);
-    expect(game.player.hp).toBe(27);
+    game.player.damageReduction = 0.2; // 20% of maxHp (45) = 9 flat reduction
+    const actual = game.player.takeDamage(15);
+    expect(actual).toBe(6);
+    expect(game.player.hp).toBe(24);
   });
 
   it('player takeDamage clamps to 0', () => {
@@ -317,11 +317,11 @@ describe('Monster clearing & Sacred Brands', () => {
   it('addBrand applies per-brand bonus and fires the set bonus at setSize', () => {
     const war = BRANDS.find(b => b.id === 'war')!;
     const atk0 = game.player.atk;
-    game.player.addBrand('body', war);      // +1
-    game.player.addBrand('left_arm', war);  // +1
-    expect(game.player.atk).toBe(atk0 + 2);
-    game.player.addBrand('right_arm', war); // +1 plus +18 set bonus (setSize 3)
-    expect(game.player.atk).toBe(atk0 + 21);
+    game.player.addBrand('body', war);      // ×1.05
+    game.player.addBrand('left_arm', war);  // ×1.05
+    expect(game.player.atk).toBeCloseTo(atk0 * 1.05 ** 2, 5);
+    game.player.addBrand('right_arm', war); // ×1.05 plus ×1.20 set bonus (setSize 3)
+    expect(game.player.atk).toBeCloseTo(atk0 * 1.05 ** 3 * 1.20, 5);
   });
 
   it('Ogham Marks are capped at 5 lifetime acquisitions — a 6th tattoo tile offers nothing', () => {
@@ -727,10 +727,10 @@ describe('JSON-configured effects', () => {
   let game: Game;
   beforeEach(() => { game = new Game(makeCallbacks()); });
 
-  it('boon add-effect applies (whetstone +2 ATK)', () => {
+  it('boon add-effect applies (whetstone +5% ATK)', () => {
     const atk = game.player.atk;
     BOONS.find(b => b.id === 'whetstone')!.onAdd(game.player, 1);
-    expect(game.player.atk).toBe(atk + 2);
+    expect(game.player.atk).toBeCloseTo(atk * 1.05, 5);
   });
 
   it('boon set-effect sets a boolean flag (iron_ward → poisonImmune)', () => {
@@ -1198,11 +1198,18 @@ describe('Status effects', () => {
     expect(game.player.totalXpEarned).toBe(xpBefore + 20);
   });
 
-  it('applyRegen heals the player by regenPerTick, clamped to maxHp', () => {
-    game.player.regenPerTick = 5;
+  it('applyRegen heals the player by a % of maxHp, clamped to maxHp', () => {
+    game.player.regenPerTick = 0.5; // 50% of maxHp (45) = 22, clamps well past -2
     game.player.hp = game.player.maxHp - 2;
     applyRegen(game);
     expect(game.player.hp).toBe(game.player.maxHp);
+  });
+
+  it('applyRegen grants exactly the rounded % of maxHp when unclamped', () => {
+    game.player.regenPerTick = 0.1; // 10% of maxHp (45) = 4.5 -> rounds to 5 (odd) or 4 (even)
+    game.player.hp = 1;
+    applyRegen(game);
+    expect(game.player.hp).toBe(1 + Math.round(game.player.maxHp * 0.1));
   });
 
   it('applyAuraStun stuns monsters within radius and leaves distant ones alone', () => {
