@@ -319,18 +319,19 @@ canvas {
   color: #666; margin-bottom: 4px; font-weight: bold;
 }
 .dpad-grid {
-  /* Smaller on mobile so the floating overlay covers less of the canvas —
-     the hero starts near the bottom rows, right under these controls. */
+  /* Smaller than the old always-visible panel so the floating overlay
+     covers less of the canvas — the hero starts near the bottom rows,
+     right under these controls — but still comfortably tappable. */
   display: grid; grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr); gap: 2px; width: 90px; height: 90px;
+  grid-template-rows: repeat(3, 1fr); gap: 3px; width: 115px; height: 115px;
 }
-.dpad-action-btn { width: 100%; margin-top: 3px; font-size: 8px; letter-spacing: .3px; }
+.dpad-action-btn { width: 100%; margin-top: 4px; font-size: 10px; letter-spacing: .4px; }
 
 /* G · D-pad tactile press */
 .dpad-btn {
   position: relative; overflow: hidden;
   background-color: rgba(20,20,32,.35); border: 1px solid rgba(255,255,255,.14); color: #fff;
-  font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;
+  font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer;
   display: flex; justify-content: center; align-items: center;
   /* Discrete/translucent at rest on mobile; a real press pops it to full
      opacity for tactile feedback (reset in the desktop breakpoint below). */
@@ -670,6 +671,7 @@ canvas {
   .dpad-btn {
     background-color: #141420;
     opacity: 1;
+    font-size: 14px;
   }
 
   .dpad-container { flex: 1; }
