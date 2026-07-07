@@ -309,13 +309,19 @@ canvas {
 }
 .dpad-container { display: flex; flex-direction: column; align-items: center; flex: 1; pointer-events: auto; }
 .dpad-title {
+  /* Hidden on mobile — the labels ate into the floating controls' footprint
+     over the play area; color-coding (border/icon) already tells them apart. */
+  display: none;
   text-transform: uppercase; letter-spacing: .5px;
   color: #666; margin-bottom: 4px; font-weight: bold;
 }
 .dpad-grid {
+  /* Smaller on mobile so the floating overlay covers less of the canvas —
+     the hero starts near the bottom rows, right under these controls. */
   display: grid; grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr); gap: 3px; width: 120px; height: 120px;
+  grid-template-rows: repeat(3, 1fr); gap: 2px; width: 90px; height: 90px;
 }
+.dpad-action-btn { width: 100%; margin-top: 3px; font-size: 8px; letter-spacing: .3px; }
 
 /* G · D-pad tactile press */
 .dpad-btn {
@@ -663,9 +669,18 @@ canvas {
     opacity: 1;
   }
 
+  .dpad-title { display: block; }
+
   .dpad-grid {
     width: 108px !important;
     height: 108px !important;
+    gap: 3px;
+  }
+
+  .dpad-action-btn {
+    margin-top: 4px;
+    font-size: 10px;
+    letter-spacing: .5px;
   }
 }
 
