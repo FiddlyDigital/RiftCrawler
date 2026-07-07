@@ -34,11 +34,11 @@
       },
       {
         "label": "Fill your flask",
-        "desc": "Heal 25 HP and gain +1 regen per tick.",
+        "desc": "Heal 25 HP and gain +2% Max HP regen per tick.",
         "handler": "spring_fill_flask",
         "params": {
           "healAmount": 25,
-          "regenBonus": 1
+          "regenBonus": 0.02
         }
       }
     ]
@@ -202,11 +202,11 @@
       },
       {
         "label": "Absorb passive wisdom",
-        "desc": "+3 vision, +1 HP regen/tick permanently.",
+        "desc": "+3 vision, +2% Max HP regen/tick permanently.",
         "handler": "scholar_wisdom",
         "params": {
           "visionBonus": 3,
-          "regenBonus": 1
+          "regenBonus": 0.02
         }
       }
     ]

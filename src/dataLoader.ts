@@ -326,7 +326,8 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
 
   spring_fill_flask: (game, opt) => {
     const healAmount = numOr(opt.params?.healAmount, 25);
-    const regenBonus = numOr(opt.params?.regenBonus, 1);
+    // regenPerTick is a fraction of maxHp (0.02 = 2%/tick), not a flat amount
+    const regenBonus = numOr(opt.params?.regenBonus, 0.02);
     const gained = game.player.heal(healAmount);
     game.player.regenPerTick += regenBonus;
     return `Healed ${gained} HP and gained passive regeneration.`;
@@ -426,10 +427,11 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
 
   scholar_wisdom: (game, opt) => {
     const visionBonus = numOr(opt.params?.visionBonus, 3);
-    const regenBonus = numOr(opt.params?.regenBonus, 1);
+    // regenPerTick is a fraction of maxHp (0.02 = 2%/tick), not a flat amount
+    const regenBonus = numOr(opt.params?.regenBonus, 0.02);
     game.player.visionRadius += visionBonus;
     game.player.regenPerTick += regenBonus;
-    return `Ancient wisdom seeps in. +${visionBonus} vision, +${regenBonus} regen/tick.`;
+    return `Ancient wisdom seeps in. +${visionBonus} vision, +${Math.round(regenBonus * 100)}% Max HP regen/tick.`;
   },
 };
 

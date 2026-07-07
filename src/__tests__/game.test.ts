@@ -317,11 +317,11 @@ describe('Monster clearing & Sacred Brands', () => {
   it('addBrand applies per-brand bonus and fires the set bonus at setSize', () => {
     const war = BRANDS.find(b => b.id === 'war')!;
     const atk0 = game.player.atk;
-    game.player.addBrand('body', war);      // ×1.05
-    game.player.addBrand('left_arm', war);  // ×1.05
-    expect(game.player.atk).toBeCloseTo(atk0 * 1.05 ** 2, 5);
-    game.player.addBrand('right_arm', war); // ×1.05 plus ×1.20 set bonus (setSize 3)
-    expect(game.player.atk).toBeCloseTo(atk0 * 1.05 ** 3 * 1.20, 5);
+    game.player.addBrand('body', war);      // ×1.10
+    game.player.addBrand('left_arm', war);  // ×1.10
+    expect(game.player.atk).toBeCloseTo(atk0 * 1.10 ** 2, 5);
+    game.player.addBrand('right_arm', war); // ×1.10 plus ×2.0 set bonus (setSize 3)
+    expect(game.player.atk).toBeCloseTo(atk0 * 1.10 ** 3 * 2.0, 5);
   });
 
   it('Ogham Marks are capped at 5 lifetime acquisitions — a 6th tattoo tile offers nothing', () => {
@@ -727,10 +727,10 @@ describe('JSON-configured effects', () => {
   let game: Game;
   beforeEach(() => { game = new Game(makeCallbacks()); });
 
-  it('boon add-effect applies (whetstone +5% ATK)', () => {
+  it('boon add-effect applies (whetstone +20% ATK)', () => {
     const atk = game.player.atk;
     BOONS.find(b => b.id === 'whetstone')!.onAdd(game.player, 1);
-    expect(game.player.atk).toBeCloseTo(atk * 1.05, 5);
+    expect(game.player.atk).toBeCloseTo(atk * 1.2, 5);
   });
 
   it('boon set-effect sets a boolean flag (iron_ward → poisonImmune)', () => {
@@ -777,6 +777,13 @@ describe('JSON-configured effects', () => {
     expect(p.atk).toBe(14);    // +8
     expect(p.maxHp).toBe(30);  // −15
     expect(p.hp).toBe(30);     // full_heal special sets hp = maxHp
+  });
+
+  it('Ironclad grants a % of Max HP as damage reduction, not a multiple of it', () => {
+    const p = game.player; p.maxHp = 45; p.hp = 45;
+    MODIFIERS.find(m => m.id === 'ironclad')!.apply(game);
+    expect(p.totalDef).toBe(3);                    // 7% of 45, rounded
+    expect(p.takeDamage(10)).toBe(7);              // hits still land — not immune
   });
 
   it('mul modifier with floor+min clamp (Blind Run halves vision, min 1)', () => {
