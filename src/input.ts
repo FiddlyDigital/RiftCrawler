@@ -1,5 +1,6 @@
 import type { Game } from './game';
 import { CONFIG } from './config';
+import { vibrate } from './haptics';
 
 type GameGetter = () => Game;
 type InspectCallback = (gx: number, gy: number, clientX: number, clientY: number) => void;
@@ -33,8 +34,16 @@ export function bindKeyboard(getGame: GameGetter): void {
   });
 }
 
+// Swipe vocabulary on the canvas itself — left/right/up/down move & rotate
+// the falling block, a fast or long downward flick hard-drops it. A short
+// tap (below TAP_THRESHOLD movement) still inspects the tapped tile.
+const TAP_THRESHOLD        = 12;   // px — below this, it's a tap not a swipe
+const SWIPE_THRESHOLD       = 28;   // px — minimum movement to count as a swipe
+const HARD_DROP_DISTANCE    = 140;  // px — a long downward swipe is a hard drop
+const HARD_DROP_VELOCITY    = 1.0;  // px/ms — a fast flick down is a hard drop regardless of distance
+
 export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter, onInspect: InspectCallback): void {
-  let startX = 0, startY = 0;
+  let startX = 0, startY = 0, startT = 0;
 
   function toGrid(clientX: number, clientY: number): { gx: number; gy: number } {
     const rect = canvas.getBoundingClientRect();
@@ -47,20 +56,37 @@ export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter
 
   canvas.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[0]!;
-    startX = t.clientX; startY = t.clientY;
+    startX = t.clientX; startY = t.clientY; startT = performance.now();
     e.preventDefault();
   }, { passive: false });
 
   canvas.addEventListener('touchend', (e) => {
     const game = getGame();
-    if (game.player.hp <= 0) return;
+    if (game.player.hp <= 0) { e.preventDefault(); return; }
     const t = e.changedTouches[0]!;
-    const absDx = Math.abs(t.clientX - startX);
-    const absDy = Math.abs(t.clientY - startY);
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
 
-    if (absDx < 12 && absDy < 12) {
+    if (absDx < TAP_THRESHOLD && absDy < TAP_THRESHOLD) {
       const { gx, gy } = toGrid(t.clientX, t.clientY);
       onInspect(gx, gy, t.clientX, t.clientY);
+    } else if (absDx > absDy && absDx > SWIPE_THRESHOLD) {
+      if (dx < 0) game.handleBlockLeft(); else game.handleBlockRight();
+      vibrate(4);
+    } else if (absDy > SWIPE_THRESHOLD) {
+      const elapsedMs = Math.max(1, performance.now() - startT);
+      if (dy < 0) {
+        game.handleBlockRotate();
+        vibrate(4);
+      } else if (absDy > HARD_DROP_DISTANCE || absDy / elapsedMs > HARD_DROP_VELOCITY) {
+        game.handleBlockDrop();
+        vibrate(12);
+      } else {
+        game.handleBlockSoftDrop();
+        vibrate(4);
+      }
     }
     e.preventDefault();
   }, { passive: false });
@@ -191,30 +217,75 @@ export function bindGamepad(getGame: GameGetter): void {
   });
 }
 
-export function bindButtons(getGame: GameGetter): void {
-  document.addEventListener('click', (e) => {
-    const btn = (e.target as Element).closest<HTMLElement>('[data-action]');
-    if (!btn) return;
-
-    const game = getGame();
-    if (game.player.hp <= 0) return;
-
-    const action = btn.dataset['action'];
-    switch (action) {
-      case 'block-rotate':   game.handleBlockRotate();   break;
-      case 'block-left':     game.handleBlockLeft();     break;
-      case 'block-right':    game.handleBlockRight();    break;
-      case 'block-drop':     game.handleBlockDrop();     break;
-      case 'block-softdrop': game.handleBlockSoftDrop(); break;
-      case 'block-hold':     game.handleBlockHold();     break;
-      case 'hero-wait':      game.handleHeroWait();      break;
-      case 'hero-ranged':    game.handleRangedAttack();  break;
-      case 'hero-move': {
-        const dx = Number(btn.dataset['dx'] ?? 0);
-        const dy = Number(btn.dataset['dy'] ?? 0);
-        heroMove(game, dx, dy);
-        break;
-      }
+function performButtonAction(game: Game, btn: HTMLElement): void {
+  const action = btn.dataset['action'];
+  switch (action) {
+    case 'block-rotate':   game.handleBlockRotate();   break;
+    case 'block-left':     game.handleBlockLeft();     break;
+    case 'block-right':    game.handleBlockRight();    break;
+    case 'block-drop':     game.handleBlockDrop();     break;
+    case 'block-softdrop': game.handleBlockSoftDrop(); break;
+    case 'block-hold':     game.handleBlockHold();     break;
+    case 'hero-wait':      game.handleHeroWait();      break;
+    case 'hero-ranged':    game.handleRangedAttack();  break;
+    case 'hero-move': {
+      const dx = Number(btn.dataset['dx'] ?? 0);
+      const dy = Number(btn.dataset['dy'] ?? 0);
+      heroMove(game, dx, dy);
+      break;
     }
+  }
+}
+
+// Buttons that only make sense as a single press — holding them fires once,
+// not repeatedly, matching the gamepad's ONE_SHOT set.
+const BUTTON_ONE_SHOT = new Set(['block-drop', 'hero-ranged']);
+const BUTTON_INITIAL_DELAY = 200; // ms before auto-repeat kicks in
+const BUTTON_REPEAT_MS     = 120; // ms between repeated fires
+
+export function bindButtons(getGame: GameGetter): void {
+  const buttons = document.querySelectorAll<HTMLElement>('[data-action]');
+
+  buttons.forEach((btn) => {
+    let repeatTimer: ReturnType<typeof setTimeout> | null = null;
+    let activePointerId: number | null = null;
+
+    function fire(): void {
+      const game = getGame();
+      if (game.player.hp <= 0) return;
+      performButtonAction(game, btn);
+    }
+
+    function scheduleRepeat(): void {
+      const action = btn.dataset['action'];
+      if (action !== undefined && BUTTON_ONE_SHOT.has(action)) return;
+      repeatTimer = setTimeout(function repeat() {
+        fire();
+        repeatTimer = setTimeout(repeat, BUTTON_REPEAT_MS);
+      }, BUTTON_INITIAL_DELAY);
+    }
+
+    function stopRepeat(): void {
+      if (repeatTimer !== null) { clearTimeout(repeatTimer); repeatTimer = null; }
+      activePointerId = null;
+    }
+
+    btn.addEventListener('pointerdown', (e) => {
+      if (activePointerId !== null) return; // already pressed by another pointer
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      // Capture is best-effort (keeps repeat firing if the finger slides off
+      // the button) — some browsers throw NotFoundError on a fast tap when
+      // the pointer is no longer "active" by the time this call lands.
+      try { btn.setPointerCapture?.(e.pointerId); } catch { /* not critical */ }
+      vibrate(4);
+      fire();
+      scheduleRepeat();
+    });
+    btn.addEventListener('pointerup', (e) => {
+      if (e.pointerId !== activePointerId) return;
+      stopRepeat();
+    });
+    btn.addEventListener('pointercancel', () => stopRepeat());
   });
 }
