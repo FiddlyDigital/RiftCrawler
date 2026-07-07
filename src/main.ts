@@ -158,6 +158,33 @@ if (fullscreenBtn && document.fullscreenEnabled) {
   document.addEventListener('fullscreenchange', updateFullscreenButton);
 }
 
+// ── Sidebar drawer (mobile) ─────────────────────────────────────────────────
+// On mobile the sidebar becomes a slide-in drawer over the canvas; on desktop
+// and landscape-phone layouts it's always visible and this toggle is hidden.
+
+const drawerToggleBtn = document.getElementById('drawer-toggle-btn') as HTMLButtonElement | null;
+const sidebarPanel     = document.getElementById('sidebar-panel');
+const sidebarBackdrop  = document.getElementById('sidebar-backdrop');
+
+function isDrawerOpen(): boolean {
+  return sidebarPanel?.classList.contains('drawer-open') ?? false;
+}
+
+function openDrawer(): void {
+  sidebarPanel?.classList.add('drawer-open');
+  sidebarBackdrop?.classList.add('visible');
+  if (drawerToggleBtn) { drawerToggleBtn.textContent = '✕'; drawerToggleBtn.setAttribute('aria-label', 'Close menu'); }
+}
+
+function closeDrawer(): void {
+  sidebarPanel?.classList.remove('drawer-open');
+  sidebarBackdrop?.classList.remove('visible');
+  if (drawerToggleBtn) { drawerToggleBtn.textContent = '☰'; drawerToggleBtn.setAttribute('aria-label', 'Open menu'); }
+}
+
+drawerToggleBtn?.addEventListener('click', () => { isDrawerOpen() ? closeDrawer() : openDrawer(); });
+sidebarBackdrop?.addEventListener('click', closeDrawer);
+
 // ── Audio event router ───────────────────────────────────────────────────────
 
 function handleAudio(event: AudioEvent, data?: number): void {
@@ -329,6 +356,7 @@ document.getElementById('pause-btn')?.addEventListener('click', togglePauseMenu)
 // Keyboard: M = mute, Esc/P = pause menu
 window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') toggleMute();
+  else if (e.key === 'Escape' && isDrawerOpen()) closeDrawer();
   else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePauseMenu();
 });
 

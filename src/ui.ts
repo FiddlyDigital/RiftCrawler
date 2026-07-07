@@ -34,6 +34,10 @@ export class UIManager {
       rate:             document.getElementById('stat-rate')!,
       hpBar:            document.getElementById('hp-bar')!,
       nextPreview:      document.getElementById('next-preview-box')!,
+      hudHp:            document.getElementById('hud-hp-text')!,
+      hudHpBar:         document.getElementById('hud-hp-bar')!,
+      hudFloor:         document.getElementById('hud-floor-num')!,
+      hudNextPreview:   document.getElementById('hud-next-preview')!,
       deathTitle:       document.getElementById('death-title')!,
       deathReason:      document.getElementById('death-reason')!,
       finalFloor:       document.getElementById('final-floor')!,
@@ -88,6 +92,15 @@ export class UIManager {
         : '0 0 28px rgba(178,58,58,.5), 0 0 8px rgba(178,58,58,.22)';
     document.documentElement.style.setProperty('--canvas-glow', glowValue);
 
+    // Mobile persistent HUD strip — mirrors HP/floor/next-piece for at-a-glance
+    // visibility while the full sidebar lives behind the slide-in drawer.
+    this.els['hudHp']!.textContent = `${state.hp}/${state.maxHp}`;
+    this.els['hudFloor']!.textContent = String(state.floor);
+    const hudHpBar = this.els['hudHpBar']!;
+    hudHpBar.style.width = hpBar.style.width;
+    hudHpBar.classList.remove('hp-full', 'hp-warning', 'hp-critical');
+    hudHpBar.classList.add(hpPct > 0.6 ? 'hp-full' : hpPct >= 0.3 ? 'hp-warning' : 'hp-critical');
+
     if (state.totalXpEarned !== this.lastXpEarned) {
       const xpEl = this.els['xpTotal']!;
       xpEl.classList.remove('score-pop');
@@ -98,6 +111,7 @@ export class UIManager {
     }
 
     this.els['nextPreview']!.innerHTML = shapePreviewHTML(SHAPES[state.nextType]);
+    this.els['hudNextPreview']!.innerHTML = shapePreviewHTML(SHAPES[state.nextType], 6);
 
     // Held piece display
     const heldBox = this.els['heldPreview']!;
