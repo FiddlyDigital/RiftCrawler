@@ -304,10 +304,13 @@ canvas {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   display: flex; flex-direction: row; justify-content: space-between;
   background: transparent; border: none;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom, 0px));
   gap: 6px; pointer-events: none;
 }
-.dpad-container { display: flex; flex-direction: column; align-items: center; flex: 1; pointer-events: auto; }
+/* flex: 0 (not 1) so each pad sits at its natural width flush against the
+   space-between edges, instead of growing to fill (and centering within)
+   half the screen. */
+.dpad-container { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; pointer-events: auto; }
 .dpad-title {
   /* Hidden on mobile — the labels ate into the floating controls' footprint
      over the play area; color-coding (border/icon) already tells them apart. */
@@ -668,6 +671,8 @@ canvas {
     background-color: #141420;
     opacity: 1;
   }
+
+  .dpad-container { flex: 1; }
 
   .dpad-title { display: block; }
 
