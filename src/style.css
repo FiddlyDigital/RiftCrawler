@@ -101,23 +101,24 @@ body {
 #drawer-toggle-btn:hover, #drawer-toggle-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
 
 /* Persistent minimal HUD strip (mobile) — HP / floor / next-piece, always
-   visible over the canvas even while the sidebar drawer is closed. */
+   visible over the canvas even while the sidebar drawer is closed. A short
+   vertical column tucked under the top-right buttons, not a long bar. */
 #hud-strip {
-  position: absolute; top: 44px; left: 8px; right: 8px; z-index: 4;
-  display: flex; align-items: center; gap: 10px;
+  position: absolute; top: 44px; right: 8px; z-index: 4;
+  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
   background: rgba(10,10,18,.62); border: 1px solid var(--border-color);
-  border-radius: 6px; padding: 4px 8px; box-sizing: border-box;
-  font-size: 10px; color: var(--text-color);
+  border-radius: 6px; padding: 5px 6px; box-sizing: border-box;
+  font-size: 9px; color: var(--text-color); width: 52px;
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
-.hud-hp-block { flex: 1; min-width: 0; }
-.hud-hp-block span { font-family: var(--font-pixel); font-size: 12px; }
+.hud-hp-block { text-align: center; }
+.hud-hp-block span { font-family: var(--font-pixel); font-size: 11px; }
 .hud-hp-bar-container {
   width: 100%; background-color: #333; height: 4px;
   border-radius: 2px; overflow: hidden; margin-top: 2px;
 }
-.hud-floor { flex-shrink: 0; font-family: var(--font-pixel); font-size: 12px; }
-.hud-next-preview { flex-shrink: 0; display: flex; align-items: center; }
+.hud-floor { text-align: center; font-family: var(--font-pixel); font-size: 11px; }
+.hud-next-preview { display: flex; align-items: center; justify-content: center; }
 
 /* Backdrop scrim behind the sidebar drawer (mobile) */
 #sidebar-backdrop {
