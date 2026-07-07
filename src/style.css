@@ -137,7 +137,11 @@ body {
 /* F · Canvas depth glow — JS updates --canvas-glow to shift color with HP */
 canvas {
   border: 2px solid var(--border-color); background-color: #020205;
-  width: 100%; height: auto; max-height: 100%; display: block;
+  /* height-driven, not width-driven — conforms to the screen's height and
+     derives width from the canvas's own aspect ratio, so it never distorts
+     or overflows sideways on tall/narrow mobile viewports. */
+  width: auto; height: 100%; max-width: 100%; display: block;
+  box-sizing: border-box;
   border-radius: 6px; image-rendering: pixelated;
   box-shadow:
     var(--canvas-glow, 0 0 28px rgba(63,158,147,.15), 0 0 6px rgba(63,158,147,.06)),
