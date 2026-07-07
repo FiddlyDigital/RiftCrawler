@@ -47,13 +47,11 @@ body {
 
 #game-wrapper {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "canvas sidebar"
-    "controls controls";
-  width: 100%; max-width: 390px; height: 100%;
-  box-sizing: border-box; padding: 5px; gap: 6px;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "canvas";
+  width: 100%; max-width: 100%; height: 100%;
+  box-sizing: border-box; padding: 0; gap: 0;
   margin: 0 auto;
 }
 
@@ -88,6 +86,44 @@ body {
 #fullscreen-btn:hover, #fullscreen-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
 #fullscreen-btn.is-active { border-color: var(--block-accent); color: var(--block-accent); }
 
+/* Floating drawer-toggle button (mobile) — mirrors #pause-btn, sits top-left */
+#drawer-toggle-btn {
+  position: absolute; top: 8px; left: 8px; z-index: 5;
+  width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+  background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
+  color: #cfcfe0; font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+#drawer-toggle-btn:hover, #drawer-toggle-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
+
+/* Persistent minimal HUD strip (mobile) — HP / floor / next-piece, always
+   visible over the canvas even while the sidebar drawer is closed. */
+#hud-strip {
+  position: absolute; top: 44px; left: 8px; right: 8px; z-index: 4;
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(10,10,18,.62); border: 1px solid var(--border-color);
+  border-radius: 6px; padding: 4px 8px; box-sizing: border-box;
+  font-size: 10px; color: var(--text-color);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.hud-hp-block { flex: 1; min-width: 0; }
+.hud-hp-block span { font-family: var(--font-pixel); font-size: 12px; }
+.hud-hp-bar-container {
+  width: 100%; background-color: #333; height: 4px;
+  border-radius: 2px; overflow: hidden; margin-top: 2px;
+}
+.hud-floor { flex-shrink: 0; font-family: var(--font-pixel); font-size: 12px; }
+.hud-next-preview { flex-shrink: 0; display: flex; align-items: center; }
+
+/* Backdrop scrim behind the sidebar drawer (mobile) */
+#sidebar-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  z-index: 35; opacity: 0; pointer-events: none;
+  transition: opacity .2s ease;
+}
+#sidebar-backdrop.visible { opacity: 1; pointer-events: auto; }
+
 /* Settings toggle rows in the pause menu */
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -110,13 +146,20 @@ canvas {
 
 #sidebar-panel {
   grid-area: sidebar;
+  /* Mobile: a fixed slide-in drawer over the canvas, not a grid column. */
+  position: fixed; top: 0; right: 0; height: 100%;
+  width: min(78vw, 280px);
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  z-index: 40;
+  box-shadow: -4px 0 24px rgba(0,0,0,.5);
   display: flex; flex-direction: column; min-height: 0;
-  align-self: stretch;  /* force full grid-row height — some engines don't stretch a flex item by default */
   justify-content: space-between; background-color: var(--panel-color);
-  border: 1px solid var(--border-color); border-radius: 6px;
+  border: 1px solid var(--border-color); border-radius: 0;
   padding: 5px; box-sizing: border-box; font-size: 11px; gap: 4px;
-  overflow: hidden;
+  overflow: hidden; overflow-y: auto;
 }
+#sidebar-panel.drawer-open { transform: translateX(0); }
 
 @keyframes titlePulse {
   0%, 100% { text-shadow: 0 0 8px rgba(255,213,79,.4); }
@@ -246,14 +289,17 @@ canvas {
 }
 .history-latest { color: #999; }
 
-/* Controls */
+/* Controls — mobile: transparent floating overlays pinned to the canvas's
+   bottom corners, out of grid flow so they float above the full-bleed canvas. */
 #controls-layout {
   grid-area: controls;
-  display: flex; flex-direction: row; justify-content: space-around;
-  background-color: var(--panel-color); padding: 8px 4px; border-radius: 8px;
-  border: 1px solid var(--border-color); gap: 6px;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; flex-direction: row; justify-content: space-between;
+  background: transparent; border: none;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  gap: 6px; pointer-events: none;
 }
-.dpad-container { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.dpad-container { display: flex; flex-direction: column; align-items: center; flex: 1; pointer-events: auto; }
 .dpad-title {
   text-transform: uppercase; letter-spacing: .5px;
   color: #666; margin-bottom: 4px; font-weight: bold;
@@ -266,7 +312,7 @@ canvas {
 /* G · D-pad tactile press */
 .dpad-btn {
   position: relative; overflow: hidden;
-  background-color: #141420; border: 1px solid #252538; color: #fff;
+  background-color: rgba(20,20,32,.5); border: 1px solid rgba(37,37,56,.8); color: #fff;
   font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;
   display: flex; justify-content: center; align-items: center;
   transition: transform .07s ease, box-shadow .07s ease, background-color .07s ease;
@@ -571,13 +617,37 @@ canvas {
        sidebar + controls together sum to precisely the canvas's height. */
     font-size: 13px;
     overflow-y: auto;
+    /* Undo the mobile fixed-drawer treatment — back to a normal grid column. */
+    position: static;
+    transform: none;
+    width: auto;
+    height: auto;
+    border-radius: 6px;
+    box-shadow: none;
   }
+
+  /* Mobile-only chrome — not used on desktop */
+  #sidebar-backdrop, #drawer-toggle-btn, #hud-strip { display: none; }
 
   .card-title { font-size: 10px; }
 
   #log-panel {
     max-height: 240px;
     flex-grow: 1;
+  }
+
+  #controls-layout {
+    /* Undo the mobile floating-overlay treatment. */
+    position: static;
+    background-color: var(--panel-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 4px;
+    justify-content: space-around;
+    pointer-events: auto;
+  }
+
+  .dpad-btn {
+    background-color: #141420;
   }
 
   .dpad-grid {
@@ -593,6 +663,7 @@ canvas {
     grid-template-columns: 1fr 200px;
     grid-template-rows: minmax(0, 1fr);
     grid-template-areas: "canvas sidebar";
+    padding: 5px; gap: 6px;
   }
 
   #controls-layout { display: none; }
@@ -604,5 +675,13 @@ canvas {
 
   #sidebar-panel {
     font-size: 12px;
+    position: static;
+    transform: none;
+    width: auto;
+    height: auto;
+    border-radius: 6px;
+    box-shadow: none;
   }
+
+  #sidebar-backdrop, #drawer-toggle-btn, #hud-strip { display: none; }
 }

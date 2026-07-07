@@ -17,9 +17,20 @@
   <div id="inspect-tooltip" class="inspect-tooltip" hidden></div>
   <div id="canvas-container">
       <canvas id="gameCanvas"></canvas>
+      <button id="drawer-toggle-btn" aria-label="Open menu" title="Menu">☰</button>
       <button id="fullscreen-btn" aria-label="Enter fullscreen" title="Fullscreen" hidden>⛶</button>
       <button id="pause-btn" aria-label="Pause / settings" title="Pause (Esc)">⏸</button>
+      <div id="hud-strip">
+        <div class="hud-hp-block">
+          <span id="hud-hp-text">35/35</span>
+          <div class="hud-hp-bar-container"><div id="hud-hp-bar" class="hp-bar-fill"></div></div>
+        </div>
+        <div class="hud-floor">🪜 <span id="hud-floor-num">1</span></div>
+        <div id="hud-next-preview" class="hud-next-preview"></div>
+      </div>
     </div>
+
+    <div id="sidebar-backdrop"></div>
 
     <div id="sidebar-panel">
       <div id="sidebar-game-title">CAUSEWAY TO ÉRIU</div>
