@@ -46,7 +46,6 @@ export const Cell = {
   MONSTER_RAT: 2,
   MONSTER_SKEL: 3,
   STAIRS: 6,
-  BOMB: 7,
   MERCHANT: 8,
   BOSS: 9,
   MONSTER_ARCHER: 11,

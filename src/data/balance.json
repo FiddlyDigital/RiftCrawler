@@ -40,8 +40,7 @@
     "geasaRerollBaseCost": 120,
     "geasaRerollCostGrowth": 1.6,
     "ogmRerollBaseCost": 350,
-    "ogmRerollCostGrowth": 2.2,
-    "bombGoldPerDungeonLevel": 50
+    "ogmRerollCostGrowth": 2.2
   },
   "brands": {
     "maxLifetime": 5
@@ -83,8 +82,8 @@
     "blessedPieceChance": 0.04,
     "stairsForcedAfterBlocks": 12,
     "stairsRandomChance": 0.10,
-    "bombChance": 0.03,
     "merchantChance": 0.04,
+    "maxTattooTilesPerFloor": 2,
     "altarChance": 0.035,
     "trapWeights": {
       "spike": 0.02,
