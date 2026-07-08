@@ -69,7 +69,6 @@ export interface BalanceConfig {
   economy: {
     geasaRerollBaseCost: number; geasaRerollCostGrowth: number;
     ogmRerollBaseCost: number; ogmRerollCostGrowth: number;
-    bombGoldPerDungeonLevel: number;
   };
   ammo: { replenishOnDescend: number; maxAmmo: number };
   altars: { vaultTierMinFloorT3: number; vaultTierMinFloorT2: number };
@@ -81,7 +80,7 @@ export interface BalanceConfig {
   spawnRates: {
     cursedPieceChance: number; blessedPieceChance: number;
     stairsForcedAfterBlocks: number; stairsRandomChance: number;
-    bombChance: number; merchantChance: number; altarChance: number;
+    merchantChance: number; maxTattooTilesPerFloor: number; altarChance: number;
     trapWeights: Record<'spike' | 'smoke' | 'teleport', number>;
     monsterBaseChance: number; monsterChancePerDungeonLevel: number; monsterChanceCap: number;
     hauntedMonsterChanceMult: number;

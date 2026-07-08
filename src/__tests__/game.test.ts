@@ -474,6 +474,15 @@ describe('Balance levers', () => {
     }
   });
 
+  it('at most maxTattooTilesPerFloor Ogham Mark (merchant) cells spawn in a floor', () => {
+    let merchantCount = 0;
+    for (let i = 0; i < 200; i++) {
+      (game as unknown as { spawnBlock(): void }).spawnBlock();
+      merchantCount += game.blockMatrix.flat().filter(c => c === Cell.MERCHANT).length;
+    }
+    expect(merchantCount).toBeLessThanOrEqual(BALANCE.spawnRates.maxTattooTilesPerFloor);
+  });
+
   // Phase 4
   it('estimateHitChance is a valid probability and rises vs weaker defenders', () => {
     const even = estimateHitChance(2, 2);

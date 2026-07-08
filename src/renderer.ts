@@ -166,7 +166,10 @@ export class Renderer {
         const idx = x * CONFIG.ROWS + y;
         if (visible && this.revealFrames[idx]! < FADE_FRAMES) this.revealFrames[idx]!++;
         const fadeFactor = visible ? Math.min(1, this.revealFrames[idx]! / FADE_FRAMES) : 1;
-        const alpha = (visible ? 1.0 : 0.35) * fadeFactor;
+        // Explored-but-out-of-sight tiles stay at a clearly legible shadowed
+        // shade (not just visible/invisible) — memory of the floor's shape,
+        // never any monster/hazard content, which only draw when `visible`.
+        const alpha = (visible ? 1.0 : 0.5) * fadeFactor;
         ctx.globalAlpha = alpha;
 
         if (type === Tile.FLOOR || type === Tile.STAIRS || isMerchant) {
@@ -213,7 +216,7 @@ export class Renderer {
         const tx = game.blockX + c, ty = game.blockY + r;
         if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
 
-        ctx.fillStyle = cell === Cell.BOMB ? '#ff6b35' : cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
+        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         if (cell === Cell.BOSS) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
@@ -560,7 +563,6 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.MONSTER_ORC]:    MONSTERS['berserker_orc']!.char,
   [Cell.MONSTER_BAT]:    MONSTERS['plague_bat']!.char,
   [Cell.STAIRS]:         'tile_stairs',
-  [Cell.BOMB]:           'fx_impact',
   [Cell.MERCHANT]:       'tile_merchant',
   [Cell.BOSS]:           'ui_warning',
   [Cell.ALTAR]:          'tile_altar',

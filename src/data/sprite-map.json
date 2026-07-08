@@ -51,7 +51,7 @@
   "tile_floor":         { "sheet": "tiles", "sx": 32,  "sy": 192, "sw": 32, "sh": 32 },
   "tile_stairs":        { "sheet": "tiles", "sx": 224, "sy": 512, "sw": 32, "sh": 32 },
   "tile_merchant":      { "sheet": "rogues", "sx": 64,  "sy": 192, "sw": 32, "sh": 32 },
-  "tile_altar":         { "sheet": "tiles", "sx": 448, "sy": 512, "sw": 32, "sh": 32 },
+  "tile_altar":         { "sheet": "tiles", "sx": 32,  "sy": 576, "sw": 32, "sh": 32 },
 
   "trap_spike":         { "sheet": "tiles", "sx": 480, "sy": 512, "sw": 32, "sh": 32 },
   "trap_smoke":         { "sheet": "monsters", "sx": 0,   "sy": 384, "sw": 32, "sh": 32 },

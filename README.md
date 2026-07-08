@@ -24,7 +24,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 
 ## The game
 
-**The loop.** Blocks fall on a gravity timer (and every hero/block action also advances a turn). When a block locks, its cells become dungeon floor — and some cells carry *riders*: monsters, altars, the tattoo artist, stairs, bombs, and traps. Your hero can only walk on floor you've built. So you're constantly deciding where to drop pieces to shape a path, reach altars, and corner enemies.
+**The loop.** Blocks fall on a gravity timer (and every hero/block action also advances a turn). When a block locks, its cells become dungeon floor — and some cells carry *riders*: monsters, altars, the tattoo artist, stairs, and traps. Your hero can only walk on floor you've built. So you're constantly deciding where to drop pieces to shape a path, reach altars, and corner enemies.
 
 **Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons** (Geasa), **brands** (Ogham Marks), **curses**, and a starting **class**.
 

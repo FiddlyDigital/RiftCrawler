@@ -110,6 +110,7 @@ export class Game {
   public comboCount = 0;
   private lastLineClearMs = 0;
   private tattooTiles: Array<{ x: number; y: number }> = [];
+  private tattooTilesSpawnedThisFloor = 0;  // caps Ogham Mark tiles per floor
   public altarTiles: AltarTile[] = [];
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
@@ -222,7 +223,6 @@ export class Game {
 
     let stairsInjected = false;
     let bossInjected = false;
-    let bombInjected = false;
     let merchantInjected = false;
     let altarInjected = false;
     let trapInjected = false;
@@ -246,13 +246,13 @@ export class Game {
           return Cell.STAIRS;
         }
 
-        // Special blocks
-        if (!bombInjected && Math.random() < BALANCE.spawnRates.bombChance) {
-          bombInjected = true;
-          return Cell.BOMB;
-        }
-        if (!merchantInjected && !this.player.brandsCapped && Math.random() < BALANCE.spawnRates.merchantChance) {
+        // Special blocks — Ogham Mark tiles are capped per floor, independent
+        // of the brands-lifetime cap, so they don't all cluster early.
+        if (!merchantInjected && !this.player.brandsCapped
+            && this.tattooTilesSpawnedThisFloor < BALANCE.spawnRates.maxTattooTilesPerFloor
+            && Math.random() < BALANCE.spawnRates.merchantChance) {
           merchantInjected = true;
+          this.tattooTilesSpawnedThisFloor++;
           return Cell.MERCHANT;
         }
         if (!altarInjected && Math.random() < BALANCE.spawnRates.altarChance) {
@@ -368,7 +368,6 @@ export class Game {
   // ── Block locking ────────────────────────────────────────────────────────
 
   private lockBlock(): void {
-    const bombPositions: Array<{ x: number; y: number }> = [];
     const landedCells: Array<{ x: number; y: number }> = [];
     const lockedFloorCells: Array<{ x: number; y: number }> = [];
     this.canHold = true;
@@ -384,11 +383,6 @@ export class Game {
         if (cell === Cell.STAIRS) {
           this.map[tx]![ty] = Tile.STAIRS;
           this.colors[tx]![ty] = '#6d3f7a';
-        } else if (cell === Cell.BOMB) {
-          this.map[tx]![ty] = Tile.FLOOR;
-          this.colors[tx]![ty] = this.blockColor;
-          bombPositions.push({ x: tx, y: ty });
-          lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.MERCHANT) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#241830';
@@ -472,11 +466,6 @@ export class Game {
     }
 
     this.cb.onBlockLand?.(landedCells);
-
-    // Trigger bombs after all cells written
-    for (const pos of bombPositions) {
-      this.triggerBomb(pos.x, pos.y);
-    }
 
     this.checkLineClears();
     this.cb.onAudio?.('blockLand');
@@ -633,25 +622,6 @@ export class Game {
       }
       this.cb.log(`A Monster Den lurks to the ${side}...`, 'log-damage', 'status_poison');
     }
-  }
-
-  private triggerBomb(cx: number, cy: number): void {
-    this.cb.log('BOOM! Bomb block detonated!', 'log-tetris', 'fx_impact');
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const x = cx + dx, y = cy + dy;
-        if (x < 0 || x >= CONFIG.COLS || y < 0 || y >= CONFIG.ROWS) continue;
-        this.map[x]![y] = Tile.VOID;
-        this.colors[x]![y] = null;
-        this.monsters = this.monsters.filter(m => !(m.x === x && m.y === y));
-        this.tattooTiles = this.tattooTiles.filter(t => !(t.x === x && t.y === y));
-        this.altarTiles = this.altarTiles.filter(a => !(a.x === x && a.y === y));
-        this.hazards = this.hazards.filter(h => !(h.x === x && h.y === y));
-        this.specialTiles = this.specialTiles.filter(t => !(t.x === x && t.y === y));
-        this.cb.onParticle(x, y, '', '#ff6b35', undefined, 'fx_impact');
-      }
-    }
-    this.gold += Math.floor(BALANCE.economy.bombGoldPerDungeonLevel * this.dungeonLevel);
   }
 
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
@@ -841,6 +811,7 @@ export class Game {
     this.explored = this.emptyBoolGrid(false);
     this.monsters = [];
     this.tattooTiles = [];
+    this.tattooTilesSpawnedThisFloor = 0;
     this.altarTiles = [];
     this.hazards = [];
     this.specialTiles = [];
