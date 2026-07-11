@@ -591,6 +591,16 @@ canvas {
 }
 .share-btn:hover, .share-btn:active { background-color: #0d2333; }
 
+/* ── Full run log (game-over/victory modal) ────────────────────────────── */
+.run-log-full {
+  text-align: left; max-height: 160px; overflow-y: auto;
+  background-color: #0c0c12; border: 1px solid #252538; border-radius: 4px;
+  padding: 6px 7px; font-family: monospace; font-size: 10px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.log-actions { display: flex; gap: 6px; margin-top: 4px; }
+.log-actions .share-btn { margin-top: 0; }
+
 /* ── Tap-to-inspect tooltip ────────────────────────────────────────────── */
 .inspect-tooltip {
   position: fixed; z-index: 150; pointer-events: none;
