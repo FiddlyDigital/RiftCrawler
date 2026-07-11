@@ -16,6 +16,7 @@ export class UIManager {
   private readonly els: Record<string, HTMLElement>;
   private lastXpEarned = -1;
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly fullLog: { text: string; cls: LogClass; icon?: string }[] = [];
 
   constructor() {
     this.logPanel          = document.getElementById('log-panel')!;
@@ -59,6 +60,7 @@ export class UIManager {
       heldPreview:      document.getElementById('held-preview-box')!,
       pieceStateBadge:  document.getElementById('piece-state-badge')!,
       runStatsGrid:     document.getElementById('run-stats-grid')!,
+      runLogFull:       document.getElementById('run-log-full')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
     };
@@ -71,6 +73,7 @@ export class UIManager {
     this.logPanel.appendChild(div);
     this.logPanel.scrollTop = this.logPanel.scrollHeight;
     if (this.logPanel.children.length > 50) this.logPanel.firstChild?.remove();
+    this.fullLog.push({ text, cls, icon });
   }
 
   updateStats(state: UIState): void {
@@ -239,6 +242,41 @@ export class UIManager {
     } else {
       this.els['runStatsGrid']!.innerHTML = '';
       this.els['shareContainer']!.style.display = 'none';
+    }
+
+    // Full run log — scrolling box + copy/download
+    this.els['runLogFull']!.innerHTML = this.fullLog.map(e =>
+      `<div class="log-entry ${e.cls}">${e.icon ? `${spriteIconHTML(e.icon, 13, 'sprite-icon log-icon')}${escapeHtml(e.text)}` : escapeHtml(e.text)}</div>`
+    ).join('') || '<div style="color:#555;font-size:9px">No events recorded.</div>';
+    const logText = this.fullLog.map(e => e.text).join('\n');
+    const copyLogBtn = document.getElementById('copy-log-btn');
+    if (copyLogBtn) {
+      copyLogBtn.onclick = () => {
+        navigator.clipboard?.writeText(logText).catch(() => {
+          const ta = document.createElement('textarea');
+          ta.value = logText;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        });
+        copyLogBtn.textContent = 'Copied!';
+        setTimeout(() => { copyLogBtn.textContent = '📋 Copy Log'; }, 1800);
+      };
+    }
+    const downloadLogBtn = document.getElementById('download-log-btn');
+    if (downloadLogBtn) {
+      downloadLogBtn.onclick = () => {
+        const blob = new Blob([logText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `causeway-to-eriu-run-log-fl${floor}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
     }
 
     // Run history table
@@ -588,5 +626,5 @@ export class UIManager {
     this.log(message, 'log-damage', 'ui_warning');
   }
 
-  clearLog(): void { this.logPanel.innerHTML = ''; }
+  clearLog(): void { this.logPanel.innerHTML = ''; this.fullLog.length = 0; }
 }
