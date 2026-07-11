@@ -79,8 +79,6 @@
   "item_key":           { "sheet": "items", "sx": 0,   "sy": 704, "sw": 32, "sh": 32 },
   "item_lock":          { "sheet": "items", "sx": 64,  "sy": 704, "sw": 32, "sh": 32 },
 
-  "class_cascade":       { "sheet": "rogues", "sx": 0,   "sy": 96,  "sw": 32, "sh": 32 },
   "class_architect":     { "sheet": "rogues", "sx": 160, "sy": 160, "sw": 32, "sh": 32 },
-  "class_chronomancer":  { "sheet": "rogues", "sx": 0,   "sy": 128, "sw": 32, "sh": 32 },
-  "class_rift_weaver":   { "sheet": "rogues", "sx": 160, "sy": 128, "sw": 32, "sh": 32 }
+  "class_chronomancer":  { "sheet": "rogues", "sx": 0,   "sy": 128, "sw": 32, "sh": 32 }
 }

@@ -36,51 +36,6 @@
     }
   },
   {
-    "id": "rift_weaver",
-    "emoji": "class_rift_weaver",
-    "name": "Rift Weaver",
-    "tagline": "Command spatial forces. Pull enemies to their doom.",
-    "statPreview": "−10 HP  +2 ATK  +2 vision  teleport immune  D8 dice  Gravity Well (Q, 4-tile pull×2+stun, cd 8)",
-    "tPieceCdReduction": 2,
-    "effects": [
-      {
-        "stat": "maxHp",
-        "value": -10,
-        "min": 10
-      },
-      {
-        "stat": "atk",
-        "value": 2
-      },
-      {
-        "stat": "visionRadius",
-        "value": 2
-      },
-      {
-        "stat": "teleportImmune",
-        "op": "set",
-        "value": true
-      },
-      {
-        "stat": "baseCombatLevel",
-        "op": "set",
-        "value": 3
-      }
-    ],
-    "ability": {
-      "name": "Gravity Well",
-      "emoji": "trap_teleport",
-      "abilityType": "gravity_well",
-      "range": 4,
-      "damageMult": 0,
-      "cooldownMax": 8,
-      "params": {
-        "pullSteps": 2,
-        "stunDuration": 1
-      }
-    }
-  },
-  {
     "id": "architect",
     "emoji": "class_architect",
     "name": "The Architect",
@@ -121,47 +76,6 @@
       "cooldownMax": 10,
       "params": {
         "tileType": "sacred"
-      }
-    }
-  },
-  {
-    "id": "cascade",
-    "emoji": "class_cascade",
-    "name": "Cascade",
-    "tagline": "Stack kills, then unleash. Pure explosive potential.",
-    "statPreview": "−20 HP  +10 ATK  line clears deal 4×rows×floor dmg  D10 dice  Overload (Q, 8×kills min floor×5, cd 12)",
-    "tPieceCdReduction": 2,
-    "effects": [
-      {
-        "stat": "maxHp",
-        "value": -20,
-        "min": 10
-      },
-      {
-        "stat": "atk",
-        "value": 10
-      },
-      {
-        "stat": "baseCombatLevel",
-        "op": "set",
-        "value": 4
-      },
-      {
-        "stat": "lineClearDmgMult",
-        "op": "set",
-        "value": 4
-      }
-    ],
-    "ability": {
-      "name": "Overload",
-      "emoji": "fx_impact",
-      "abilityType": "overload",
-      "range": 0,
-      "damageMult": 0,
-      "cooldownMax": 12,
-      "params": {
-        "perKillDmg": 8,
-        "perFloorMinDmg": 5
       }
     }
   }

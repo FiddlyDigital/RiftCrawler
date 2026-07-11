@@ -308,7 +308,7 @@ function startGame(startPaused = false): void {
     onLevelUp: (choices, onChoice) => {
       stopTick();
       audio.playLevelUp();
-      ui.showAltarModal(1, choices, (index) => {
+      ui.showAltarModal(1, choices, game.player.boons, (index) => {
         onChoice(index);
         audio.playPerk();
         startTick();
@@ -318,7 +318,7 @@ function startGame(startPaused = false): void {
     onOpenTattooArtist: (choices, onChoice, reroll) => {
       stopTick();
       audio.playShop();
-      ui.showTattooModal(choices, (i) => {
+      ui.showTattooModal(choices, game.player.brands, (i) => {
         onChoice(i);
         startTick();
       }, reroll);
@@ -344,7 +344,7 @@ function startGame(startPaused = false): void {
     onOpenAltar: (tier, choices, onChoice, reroll) => {
       stopTick();
       audio.playPerk();
-      ui.showAltarModal(tier, choices, (index) => {
+      ui.showAltarModal(tier, choices, game.player.boons, (index) => {
         onChoice(index);
         startTick();
       }, undefined, reroll);
@@ -360,7 +360,7 @@ function startGame(startPaused = false): void {
 // ── Class + Modifier picker then launch ──────────────────────────────────────
 
 function launchWithModifier(onReady: () => void): void {
-  const classes = game.getRandomClasses(4);
+  const classes = game.getRandomClasses(2);
   ui.showClassSelection(classes, (classId) => {
     game.applyClass(classId);
     const mods = game.getRandomModifiers(3);

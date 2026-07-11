@@ -89,7 +89,7 @@ export class Game {
   public activeClassId: string | null = null;
   public timeDilationTurns = 0;    // Chronomancer: turns remaining at the slow below
   public timeDilationSlowPct = 0;  // magnitude of the slow while timeDilationTurns > 0 (class-configurable)
-  public killsThisFloor    = 0;  // Cascade: kill counter for Overload
+  public killsThisFloor    = 0;  // kill counter for the Overload ability type
 
   // Biome state
   public biomeId = 'stone';
@@ -742,7 +742,7 @@ export class Game {
         this.monsters = this.monsters.filter(m => m.hp > 0);
       }
 
-      // Cascade passive: line clears deal scaled damage to all visible monsters
+      // line-clear-damage-mult passive: line clears deal scaled damage to all visible monsters
       if (this.player.lineClearDmgMult > 0) {
         const dmg = this.player.lineClearDmgMult * rowsCleared * this.dungeonLevel;
         for (const m of this.monsters) {
@@ -938,7 +938,7 @@ export class Game {
 
   // ── Class selection ──────────────────────────────────────────────────────
 
-  getRandomClasses(count = 4): ClassDef[] {
+  getRandomClasses(count = 2): ClassDef[] {
     return CLASSES.slice(0, count);
   }
 

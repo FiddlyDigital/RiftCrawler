@@ -43,7 +43,7 @@ export function checkHazardTrigger(entity: { x: number; y: number }, game: Game,
   if (!h) return;
   if (h.type === 'teleport') {
     if (isPlayer && game.player.teleportImmune) {
-      game.cb.log('Teleport rune — you resist! (Rift Weaver)', 'log-success', 'trap_teleport');
+      game.cb.log('Teleport rune — you resist!', 'log-success', 'trap_teleport');
       game.cb.onParticle(entity.x, entity.y, '', '#7e57c2', undefined, 'sprite_equip_buckler');
       return;
     }

@@ -53,8 +53,8 @@ export class Player {
 
   // Class-set multipliers
   lineClearXpMult = 1;  // Architect doubles line-clear XP
-  lineClearDmgMult = 0;  // Cascade: line clears deal lineClearDmgMult×rows×floor dmg
-  teleportImmune  = false;  // Rift Weaver resists teleport traps
+  lineClearDmgMult = 0;  // line clears deal lineClearDmgMult×rows×floor dmg (unused by current classes)
+  teleportImmune  = false;  // resists teleport traps (unused by current classes)
 
   // Perk-granted bonuses (boons & brands)
   dodgeChance = 0;

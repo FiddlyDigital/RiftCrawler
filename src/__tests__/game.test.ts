@@ -821,15 +821,13 @@ describe('Player classes (JSON-configured)', () => {
     game = new Game(cb);
   });
 
-  it('CLASSES loads all 4 classes from JSON in the original order', () => {
-    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'rift_weaver', 'architect', 'cascade']);
+  it('CLASSES loads both classes from JSON in the original order', () => {
+    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'architect']);
   });
 
   it('tPieceCdReduction defaults to 2, architect overrides to 4', () => {
     expect(CLASSES.find(c => c.id === 'architect')!.tPieceCdReduction).toBe(4);
     expect(CLASSES.find(c => c.id === 'chronomancer')!.tPieceCdReduction).toBe(2);
-    expect(CLASSES.find(c => c.id === 'rift_weaver')!.tPieceCdReduction).toBe(2);
-    expect(CLASSES.find(c => c.id === 'cascade')!.tPieceCdReduction).toBe(2);
   });
 
   it('applyClass(chronomancer) sets stats and Time Dilation ability', () => {
@@ -844,20 +842,6 @@ describe('Player classes (JSON-configured)', () => {
     expect(game.player.rangedAbility?.params).toEqual({ slowTurns: 15, slowPct: 100 });
   });
 
-  it('applyClass(rift_weaver) sets stats and Gravity Well ability', () => {
-    const hpBefore = game.player.maxHp;
-    const atkBefore = game.player.atk;
-    const visionBefore = game.player.visionRadius;
-    game.applyClass('rift_weaver');
-    expect(game.player.maxHp).toBe(hpBefore - 10);
-    expect(game.player.atk).toBe(atkBefore + 2);
-    expect(game.player.visionRadius).toBe(visionBefore + 2);
-    expect(game.player.teleportImmune).toBe(true);
-    expect(game.player.rangedAbility?.abilityType).toBe('gravity_well');
-    expect(game.player.rangedAbility?.range).toBe(4);
-    expect(game.player.rangedAbility?.params).toEqual({ pullSteps: 2, stunDuration: 1 });
-  });
-
   it('applyClass(architect) sets stats and Consecrate ability', () => {
     const hpBefore = game.player.maxHp;
     const atkBefore = game.player.atk;
@@ -869,20 +853,9 @@ describe('Player classes (JSON-configured)', () => {
     expect(game.player.rangedAbility?.params).toEqual({ tileType: 'sacred' });
   });
 
-  it('applyClass(cascade) sets stats and Overload ability', () => {
-    const hpBefore = game.player.maxHp;
-    const atkBefore = game.player.atk;
-    game.applyClass('cascade');
-    expect(game.player.maxHp).toBe(hpBefore - 20);
-    expect(game.player.atk).toBe(atkBefore + 10);
-    expect(game.player.lineClearDmgMult).toBe(4);
-    expect(game.player.rangedAbility?.abilityType).toBe('overload');
-    expect(game.player.rangedAbility?.params).toEqual({ perKillDmg: 8, perFloorMinDmg: 5 });
-  });
-
   it('applyClass clamps hp to the new (lower) maxHp instead of leaving it over-full', () => {
     game.player.hp = game.player.maxHp; // full HP (45)
-    game.applyClass('cascade'); // −20 maxHp
+    game.applyClass('chronomancer'); // −5 maxHp
     expect(game.player.hp).toBe(game.player.maxHp);
   });
 
@@ -895,11 +868,17 @@ describe('Player classes (JSON-configured)', () => {
     expect(game.timeDilationSlowPct).toBe(100);
   });
 
+  // Gravity Well and Overload aren't wired to any current class, but the
+  // ability-type engine that runs them is still live (reusable by boons/
+  // future classes) — construct the ability directly rather than via a
+  // removed class id.
   it('Gravity Well pulls an eligible monster pullSteps tiles toward the player and stuns it', () => {
-    game.applyClass('rift_weaver');
     // Use a longer stun than the 1-turn default so it survives the monster-turn
     // processing that happens later in this same action's advanceTurn().
-    game.player.rangedAbility!.params = { pullSteps: 2, stunDuration: 3 };
+    game.player.rangedAbility = {
+      name: 'Gravity Well', emoji: 'trap_teleport', abilityType: 'gravity_well',
+      range: 4, damageMult: 0, cooldownMax: 8, params: { pullSteps: 2, stunDuration: 3 },
+    };
     const m = new Monster(game.player.x + 3, game.player.y, 'sprite_berserker_orc', 'Orc', 20, 20, 1, 5);
     game.monsters = [m];
     game.visibility[m.x]![m.y] = true;
@@ -909,7 +888,10 @@ describe('Player classes (JSON-configured)', () => {
   });
 
   it('Overload damage uses perKillDmg × kills, floored by perFloorMinDmg × floor, and resets killsThisFloor', () => {
-    game.applyClass('cascade');
+    game.player.rangedAbility = {
+      name: 'Overload', emoji: 'fx_impact', abilityType: 'overload',
+      range: 0, damageMult: 0, cooldownMax: 12, params: { perKillDmg: 8, perFloorMinDmg: 5 },
+    };
     game.killsThisFloor = 3; // 8*3=24 > floor(1)*5=5 → dmg should be 24
     const m = new Monster(game.player.x, game.player.y + 1, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
     game.monsters = [m];
@@ -937,8 +919,8 @@ describe('Player classes (JSON-configured)', () => {
     expect(game.player.rangedCooldown).toBe(5);
   });
 
-  it("Cascade's line-clear passive deals lineClearDmgMult × rows × dungeonLevel to visible monsters", () => {
-    game.applyClass('cascade');
+  it('the line-clear-damage-mult passive deals lineClearDmgMult × rows × dungeonLevel to visible monsters', () => {
+    game.player.lineClearDmgMult = 4;
     const m = new Monster(0, 5, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
     game.monsters = [m];
     game.visibility[m.x]![m.y] = true;
@@ -1141,7 +1123,7 @@ describe('Hazards', () => {
     expect(cb.logs.some(l => l.includes('Teleport trap!'))).toBe(true);
   });
 
-  it('teleportImmune (Rift Weaver) resists the teleport trap — hazard stays, player stays put', () => {
+  it('teleportImmune resists the teleport trap — hazard stays, player stays put', () => {
     for (let x = 0; x < 3; x++) game.map[x]![10] = Tile.FLOOR;
     game.player.x = 0; game.player.y = 10;
     game.player.teleportImmune = true;
