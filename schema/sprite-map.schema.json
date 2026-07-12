@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/sprite-map.schema.json",
+  "title": "SpriteMap",
+  "description": "Sprite key -> sheet coordinates. Mirrors SpriteCoord in src/types.ts. The `_comment` key is a free-text note stripped at load time.",
+  "type": "object",
+  "properties": {
+    "_comment": { "type": "string" }
+  },
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["sheet", "sx", "sy", "sw", "sh"],
+    "properties": {
+      "sheet": { "type": "string", "enum": ["monsters", "rogues", "items", "tiles"] },
+      "sx": { "type": "number", "minimum": 0 },
+      "sy": { "type": "number", "minimum": 0 },
+      "sw": { "type": "number", "exclusiveMinimum": 0 },
+      "sh": { "type": "number", "exclusiveMinimum": 0 }
+    }
+  }
+}

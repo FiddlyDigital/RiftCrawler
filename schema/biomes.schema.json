@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/biomes.schema.json",
+  "title": "Biomes",
+  "description": "Ordered list of dungeon biomes, deepest-first. Mirrors BiomeDef in src/types.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "name", "minFloor", "tileRgb", "monsterHpMult", "gravityPctBonus", "desc", "moteColor"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "minFloor": { "type": "number" },
+      "tileRgb": { "type": "string", "pattern": "^\\d{1,3},\\d{1,3},\\d{1,3}$" },
+      "monsterHpMult": { "type": "number" },
+      "gravityPctBonus": { "type": "number" },
+      "desc": { "type": "string", "minLength": 1 },
+      "moteColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/combat.schema.json",
+  "title": "CombatBalance",
+  "description": "Dice-based combat resolution tuning. Mirrors CombatBalance in src/balance.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["diceSidesByLevel", "outcomeMultipliers", "marginThresholds", "missPityStreak", "grazeDamagePct", "critStun", "rewards"],
+  "properties": {
+    "diceSidesByLevel": {
+      "type": "array",
+      "items": { "type": "number" }
+    },
+    "outcomeMultipliers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["miss", "weak", "normal", "power", "critical"],
+      "properties": {
+        "miss": { "type": "number" },
+        "weak": { "type": "number" },
+        "normal": { "type": "number" },
+        "power": { "type": "number" },
+        "critical": { "type": "number" }
+      }
+    },
+    "marginThresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weakMax", "normalMax"],
+      "properties": {
+        "weakMax": { "type": "number" },
+        "normalMax": { "type": "number" }
+      }
+    },
+    "missPityStreak": { "type": "number" },
+    "grazeDamagePct": { "type": "number" },
+    "critStun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration", "power"],
+      "properties": {
+        "duration": { "type": "number" },
+        "power": { "type": "number" }
+      }
+    },
+    "rewards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goldOnKill", "goldOnBossKill", "eliteGoldBonusPerFloor", "healOnKill"],
+      "properties": {
+        "goldOnKill": { "type": "number" },
+        "goldOnBossKill": { "type": "number" },
+        "eliteGoldBonusPerFloor": { "type": "number" },
+        "healOnKill": { "type": "number" }
+      }
+    }
+  }
+}

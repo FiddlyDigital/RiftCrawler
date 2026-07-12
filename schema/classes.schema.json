@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/classes.schema.json",
+  "title": "Classes",
+  "description": "Starting character classes. Mirrors RawClass in src/dataLoader.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "emoji", "name", "tagline", "statChips"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "emoji": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "tagline": { "type": "string", "minLength": 1 },
+      "statChips": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      },
+      "tPieceCdReduction": { "type": "number" },
+      "effects": {
+        "type": "array",
+        "items": { "$ref": "_effect-spec.schema.json" }
+      },
+      "ability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "emoji", "abilityType", "range", "damageMult", "cooldownMax"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "emoji": { "type": "string", "minLength": 1 },
+          "abilityType": { "type": "string", "enum": ["bolt", "time_dilation", "gravity_well", "consecrate", "overload"] },
+          "range": { "type": "number" },
+          "damageMult": { "type": "number" },
+          "cooldownMax": { "type": "number" },
+          "statusEffect": { "type": "string", "enum": ["stun"] },
+          "params": {
+            "type": "object",
+            "additionalProperties": { "type": ["number", "string"] }
+          }
+        }
+      }
+    }
+  }
+}

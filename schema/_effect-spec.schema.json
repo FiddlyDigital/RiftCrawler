@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/_effect-spec.schema.json",
+  "title": "EffectSpec",
+  "description": "Declarative stat mutation used by boons/brands/modifiers/classes effect arrays. Mirrors src/types.ts EffectSpec.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["stat", "value"],
+  "properties": {
+    "target": { "type": "string", "enum": ["player", "game"] },
+    "stat": { "type": "string", "minLength": 1 },
+    "op": { "type": "string", "enum": ["add", "mul", "set"] },
+    "value": { "type": ["number", "boolean"] },
+    "min": { "type": "number" },
+    "max": { "type": "number" },
+    "floor": { "type": "boolean" }
+  }
+}

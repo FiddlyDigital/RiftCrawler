@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/hazards.schema.json",
+  "title": "HazardBalance",
+  "description": "Trap-tile tuning. Mirrors HazardBalance in src/balance.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spike"],
+  "properties": {
+    "spike": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rearmMinTurns", "rearmRandomTurns", "warningThreshold", "damagePerDungeonLevel", "minDamage", "fieldFixedTimer"],
+      "properties": {
+        "rearmMinTurns": { "type": "number" },
+        "rearmRandomTurns": { "type": "number" },
+        "warningThreshold": { "type": "number" },
+        "damagePerDungeonLevel": { "type": "number" },
+        "minDamage": { "type": "number" },
+        "fieldFixedTimer": { "type": "number" }
+      }
+    }
+  }
+}

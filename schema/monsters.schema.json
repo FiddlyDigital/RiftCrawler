@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/monsters.schema.json",
+  "title": "Monsters",
+  "description": "Monster roster, keyed by monster id. Mirrors RawMonster in src/dataLoader.ts.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "displayName", "visualAsset", "cellTypeId", "baseHp", "baseAtk", "hpScaleCoefficient", "atkScaleCoefficient", "xpValue", "spawnMsg"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "displayName": { "type": "string", "minLength": 1 },
+      "visualAsset": { "type": "string", "minLength": 1 },
+      "cellTypeId": { "type": "string", "minLength": 1 },
+      "combatLevel": { "type": "number" },
+      "baseHp": { "type": "number" },
+      "baseAtk": { "type": "number" },
+      "hpScaleCoefficient": { "type": "number" },
+      "atkScaleCoefficient": { "type": "number" },
+      "xpValue": { "type": "number" },
+      "spawnMsg": { "type": "string", "minLength": 1 },
+      "statusInflict": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "chance", "duration", "power"],
+        "properties": {
+          "type": { "type": "string", "enum": ["poison", "stun"] },
+          "chance": { "type": "number" },
+          "duration": { "type": "number" },
+          "power": { "type": "number" }
+        }
+      },
+      "behaviorType": { "type": "string", "enum": ["melee", "berserker", "swift", "ranged", "healer"] },
+      "attackRange": { "type": "number" },
+      "moveSpeed": { "type": "number" }
+    }
+  }
+}

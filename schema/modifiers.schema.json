@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/modifiers.schema.json",
+  "title": "Modifiers",
+  "description": "Run-start modifiers offered alongside class choice. Mirrors RawModifier in src/dataLoader.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "emoji", "name", "desc"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "emoji": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "desc": { "type": "string", "minLength": 1 },
+      "effects": {
+        "type": "array",
+        "items": { "$ref": "_effect-spec.schema.json" }
+      },
+      "special": { "type": "string", "minLength": 1 }
+    }
+  }
+}

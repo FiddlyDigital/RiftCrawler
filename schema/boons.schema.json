@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/boons.schema.json",
+  "title": "Boons",
+  "description": "Ogham/altar boon offers. Mirrors RawBoon in src/dataLoader.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "char", "name", "tier", "role", "desc"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "char": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "tier": { "type": "integer", "enum": [1, 2, 3] },
+      "role": { "type": "string", "enum": ["offense", "defense", "utility"] },
+      "desc": { "type": "string", "minLength": 1 },
+      "effects": {
+        "type": "array",
+        "items": { "$ref": "_effect-spec.schema.json" }
+      },
+      "special": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/monster-ai.schema.json",
+  "title": "MonsterAiConfig",
+  "description": "Per-behavior-type AI tuning. Mirrors MonsterAiConfig in src/balance.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["common", "melee", "berserker", "swift", "ranged", "healer", "gorgoth"],
+  "properties": {
+    "common": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contactDistance"],
+      "properties": {
+        "contactDistance": { "type": "number" }
+      }
+    },
+    "melee": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chaseRange"],
+      "properties": {
+        "chaseRange": { "type": "number" }
+      }
+    },
+    "berserker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chaseRange", "enrageHpFraction"],
+      "properties": {
+        "chaseRange": { "type": "number" },
+        "enrageHpFraction": { "type": "number" }
+      }
+    },
+    "swift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chaseRange", "doubleMoveOnChase"],
+      "properties": {
+        "chaseRange": { "type": "number" },
+        "doubleMoveOnChase": { "type": "boolean" }
+      }
+    },
+    "ranged": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retreatDistance", "advanceRangeBonus"],
+      "properties": {
+        "retreatDistance": { "type": "number" },
+        "advanceRangeBonus": { "type": "number" }
+      }
+    },
+    "healer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["healRadius", "healFraction"],
+      "properties": {
+        "healRadius": { "type": "number" },
+        "healFraction": { "type": "number" }
+      }
+    },
+    "gorgoth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepTurns"],
+      "properties": {
+        "stepTurns": { "type": "number" }
+      }
+    }
+  }
+}

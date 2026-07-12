@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/shapes.schema.json",
+  "title": "Shapes",
+  "description": "Falling-piece definitions, keyed by shape letter. Mirrors ShapeDef in src/dataLoader.ts.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["matrix", "color"],
+    "properties": {
+      "matrix": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "integer", "enum": [0, 1] }
+        }
+      },
+      "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+    }
+  }
+}

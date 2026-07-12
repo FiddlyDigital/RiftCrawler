@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/bosses.schema.json",
+  "title": "Bosses",
+  "description": "Floor bosses (biome-agnostic pool). Mirrors RawBoss in src/dataLoader.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "displayName", "visualAsset", "hpMult", "atkMult", "xpValue", "flavorText"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "displayName": { "type": "string", "minLength": 1 },
+      "visualAsset": { "type": "string", "minLength": 1 },
+      "hpMult": { "type": "number" },
+      "atkMult": { "type": "number" },
+      "xpValue": { "type": "number" },
+      "flavorText": { "type": "string", "minLength": 1 }
+    }
+  }
+}
