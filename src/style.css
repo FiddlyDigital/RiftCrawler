@@ -649,7 +649,7 @@ canvas {
     /* "auto" (not 1fr) lets the canvas column shrink-to-fit the canvas's own
        rendered width, so justify-content can center the whole canvas+sidebar
        block instead of the canvas floating inside an edge-to-edge column. */
-    grid-template-columns: auto 260px;
+    grid-template-columns: auto 310px;
     grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas:
       "canvas sidebar"
@@ -672,7 +672,7 @@ canvas {
   #sidebar-panel {
     /* Stretch (grid default) to fill the "sidebar" row exactly, so
        sidebar + controls together sum to precisely the canvas's height. */
-    font-size: 13px;
+    font-size: 14px;
     overflow-y: auto;
     /* Undo the mobile fixed-drawer treatment — back to a normal grid column. */
     position: static;
@@ -691,11 +691,49 @@ canvas {
   .kbd-only { display: block; }
   .touch-only { display: none; }
 
-  .card-title { font-size: 10px; }
+  /* ── Desktop type scale-up ────────────────────────────────────────────
+     The mobile-tuned 8-10px labels are illegibly small on a monitor. Many
+     of them are inline styles (index.html + JS-built HTML), so the desktop
+     bump needs attribute-selector overrides — contained here, and matched
+     by explicit resets in the landscape-phone block below (those widths
+     also satisfy min-width:640px but are still small phone screens). */
+  .card-title { font-size: 13px; }
+
+  #sidebar-panel [style*="font-size:8px"],  .modal-card [style*="font-size:8px"],
+  #sidebar-panel [style*="font-size: 8px"], .modal-card [style*="font-size: 8px"] {
+    font-size: 11px !important;
+  }
+  #sidebar-panel [style*="font-size:9px"],  .modal-card [style*="font-size:9px"],
+  #sidebar-panel [style*="font-size: 9px"], .modal-card [style*="font-size: 9px"] {
+    font-size: 12px !important;
+  }
+  #sidebar-panel [style*="font-size:10px"],  .modal-card [style*="font-size:10px"],
+  #sidebar-panel [style*="font-size: 10px"], .modal-card [style*="font-size: 10px"] {
+    font-size: 13px !important;
+  }
+  #sidebar-panel [style*="font-size:11px"],  .modal-card [style*="font-size:11px"],
+  #sidebar-panel [style*="font-size: 11px"], .modal-card [style*="font-size: 11px"] {
+    font-size: 13px !important;
+  }
+
+  .modal-card { max-width: 420px; }
+  .modal-card[style*="max-width"] { max-width: 420px !important; }
+  .boon-chip, .brand-chip { font-size: 13px; }
+  .class-chip { font-size: 11px; }
+  .modifier-info strong { font-size: 14px; }
+  .modifier-info span { font-size: 12px; }
+  .perk-btn { font-size: 13px; }
+  .history-row { font-size: 10px; }
+  .stat-cell { font-size: 13px; }
+  .stat-cell b { font-size: 16px; }
+  .stat-cell span { font-size: 10px; }
+  .run-log-full { font-size: 12px; max-height: 200px; }
+  #share-text { font-size: 11px; }
 
   #log-panel {
     max-height: 240px;
     flex-grow: 1;
+    font-size: 12px;
   }
 
   #controls-layout {
@@ -764,4 +802,27 @@ canvas {
      touch device — undo the desktop keyboard-first treatment. */
   .kbd-hint, .kbd-only { display: none; }
   .touch-only { display: block; }
+
+  /* ...and undo the desktop type scale-up: this is a 200px-wide sidebar on a
+     small screen, not a monitor. */
+  .card-title { font-size: 11px; }
+  .boon-chip, .brand-chip { font-size: 11px; }
+  .modal-card { max-width: 340px; }
+  .modal-card[style*="max-width"] { max-width: 340px !important; }
+  #sidebar-panel [style*="font-size:8px"],  .modal-card [style*="font-size:8px"],
+  #sidebar-panel [style*="font-size: 8px"], .modal-card [style*="font-size: 8px"] {
+    font-size: 8px !important;
+  }
+  #sidebar-panel [style*="font-size:9px"],  .modal-card [style*="font-size:9px"],
+  #sidebar-panel [style*="font-size: 9px"], .modal-card [style*="font-size: 9px"] {
+    font-size: 9px !important;
+  }
+  #sidebar-panel [style*="font-size:10px"],  .modal-card [style*="font-size:10px"],
+  #sidebar-panel [style*="font-size: 10px"], .modal-card [style*="font-size: 10px"] {
+    font-size: 10px !important;
+  }
+  #sidebar-panel [style*="font-size:11px"],  .modal-card [style*="font-size:11px"],
+  #sidebar-panel [style*="font-size: 11px"], .modal-card [style*="font-size: 11px"] {
+    font-size: 11px !important;
+  }
 }
