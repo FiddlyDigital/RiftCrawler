@@ -168,8 +168,9 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
   if (game.player.dodgeChance > 0 && Math.random() < game.player.dodgeChance) {
     game.cb.log(`${m.name} attacks — you dodge!`, 'log-success');
     game.cb.onParticle(game.player.x, game.player.y, 'DODGE!', '#29b6f6');
+    // Mist Cloak: dodgeHeal is a fraction of maxHp, like the other sustain stats
     if (game.player.dodgeHeal > 0) {
-      const healed = game.player.heal(game.player.dodgeHeal);
+      const healed = game.player.heal(pctOf(game.player.maxHp, game.player.dodgeHeal));
       if (healed > 0) game.cb.onParticle(game.player.x, game.player.y, `+${healed} HP`, '#69f0ae');
     }
     return;

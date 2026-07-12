@@ -333,6 +333,15 @@ function startGame(startPaused = false): void {
       }, reroll);
     },
 
+    onOpenShop: (stock, gold, buy, close) => {
+      stopTick();
+      audio.playShop();
+      ui.showShop(stock, gold, buy, () => {
+        close();
+        startTick();
+      });
+    },
+
     onBossWarning: (boss, onDone) => {
       audio.playBossWarn();
       ui.showBossWarning(boss, () => {

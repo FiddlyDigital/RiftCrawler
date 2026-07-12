@@ -1,6 +1,6 @@
 import { SHAPES } from './config';
 import { spriteIconHTML, escapeHtml, shapePreviewHTML } from './sprites';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem } from './types';
 import type { RunRecord } from './types';
 
 export class UIManager {
@@ -522,6 +522,39 @@ export class UIManager {
 
     render(opts.choices, opts.reroll?.gold ?? 0, opts.reroll?.cost ?? 0);
     this.altarModal.style.display = 'flex';
+  }
+
+  showShop(stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void): void {
+    const modal  = document.getElementById('shop-modal')!;
+    const goldEl = document.getElementById('shop-gold')!;
+    const items  = document.getElementById('shop-items')!;
+
+    const render = (g: number): void => {
+      goldEl.textContent = `${g.toLocaleString()}g`;
+      items.innerHTML = '';
+      for (const item of stock) {
+        const btn = document.createElement('button');
+        btn.className = 'shop-item-btn';
+        btn.disabled = item.purchased || g < item.cost;
+        btn.innerHTML =
+          `<span style="display:flex;align-items:center;gap:8px;">${spriteIconHTML(item.icon, 18)}` +
+          `<span style="text-align:left;"><b>${escapeHtml(item.name)}</b><br>` +
+          `<span style="color:#888;font-size:10px;">${escapeHtml(item.desc)}</span></span></span>` +
+          `<span class="shop-cost">${item.purchased ? 'SOLD' : `${item.cost}g`}</span>`;
+        btn.addEventListener('click', () => {
+          const result = buy(item.id);
+          if (result.ok) render(result.gold);
+        });
+        items.appendChild(btn);
+      }
+    };
+
+    render(gold);
+    (document.getElementById('shop-close') as HTMLButtonElement).onclick = () => {
+      modal.style.display = 'none';
+      onClose();
+    };
+    modal.style.display = 'flex';
   }
 
   showTattooModal(

@@ -108,6 +108,50 @@
     ]
   },
   {
+    "id": "purifying_spring",
+    "char": "item_droplet",
+    "name": "Purifying Spring",
+    "tier": 1,
+    "role": "utility",
+    "desc": "Poison & stun on you fade 1 turn faster per stack",
+    "effects": [
+      {
+        "stat": "statusDurationBonus",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "id": "mist_cloak",
+    "char": "trap_smoke",
+    "name": "Mist Cloak",
+    "tier": 2,
+    "role": "defense",
+    "desc": "Heal 4% Max HP whenever you dodge (per stack, max 20%)",
+    "effects": [
+      {
+        "stat": "dodgeHeal",
+        "value": 0.04,
+        "max": 0.2
+      }
+    ]
+  },
+  {
+    "id": "banshee_keening",
+    "char": "sprite_boss_wraith",
+    "name": "Banshee's Keening",
+    "tier": 3,
+    "role": "utility",
+    "desc": "Monsters within 1 tile are stunned each turn (+1 reach per stack, max 3)",
+    "effects": [
+      {
+        "stat": "auraStunRadius",
+        "value": 1,
+        "max": 3
+      }
+    ]
+  },
+  {
     "id": "bloodtap",
     "char": "sprite_blood",
     "name": "Bloodtap Core",

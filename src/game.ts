@@ -1,5 +1,5 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type ShopItem } from './types';
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
@@ -125,6 +125,7 @@ export class Game {
   private gorgothHintShown = false;   // one-time nudge toward the win condition
   private gorgothHp = BALANCE.gorgoth.maxHp;  // carries over between summons (escape & retry)
   private gorgothHalfTriggered = false;
+  public gorgothEverSummoned = false;  // once true, line clears chip the causeway (his stored HP)
 
   readonly cb: GameCallbacks;
 
@@ -739,7 +740,6 @@ export class Game {
             this.cb.onParticle(m.x, m.y, `-${lineClearDmg}`, '#ff6b35', undefined, 'fx_fire');
           }
         }
-        this.monsters = this.monsters.filter(m => m.hp > 0);
       }
 
       // line-clear-damage-mult passive: line clears deal scaled damage to all visible monsters
@@ -751,7 +751,6 @@ export class Game {
             this.cb.onParticle(m.x, m.y, `-${dmg}`, '#ff6d00', 14, 'fx_impact');
           }
         }
-        this.monsters = this.monsters.filter(m => m.hp > 0);
       }
 
       // Annihilation Rune: line clears deal floor×mult dmg to ALL monsters
@@ -761,7 +760,24 @@ export class Game {
           m.hp -= aoeDmg;
           this.cb.onParticle(m.x, m.y, `-${aoeDmg}`, '#ff6d00', undefined, 'fx_impact');
         }
-        this.monsters = this.monsters.filter(m => m.hp > 0);
+      }
+
+      // Route line-clear deaths through killMonster so they award XP/gold and,
+      // crucially, so dropping Bres to 0 triggers victory instead of silently
+      // deleting him (which would soft-lock the run: no boss, no blocks).
+      for (const m of this.monsters.filter(x => x.hp <= 0)) killMonster(m, this);
+
+      // The Causeway Crumbles: once Bres has shown himself, every row you
+      // demolish is a span of his half-built bridge — his stored HP takes the
+      // hit, but he can never be finished off in absentia (min 1): you must
+      // face him to end it.
+      if (this.gorgothEverSummoned && !this.gorgothSummoned) {
+        const chip = BALANCE.gorgoth.causewayDamagePerRowPerFloor * rowsCleared * this.dungeonLevel;
+        const before = this.gorgothHp;
+        this.gorgothHp = Math.max(1, this.gorgothHp - chip);
+        if (this.gorgothHp < before) {
+          this.cb.log(`The causeway shudders — Bres feels it! (−${before - this.gorgothHp})`, 'log-boss', 'sprite_boss_gorgoth');
+        }
       }
 
       if (!this.noLineHeal) {
@@ -999,6 +1015,38 @@ export class Game {
     });
   }
 
+  // The Fear Dearg's stall — the gold sink. Prices scale with depth; each
+  // item can be bought once per visit.
+  openPeddler(): void {
+    if (!this.cb.onOpenShop) return;
+    this.paused = true;
+    const prices = BALANCE.economy.shop.prices;
+    const cost = (p: { base: number; perFloor: number }): number => p.base + p.perFloor * this.dungeonLevel;
+    const stock: ShopItem[] = [
+      { id: 'heal',  icon: 'sprite_potion',           name: 'Hearth Broth',       desc: 'Restore to full HP',                     cost: cost(prices.heal),  purchased: false },
+      { id: 'maxhp', icon: 'item_heart',              name: 'Bogwood Charm',      desc: '+10% Max HP',                            cost: cost(prices.maxhp), purchased: false },
+      { id: 'atk',   icon: 'sprite_equip_iron_sword', name: 'Ogham-Etched Edge',  desc: '+10% ATK',                               cost: cost(prices.atk),   purchased: false },
+      { id: 'ward',  icon: 'status_poison',           name: 'Deathward Sigil',    desc: 'Survive one killing blow (this floor)',  cost: cost(prices.ward),  purchased: false },
+    ];
+    const buy = (id: string): { gold: number; ok: boolean } => {
+      const item = stock.find(s => s.id === id);
+      if (!item || item.purchased || this.gold < item.cost) return { gold: this.gold, ok: false };
+      this.gold -= item.cost;
+      item.purchased = true;
+      switch (id) {
+        case 'heal':  this.player.heal(this.player.maxHp); break;
+        case 'maxhp': this.player.maxHp *= 1.10; this.player.hp = Math.min(this.player.hp * 1.10, this.player.maxHp); break;
+        case 'atk':   this.player.atk *= 1.10; break;
+        case 'ward':  this.player.deathwardCharges += 1; break;
+      }
+      this.cb.log(`Bought ${item.name} for ${item.cost}g.`, 'log-perk', item.icon);
+      this.pushUI();
+      return { gold: this.gold, ok: true };
+    };
+    this.cb.log('A red-capped peddler unfolds his stall...', 'log-perk', 'tile_merchant');
+    this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
+  }
+
   openAltar(tier: 1 | 2 | 3): void {
     this.paused = true;
     const pool = BOONS_BY_TIER[tier];
@@ -1130,7 +1178,9 @@ export class Game {
       this.updateBiome();
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
       this.resetDungeonState();
-      // Floor event fires every N voluntary descents (skip boss floors)
+      // Floor event fires every N voluntary descents (skip boss floors); the
+      // wandering peddler takes the descents in between (offset so the two
+      // can never stack modals on the same floor).
       const isBossFloor = this.dungeonLevel % BALANCE.floors.bossFloorInterval === 0;
       if (!isBossFloor && this.floorsDescended % BALANCE.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
         const event = getRandomFloorEvent();
@@ -1141,6 +1191,10 @@ export class Game {
           this.paused = false;
           this.cb.onAction();
         });
+      } else if (!isBossFloor
+          && this.floorsDescended % BALANCE.economy.shop.descentModulo === BALANCE.economy.shop.descentRemainder
+          && this.cb.onOpenShop) {
+        this.openPeddler();
       }
     } else {
       this.advanceTurn();
@@ -1394,6 +1448,7 @@ export class Game {
   summonGorgoth(): void {
     if (this.gorgothSummoned) return;
     this.gorgothSummoned = true;
+    this.gorgothEverSummoned = true;
 
     // The board the player built stays exactly as it is — no arena reset; only
     // the tetromino supply stops.

@@ -174,7 +174,7 @@ describe('Game', () => {
 
   it('XP threshold increases each level', () => {
     game.player.gainXP(50);
-    expect(game.player.xpToNext).toBe(75);
+    expect(game.player.xpToNext).toBe(70); // 50 × 1.4 growth
   });
 
   it('totalXpEarned accumulates across gainXP calls', () => {
@@ -474,6 +474,70 @@ describe('Balance levers', () => {
     }
   });
 
+  it('line-clear passive kills award XP and count as kills (killMonster routing)', () => {
+    game.player.lineClearDamage = 2.0; // 200% of ATK(6) = 12 dmg — lethal to a 5 HP rat
+    const m = new Monster(0, 5, 'sprite_rat_01', 'Rat', 5, 5, 1, 20);
+    game.monsters = [m];
+    game.visibility[0]![5] = true;
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    const xpBefore = game.player.totalXpEarned;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(game.monsters).toHaveLength(0);
+    expect(game.monstersKilled).toBe(1);
+    // line-clear XP (15) + the rat's 20 XP — not just the line XP
+    expect(game.player.totalXpEarned).toBe(xpBefore + 15 + 20);
+  });
+
+  it('after Bres first appears, line clears chip his stored HP — but never below 1', () => {
+    game.gorgothEverSummoned = true;
+    game.dungeonLevel = 10;
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(cb.logs.some(l => l.includes('causeway shudders'))).toBe(true);
+    game.summonGorgoth();
+    const bres = game.monsters.find(m => m.isGorgoth)!;
+    // 6 dmg × 1 row × floor 10 = 60 chipped off the 800 max
+    expect(bres.hp).toBe(BALANCE.gorgoth.maxHp - 60);
+
+    // Grind him to the floor from afar: HP clamps at 1, never 0
+    const g = game as unknown as { gorgothHp: number };
+    game.monsters = [];
+    (game as unknown as { gorgothSummoned: boolean }).gorgothSummoned = false;
+    g.gorgothHp = 5;
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(g.gorgothHp).toBe(1);
+  });
+
+  it('the peddler sells each item once, deducts gold, and applies the effect', () => {
+    let captured: { stock: import('../types').ShopItem[]; buy: (id: string) => { gold: number; ok: boolean } } | null = null;
+    cb.onOpenShop = (stock, _gold, buy) => { captured = { stock, buy }; };
+    game.gold = 10000;
+    const atkBefore = game.player.atk;
+    game.openPeddler();
+    expect(captured).not.toBeNull();
+    const { stock, buy } = captured!;
+    const atkItem = stock.find(s => s.id === 'atk')!;
+    const r1 = buy('atk');
+    expect(r1.ok).toBe(true);
+    expect(r1.gold).toBe(10000 - atkItem.cost);
+    expect(game.player.atk).toBeCloseTo(atkBefore * 1.10, 5);
+    // once per visit
+    expect(buy('atk').ok).toBe(false);
+    expect(game.player.atk).toBeCloseTo(atkBefore * 1.10, 5);
+  });
+
+  it('the peddler refuses a purchase the player cannot afford', () => {
+    let buyFn: ((id: string) => { gold: number; ok: boolean }) | null = null;
+    cb.onOpenShop = (_stock, _gold, buy) => { buyFn = buy; };
+    game.gold = 1;
+    const hpBefore = game.player.maxHp;
+    game.openPeddler();
+    expect(buyFn!('maxhp').ok).toBe(false);
+    expect(game.gold).toBe(1);
+    expect(game.player.maxHp).toBe(hpBefore);
+  });
+
   it('at most maxTattooTilesPerFloor Ogham Mark (merchant) cells spawn in a floor', () => {
     let merchantCount = 0;
     for (let i = 0; i < 200; i++) {
@@ -570,7 +634,7 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(boss).toBeDefined();
     expect(boss!.isBoss).toBe(true);
     expect(boss!.y).toBe(0);                                    // the very top of the arena
-    expect(boss!.maxHp).toBeGreaterThanOrEqual(1000);           // huge
+    expect(boss!.maxHp).toBe(BALANCE.gorgoth.maxHp);            // the true final-boss pool
     expect(boss!.combatLevel).toBe(BALANCE.gorgoth.combatLevel);  // D20
     expect(game.map[3]![10]).toBe(Tile.FLOOR);                  // board preserved, not reset
   });
@@ -760,6 +824,37 @@ describe('JSON-configured effects', () => {
     expect(game.player.critEvery).toBe(6);
     vl.onAdd(game.player, 2);
     expect(game.player.critEvery).toBe(5);
+  });
+
+  it('Purifying Spring makes player debuffs expire a turn early', () => {
+    BOONS.find(b => b.id === 'purifying_spring')!.onAdd(game.player, 1);
+    expect(game.player.statusDurationBonus).toBe(1);
+    game.player.statuses = [{ type: 'stun', duration: 3, power: 0 }];
+    applyStatusEffects(game);
+    applyStatusEffects(game);
+    // A 3-turn stun normally survives two ticks (duration 1 left); with the
+    // boon it's already gone.
+    expect(game.player.statuses).toHaveLength(0);
+  });
+
+  it('Mist Cloak heals a % of Max HP on dodge', () => {
+    BOONS.find(b => b.id === 'mist_cloak')!.onAdd(game.player, 1);
+    expect(game.player.dodgeHeal).toBeCloseTo(0.04, 5);
+    game.player.dodgeChance = 1; // always dodge
+    game.player.hp = 20;
+    const m = new Monster(game.player.x + 1, game.player.y, 'sprite_berserker_orc', 'Orc', 10, 10, 5, 5);
+    monsterAttackPlayer(m, game);
+    expect(game.player.hp).toBe(20 + Math.round(game.player.maxHp * 0.04)); // healed, not hurt
+  });
+
+  it("Banshee's Keening grants a stun aura, capped at radius 3", () => {
+    const bk = BOONS.find(b => b.id === 'banshee_keening')!;
+    for (let i = 0; i < 5; i++) bk.onAdd(game.player, i + 1);
+    expect(game.player.auraStunRadius).toBe(3); // capped
+    const near = new Monster(game.player.x + 1, game.player.y, 'sprite_berserker_orc', 'Near', 10, 10, 1, 5);
+    game.monsters.push(near);
+    applyAuraStun(game);
+    expect(near.isStunned).toBe(true);
   });
 
   it('brand onSet effect applies (Life set → free-revive flag)', () => {

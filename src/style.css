@@ -458,7 +458,8 @@ canvas {
   display: flex; justify-content: space-between; align-items: center;
   cursor: pointer; font-size: 11px; width: 100%;
 }
-.shop-item-btn:hover, .shop-item-btn:active { background-color: #1b2e1b; }
+.shop-item-btn:hover:not(:disabled), .shop-item-btn:active:not(:disabled) { background-color: #1b2e1b; }
+.shop-item-btn:disabled { opacity: .45; cursor: not-allowed; }
 .shop-cost { color: var(--accent-color); font-weight: bold; font-size: 10px; }
 
 /* J · Start screen title glow */

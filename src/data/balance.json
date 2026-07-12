@@ -3,7 +3,7 @@
     "startingHp": 45,
     "startingAtk": 6,
     "xpToNextStart": 50,
-    "xpToNextGrowth": 1.5,
+    "xpToNextGrowth": 1.4,
     "combatLevelBands": [
       {
         "minPlayerLevel": 9,
@@ -40,7 +40,17 @@
     "geasaRerollBaseCost": 120,
     "geasaRerollCostGrowth": 1.6,
     "ogmRerollBaseCost": 350,
-    "ogmRerollCostGrowth": 2.2
+    "ogmRerollCostGrowth": 2.2,
+    "shop": {
+      "descentModulo": 3,
+      "descentRemainder": 2,
+      "prices": {
+        "heal":  { "base": 350, "perFloor": 50 },
+        "maxhp": { "base": 600, "perFloor": 75 },
+        "atk":   { "base": 600, "perFloor": 75 },
+        "ward":  { "base": 450, "perFloor": 50 }
+      }
+    }
   },
   "brands": {
     "maxLifetime": 5
@@ -66,10 +76,11 @@
     "combatLevel": 5
   },
   "gorgoth": {
-    "maxHp": 1400,
-    "atk": 48,
+    "maxHp": 800,
+    "atk": 36,
     "xpReward": 2000,
-    "combatLevel": 6
+    "combatLevel": 6,
+    "causewayDamagePerRowPerFloor": 6
   },
   "crystalShards": {
     "baseHp": 8,

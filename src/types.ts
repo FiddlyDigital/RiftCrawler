@@ -85,6 +85,16 @@ export interface EffectSpec {
   floor?: boolean;
 }
 
+// One purchasable line in the wandering peddler's stock.
+export interface ShopItem {
+  id: string;
+  icon: string;
+  name: string;
+  desc: string;
+  cost: number;
+  purchased: boolean;
+}
+
 // Gold-reroll config handed to the choice modals; run() returns the new
 // state (choices + remaining gold + next cost) or null when unaffordable.
 export interface RerollCfg<T> {
@@ -211,7 +221,7 @@ export interface GameCallbacks {
   onParticleBurst?: (gridX: number, gridY: number, count: number, color: string, icon?: string) => void;
   onImpactGlow?: (gridX: number, gridY: number, rgb: string, frames?: number) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
-  onOpenShop?: (gold: number) => void;
+  onOpenShop?: (stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, close: () => void) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;

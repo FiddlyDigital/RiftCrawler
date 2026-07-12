@@ -69,13 +69,17 @@ export interface BalanceConfig {
   economy: {
     geasaRerollBaseCost: number; geasaRerollCostGrowth: number;
     ogmRerollBaseCost: number; ogmRerollCostGrowth: number;
+    shop: {
+      descentModulo: number; descentRemainder: number;
+      prices: Record<'heal' | 'maxhp' | 'atk' | 'ward', { base: number; perFloor: number }>;
+    };
   };
   ammo: { replenishOnDescend: number; maxAmmo: number };
   altars: { vaultTierMinFloorT3: number; vaultTierMinFloorT2: number };
   brands: { maxLifetime: number };
   floors: { bossFloorInterval: number; floorEventInterval: number; dungeonRoomChance: number };
   boss: { baseHpFloor1: number; baseHpPerDungeonLevel: number; baseAtkFloor1: number; baseAtkPerDungeonLevel: number; combatLevel: number };
-  gorgoth: { maxHp: number; atk: number; xpReward: number; combatLevel: number };
+  gorgoth: { maxHp: number; atk: number; xpReward: number; combatLevel: number; causewayDamagePerRowPerFloor: number };
   crystalShards: { baseHp: number; hpPerDungeonLevel: number; baseAtk: number; atkPerDungeonLevel: number };
   spawnRates: {
     cursedPieceChance: number; blessedPieceChance: number;
