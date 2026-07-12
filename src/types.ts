@@ -182,6 +182,9 @@ export interface RangedAbility {
   params?: Record<string, number | string>;
 }
 
+export interface CharacterSheetStat { label: string; value: string; }
+export interface CharacterSheetSection { title: string; icon: string; stats: CharacterSheetStat[]; }
+
 export interface UIState {
   hp: number;
   maxHp: number;
@@ -205,6 +208,7 @@ export interface UIState {
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null } | null;
+  characterSheet: CharacterSheetSection[];
 }
 
 export type AudioEvent =

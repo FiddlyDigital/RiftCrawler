@@ -575,6 +575,36 @@ canvas {
   background: var(--inset-bg); border: 1px solid var(--card-border); border-radius: 3px;
   padding: 1px 5px; font-size: 9px; color: #a8b39a; white-space: nowrap;
 }
+
+/* ── Character sheet ────────────────────────────────────────────────────── */
+.char-sheet-open-btn {
+  display: block; width: 100%; margin-top: 6px;
+  background: var(--inset-bg); border: 1px solid var(--card-border); border-radius: 4px;
+  color: var(--accent-color); padding: 5px 8px; font-size: 10px; cursor: pointer;
+  font-family: var(--font-pixel); letter-spacing: .5px; text-align: center;
+}
+.char-sheet-open-btn:hover, .char-sheet-open-btn:active { border-color: var(--accent-color); }
+.char-sheet-card { max-width: 380px; text-align: left; }
+.char-sheet-body {
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 55vh; overflow-y: auto; margin-bottom: 4px;
+}
+.char-sheet-section {
+  background: var(--inset-bg); border: 1px solid var(--card-border); border-radius: 6px;
+  padding: 8px 10px;
+}
+.char-sheet-section-title {
+  display: flex; align-items: center; gap: 4px;
+  text-transform: uppercase; letter-spacing: .5px; font-size: 10px;
+  color: var(--accent-color); font-weight: bold; margin-bottom: 6px;
+}
+.char-sheet-rows { display: flex; flex-direction: column; gap: 3px; }
+.char-sheet-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 11px; color: var(--text-color);
+}
+.char-sheet-row span:first-child { color: #999; }
+.char-sheet-row span:last-child { font-weight: bold; text-align: right; white-space: nowrap; }
 #altar-modal .modifier-btn:hover {
   border-color: #b98fc4;
 }

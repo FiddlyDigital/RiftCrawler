@@ -63,6 +63,7 @@
         <div id="active-class-badge"    style="display:none;margin-top:2px;font-size:9px;color:#8d6fd4;"></div>
         <div id="biome-badge"           style="display:none;margin-top:2px;font-size:9px;color:#26a69a;"></div>
         <div id="ranged-ability-badge"  style="display:none;margin-top:4px;"></div>
+        <button id="char-sheet-btn" class="char-sheet-open-btn">📜 Character Sheet</button>
       </div>
 
       <!-- Experience + XP Earned -->
@@ -306,6 +307,16 @@
       <div id="altar-owned-chips" class="boon-grid"></div>
     </div>
     <div id="altar-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Character sheet: aggregated totals from boons + brands + shop purchases -->
+<div id="char-sheet-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="char-sheet-title">
+  <div class="modal-card char-sheet-card">
+    <div class="modal-title" id="char-sheet-title" style="color:var(--accent-color);font-size:18px;">📜 CHARACTER SHEET</div>
+    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Every effective stat currently on your hero — base, Geasa, Ogham Marks, and stall purchases combined.</p>
+    <div id="char-sheet-body" class="char-sheet-body"></div>
+    <button class="restart-btn" id="char-sheet-close">Close</button>
   </div>
 </div>
 

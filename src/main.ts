@@ -218,6 +218,31 @@ function closeDrawer(): void {
 drawerToggleBtn?.addEventListener('click', () => { isDrawerOpen() ? closeDrawer() : openDrawer(); });
 sidebarBackdrop?.addEventListener('click', closeDrawer);
 
+// ── Character sheet ──────────────────────────────────────────────────────────
+// Read-only stat totals overlay — pauses like the drawer so reading it is free.
+
+let charSheetPausedGame = false;
+
+function openCharacterSheet(): void {
+  ui.showCharacterSheet();
+  if (!manualPaused && !game.paused && game.player.hp > 0) {
+    charSheetPausedGame = true;
+    game.paused = true;
+    stopTick();
+  }
+}
+
+function closeCharacterSheet(): void {
+  ui.hideCharacterSheet();
+  if (charSheetPausedGame) {
+    charSheetPausedGame = false;
+    if (!manualPaused && game.player.hp > 0) { game.paused = false; startTick(); }
+  }
+}
+
+document.getElementById('char-sheet-btn')?.addEventListener('click', openCharacterSheet);
+document.getElementById('char-sheet-close')?.addEventListener('click', closeCharacterSheet);
+
 // ── Drawer swipe gestures (mobile) ───────────────────────────────────────────
 // Edge-swipe in from the right screen edge opens the drawer; swiping right
 // on the open drawer closes it — the standard mobile drawer idiom.
@@ -443,6 +468,7 @@ document.getElementById('pause-btn')?.addEventListener('click', togglePauseMenu)
 // Keyboard: M = mute, Esc/P = pause menu
 window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') toggleMute();
+  else if (e.key === 'Escape' && ui.isCharacterSheetOpen()) closeCharacterSheet();
   else if (e.key === 'Escape' && isDrawerOpen()) closeDrawer();
   else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePauseMenu();
 });

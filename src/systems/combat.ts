@@ -28,7 +28,7 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
 // ── Dice engine ───────────────────────────────────────────────────────────────
 // Level 1→D4, 2→D6, 3→D8, 4→D10, 5→D12, 6→D20 (combat.json: diceSidesByLevel)
 
-function dieSides(level: number): number {
+export function dieSides(level: number): number {
   // The `6` cap is coupled to diceSidesByLevel's fixed 7-entry length (indices
   // 0-6) — see also the boss/Gorgoth/elite combatLevel caps in game.ts.
   return numOr(COMBAT_BALANCE.diceSidesByLevel[Math.max(1, Math.min(6, level))], 4);

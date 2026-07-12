@@ -1,10 +1,10 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type ShopItem } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type ShopItem, type CharacterSheetSection } from './types';
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
-import { killMonster, playerAttackMonster, estimateHitChance } from './systems/combat';
+import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 import { spriteIconHTML } from './sprites';
 import { HAZARD_BALANCE, BALANCE, weightedPick } from './balance';
@@ -1642,6 +1642,64 @@ export class Game {
     return null;
   }
 
+  // ── Character sheet ─────────────────────────────────────────────────────
+  // Aggregates every effective stat currently on the player — base numbers
+  // plus whatever boons/brands/shop purchases have folded into them — into a
+  // display-ready snapshot. Boons/brands/shop purchases all mutate the same
+  // Player fields directly, so reading Player state IS reading the totals.
+
+  private buildCharacterSheet(): CharacterSheetSection[] {
+    const p = this.player;
+    const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
+    return [
+      {
+        title: 'Offense', icon: 'sprite_equip_iron_sword',
+        stats: [
+          { label: 'Attack', value: String(Math.round(p.atk)) },
+          { label: 'Combat Dice', value: `D${dieSides(p.combatLevel)}` },
+          { label: 'Line-Clear Damage', value: p.lineClearDamage > 0 ? `+${pct(p.lineClearDamage)} ATK` : '—' },
+          { label: 'Line-Clear AoE', value: p.lineClearAoeDmgMult > 0 ? `${p.lineClearAoeDmgMult}× floor dmg, all enemies` : '—' },
+          { label: 'Kill ATK Bonus', value: p.killAtkBonus > 0 ? `+${pct(p.killAtkBonus)} ATK/kill (this floor)` : '—' },
+          { label: 'Thorn Reflect', value: p.thornDamage > 0 ? pct(p.thornDamage) : '—' },
+          { label: 'Poison on Hit', value: p.poisonAttackChance > 0 ? pct(p.poisonAttackChance) : '—' },
+          { label: 'Stun on Hit', value: p.stunAttackChance > 0 ? pct(p.stunAttackChance) : '—' },
+          { label: 'Guaranteed Crit', value: p.critEvery > 0 ? `every ${p.critEvery}${p.critEvery === 1 ? 'st' : 'th'} hit` : '—' },
+        ],
+      },
+      {
+        title: 'Defense', icon: 'sprite_equip_buckler',
+        stats: [
+          { label: 'Max HP', value: String(Math.round(p.maxHp)) },
+          { label: 'Damage Reduction', value: p.damageReduction > 0 ? `${pct(p.damageReduction)} (−${p.totalDef} dmg/hit)` : '—' },
+          { label: 'Dodge Chance', value: p.dodgeChance > 0 ? pct(p.dodgeChance) : '—' },
+          { label: 'Dodge Heal', value: p.dodgeHeal > 0 ? `${pct(p.dodgeHeal)} Max HP` : '—' },
+          { label: 'Poison Immune', value: p.poisonImmune ? 'Yes' : '—' },
+          { label: 'Deathward Charges', value: p.deathwardCharges > 0 ? String(p.deathwardCharges) : '—' },
+          { label: 'Ghost Dodge Charges', value: p.ghostDodgeCharges > 0 ? String(p.ghostDodgeCharges) : '—' },
+          { label: 'Life Brand Revive', value: p.lifeBrandRevive ? 'Armed' : '—' },
+        ],
+      },
+      {
+        title: 'Sustain', icon: 'item_droplet',
+        stats: [
+          { label: 'Regen / Tick', value: p.regenPerTick > 0 ? `${pct(p.regenPerTick)} Max HP` : '—' },
+          { label: 'Heal on Kill', value: p.killHeal > 0 ? `${pct(p.killHeal)} Max HP` : '—' },
+        ],
+      },
+      {
+        title: 'Utility', icon: 'fx_arcane',
+        stats: [
+          { label: 'Vision Radius', value: String(p.visionRadius) },
+          { label: 'Gravity Slow', value: p.tickSlowPercent !== 0 ? `${p.tickSlowPercent > 0 ? '+' : ''}${p.tickSlowPercent}%` : '—' },
+          { label: 'Status Fades Faster', value: p.statusDurationBonus > 0 ? `−${p.statusDurationBonus} turn(s)` : '—' },
+          { label: 'Aura Stun Radius', value: p.auraStunRadius > 0 ? `${p.auraStunRadius} tile(s)` : '—' },
+          { label: 'Bonus Hero Moves', value: p.bonusHeroMoves > 0 ? `+${p.bonusHeroMoves}/turn` : '—' },
+          { label: 'Line-Clear XP', value: p.lineClearXpMult !== 1 ? `×${p.lineClearXpMult}` : '—' },
+        ],
+      },
+    ];
+  }
+
   // ── UI push ──────────────────────────────────────────────────────────────
 
   private pushUI(): void {
@@ -1688,6 +1746,7 @@ export class Game {
             ammo:        this.player.rangedAmmo >= 0 ? this.player.rangedAmmo : null,
           }
         : null,
+      characterSheet: this.buildCharacterSheet(),
     });
   }
 }

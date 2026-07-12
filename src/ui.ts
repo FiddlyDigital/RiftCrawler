@@ -1,6 +1,6 @@
 import { SHAPES } from './config';
 import { spriteIconHTML, escapeHtml, shapePreviewHTML } from './sprites';
-import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem } from './types';
+import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
 export class UIManager {
@@ -13,8 +13,10 @@ export class UIManager {
   private readonly inspectTooltip: HTMLElement;
   private readonly altarModal: HTMLElement;
   private readonly crashModal: HTMLElement;
+  private readonly charSheetModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
   private lastXpEarned = -1;
+  private lastCharacterSheet: CharacterSheetSection[] = [];
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly fullLog: { text: string; cls: LogClass; icon?: string }[] = [];
 
@@ -28,6 +30,7 @@ export class UIManager {
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.altarModal        = document.getElementById('altar-modal')!;
     this.crashModal        = document.getElementById('crash-modal')!;
+    this.charSheetModal    = document.getElementById('char-sheet-modal')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
       xpTotal:          document.getElementById('stat-xp-total')!,
@@ -65,6 +68,7 @@ export class UIManager {
       runLogFull:       document.getElementById('run-log-full')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
+      charSheetBody:    document.getElementById('char-sheet-body')!,
     };
   }
 
@@ -158,6 +162,7 @@ export class UIManager {
     this.updateBoons(state.boons);
     this.updateBrands(state.brands);
     this.els['brandCount']!.textContent = `(${state.brandsAcquiredTotal}/${state.brandsMaxLifetime})`;
+    this.lastCharacterSheet = state.characterSheet;
 
     // Status effect tags
     this.els['statusRow']!.innerHTML = state.statuses
@@ -455,6 +460,25 @@ export class UIManager {
       }));
       panel.appendChild(chip);
     }
+  }
+
+  showCharacterSheet(): void {
+    this.els['charSheetBody']!.innerHTML = this.lastCharacterSheet.map(section => `
+      <div class="char-sheet-section">
+        <div class="char-sheet-section-title">${spriteIconHTML(section.icon, 13)}${escapeHtml(section.title)}</div>
+        <div class="char-sheet-rows">
+          ${section.stats.map(s => `<div class="char-sheet-row"><span>${escapeHtml(s.label)}</span><span>${escapeHtml(s.value)}</span></div>`).join('')}
+        </div>
+      </div>`).join('');
+    this.charSheetModal.style.display = 'flex';
+  }
+
+  hideCharacterSheet(): void {
+    this.charSheetModal.style.display = 'none';
+  }
+
+  isCharacterSheetOpen(): boolean {
+    return this.charSheetModal.style.display === 'flex';
   }
 
   // Owned-summary chips shown above the choices so a player picking a new
