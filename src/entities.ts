@@ -248,9 +248,13 @@ export class Particle {
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.globalAlpha = this.life;
-    ctx.font = `bold ${this.fontSize}px monospace`;
+    // Pop-in: spawn at ~1.5× size and settle over the first few frames, so
+    // damage numbers (and burst motes) punch instead of drifting into view.
+    const pop = 1 + 0.55 * Math.max(0, (this.life - 0.78) / 0.22);
+    const size = Math.round(this.fontSize * pop);
+    ctx.font = `bold ${size}px monospace`;
     const tw = this.text ? ctx.measureText(this.text).width : 0;
-    const iconSize = this.icon ? this.fontSize : 0;
+    const iconSize = this.icon ? size : 0;
     const totalW = tw + (this.icon && this.text ? iconSize + 2 : iconSize);
     let cursorX = this.x - totalW / 2;
 
@@ -260,7 +264,7 @@ export class Particle {
       if (img) {
         const scale = Math.min(iconSize / coord.sw, iconSize / coord.sh);
         const iw = coord.sw * scale, ih = coord.sh * scale;
-        ctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, cursorX, this.y - ih / 2 - this.fontSize * 0.15, iw, ih);
+        ctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, cursorX, this.y - ih / 2 - size * 0.15, iw, ih);
       }
       cursorX += iconSize + (this.text ? 2 : 0);
     }
@@ -285,9 +289,9 @@ export class ParticlePool {
     for (let i = 0; i < size; i++) this.pool.push(new Particle());
   }
 
-  spawn(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
+  spawn(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = '', vx = 0, vy = -0.7, drag = 1): void {
     const p = this.pool.pop() ?? new Particle();
-    p.reset(gridX, gridY, text, color, fontSize, icon);
+    p.reset(gridX, gridY, text, color, fontSize, icon, vx, vy, drag);
     this.active.push(p);
   }
 

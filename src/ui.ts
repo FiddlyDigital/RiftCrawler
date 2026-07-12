@@ -78,7 +78,18 @@ export class UIManager {
     this.fullLog.push({ text, cls, icon });
   }
 
+  // Static HTML can't embed sprite icons (sheets load async), so icon slots
+  // are <span class="spr" data-sprite="..."> hydrated here once the sheet is
+  // ready — retried each update until spriteIconHTML returns real markup.
+  private hydrateSpriteSlots(): void {
+    document.querySelectorAll<HTMLElement>('.spr[data-sprite]:not([data-hydrated])').forEach(el => {
+      const html = spriteIconHTML(el.dataset['sprite']!, Number(el.dataset['size'] ?? 12));
+      if (html) { el.innerHTML = html; el.dataset['hydrated'] = '1'; }
+    });
+  }
+
   updateStats(state: UIState): void {
+    this.hydrateSpriteSlots();
     this.els['floor']!.textContent       = String(state.floor);
     this.els['xpTotal']!.textContent     = String(state.totalXpEarned);
     this.els['hp']!.textContent          = `${state.hp}/${state.maxHp}`;

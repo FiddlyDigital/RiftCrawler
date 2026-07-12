@@ -665,6 +665,7 @@ export class Game {
 
   private checkLineClears(): void {
     let rowsCleared = 0;
+    const clearedRows: number[] = [];
 
     for (let y = CONFIG.ROWS - 1; y >= 0; y--) {
       let rowFull = true;
@@ -674,6 +675,7 @@ export class Game {
       if (!rowFull) continue;
 
       rowsCleared++;
+      clearedRows.push(y);
       for (let x = 0; x < CONFIG.COLS; x++) {
         this.map[x]![y] = Tile.VOID;
         this.colors[x]![y] = null;
@@ -703,6 +705,7 @@ export class Game {
 
     if (rowsCleared > 0) {
       this.linesCleared += rowsCleared;
+      this.cb.onRowClear?.(clearedRows);
       this.cb.onAudio?.('lineClear', rowsCleared);
       const now = performance.now();
       const isCombo = now - this.lastLineClearMs < 2000;
@@ -777,6 +780,9 @@ export class Game {
         this.gorgothHp = Math.max(1, this.gorgothHp - chip);
         if (this.gorgothHp < before) {
           this.cb.log(`The causeway shudders — Bres feels it! (−${before - this.gorgothHp})`, 'log-boss', 'sprite_boss_gorgoth');
+          // Stone shards rain from the unfinished bridge at the top of the board
+          this.cb.onParticleBurst?.(Math.floor(CONFIG.COLS / 2), 1, 8, '#b9a27e');
+          this.cb.onImpactGlow?.(Math.floor(CONFIG.COLS / 2), 0, '185,162,126', 12);
         }
       }
 
@@ -784,6 +790,7 @@ export class Game {
         const lineHeal = this.player.heal(10);
         if (lineHeal > 0) {
           this.cb.onParticle(this.player.x, this.player.y, `+${lineHeal} HP`, '#69f0ae');
+          this.cb.onParticleBurst?.(this.player.x, this.player.y, 4, '#7fd488');
           if (this.comboCount === 0) this.cb.log(`Row cleared! +${lineHeal} HP.`, 'log-tetris');
         } else if (this.comboCount === 0) {
           this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold.`, 'log-tetris');
@@ -940,6 +947,7 @@ export class Game {
 
   openLevelUpBoons(): void {
     this.paused = true;
+    this.cb.onBeam?.(this.player.x);
     const tier = getBoonTierForFloor(this.dungeonLevel);
     const pool = BOONS_BY_TIER[tier];
     const choices = getThreeRandomBoons(pool, this.player.boons.map(b => b.id));
@@ -1217,6 +1225,7 @@ export class Game {
       const bonus = this.player.heal(2);
       if (bonus > 0) {
         this.cb.onParticle(this.player.x, this.player.y, `+${bonus}`, '#ffb74d', undefined, 'special_sacred');
+        this.cb.onParticleBurst?.(this.player.x, this.player.y, 4, '#7fd488');
         this.cb.log('Sacred ground — blessed rest!', 'log-success');
       }
     }
@@ -1301,6 +1310,7 @@ export class Game {
     this.player.rangedCooldown = ability.cooldownMax;
     this.cb.log(`Time Dilation! Gravity slowed for ${slowTurns} turns.`, 'log-perk', ability.emoji);
     this.cb.onParticle(this.player.x, this.player.y, 'SLOW!', '#b39ddb', 16, ability.emoji);
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '63,158,147');  // time ripples outward
     this.cb.onAction();  // immediately restart tick interval with new slow value
     this.advanceTurn();
   }
@@ -1353,6 +1363,8 @@ export class Game {
     this.player.rangedCooldown = ability.cooldownMax;
     this.cb.log(`Sacred Grounds! ${count} tiles consecrated.`, 'log-perk', 'special_sacred');
     this.cb.onParticle(this.player.x, this.player.y, 'HOLY', '#fff176', 18, 'special_sacred');
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '217,164,65');  // golden blessing wave
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 10, '#ffd98a', 'special_sacred');
     this.advanceTurn();
   }
 
@@ -1531,7 +1543,27 @@ export class Game {
 
   handleBlockDrop(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    const startY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
+    // Afterimage streaks along the travel path — one per occupied column,
+    // from that column's topmost filled cell at launch to its final cell.
+    if (this.blockY > startY && this.cb.onHardDrop) {
+      const cols = new Map<number, { top: number; bottom: number }>();
+      for (let r = 0; r < this.blockMatrix.length; r++) {
+        for (let c = 0; c < this.blockMatrix[r]!.length; c++) {
+          if (this.blockMatrix[r]![c] === Cell.EMPTY) continue;
+          const e = cols.get(c);
+          if (e) { e.top = Math.min(e.top, r); e.bottom = Math.max(e.bottom, r); }
+          else cols.set(c, { top: r, bottom: r });
+        }
+      }
+      const trails = Array.from(cols.entries()).map(([c, e]) => ({
+        x: this.blockX + c,
+        fromY: startY + e.top,
+        toY: this.blockY + e.bottom,
+      }));
+      this.cb.onHardDrop(trails, this.blockColor);
+    }
     this.lockBlock();
     this.advanceTurn();
   }

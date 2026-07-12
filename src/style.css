@@ -2,6 +2,9 @@
   --bg-color: #08090a;
   --panel-color: #151a15;
   --border-color: #2b332a;
+  --card-bg: #181e16;       /* surfaces inside panels — same Celtic family, one step lighter */
+  --card-border: #2e3629;
+  --inset-bg: #10140e;      /* recessed wells (log boxes, stat cells, code-ish areas) */
   --accent-color: #d9a441;
   --text-color: #e8e3d2;
   --hp-color: #c1443c;
@@ -146,7 +149,7 @@ body {
 /* Settings toggle rows in the pause menu */
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;
-  background: #14141f; border: 1px solid var(--border-color); border-radius: 6px;
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px;
   color: var(--text-color); padding: 10px 12px; font-size: 12px; cursor: pointer;
   font-family: var(--font-pixel); width: 100%;
 }
@@ -198,12 +201,12 @@ canvas {
 }
 
 .sidebar-card {
-  background-color: #141420; border: 1px solid #252538; border-radius: 4px; padding: 5px;
+  background-color: var(--card-bg); border: 1px solid var(--card-border); border-radius: 4px; padding: 5px;
   animation: cardBreathe 5s ease-in-out infinite;
 }
 @keyframes cardBreathe {
-  0%, 100% { box-shadow: 0 0 0 rgba(124,77,255,0); border-color: #252538; }
-  50%       { box-shadow: 0 0 6px rgba(124,77,255,.18); border-color: #322f55; }
+  0%, 100% { box-shadow: 0 0 0 rgba(217,164,65,0); border-color: var(--card-border); }
+  50%       { box-shadow: 0 0 6px rgba(217,164,65,.16); border-color: #3a4232; }
 }
 .card-title {
   text-transform: uppercase; letter-spacing: .5px;
@@ -260,8 +263,8 @@ canvas {
   font-weight: bold; text-transform: capitalize;
   display: inline-flex; align-items: center; gap: 2px;
 }
-.status-poison { background-color: #4a0070; color: #e040fb; }
-.status-stun   { background-color: #3e2a00; color: #ffd600; }
+.status-poison { background-color: #2d1535; color: #c77fd4; }
+.status-stun   { background-color: #33290e; color: #e3c05a; }
 
 /* Sprite icons — inline crops of public/sprites/*.png, used anywhere an
    emoji used to sit (log lines, badges, chips, tooltips, buttons). */
@@ -270,6 +273,8 @@ canvas {
   vertical-align: middle;
   display: inline-block;
 }
+/* Icon slots in static HTML, hydrated by UIManager once sprite sheets load */
+.spr { display: inline-flex; vertical-align: middle; min-width: 12px; }
 .log-icon { margin-right: 3px; }
 
 /* Small colored square standing in for the "lines cleared" brick emoji */
@@ -298,12 +303,12 @@ canvas {
 }
 .log-entry  { line-height: 1.1; animation: logSlide 0.18s ease; }
 .log-neutral { color: #8a9ba8; }
-.log-damage  { color: #ff6b6b; }
-.log-success { color: #51cf66; }
-.log-tetris  { color: #cc5de8; font-weight: bold; }
-.log-boss    { color: #ff1744; font-weight: bold; }
-.log-combo   { color: #ff9100; font-weight: bold; }
-.log-perk    { color: #7c4dff; font-weight: bold; }
+.log-damage  { color: #e26d5a; }
+.log-success { color: #6fbf73; }
+.log-tetris  { color: #b98fc4; font-weight: bold; }
+.log-boss    { color: #e04848; font-weight: bold; }
+.log-combo   { color: #d98e2b; font-weight: bold; }
+.log-perk    { color: #8d6fd4; font-weight: bold; }
 
 /* Run history */
 .history-row {
@@ -345,7 +350,7 @@ canvas {
 /* G · D-pad tactile press */
 .dpad-btn {
   position: relative; overflow: hidden;
-  background-color: rgba(20,20,32,.35); border: 1px solid rgba(255,255,255,.14); color: #fff;
+  background-color: rgba(22,28,20,.35); border: 1px solid rgba(255,255,255,.14); color: #fff;
   font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer;
   display: flex; justify-content: center; align-items: center;
   /* Discrete/translucent at rest on mobile; a real press pops it to full
@@ -443,7 +448,7 @@ canvas {
 
 /* Perk selection */
 .perk-btn {
-  background-color: #1a1a30; border: 1px solid var(--xp-color); border-radius: 6px;
+  background-color: #1a1524; border: 1px solid var(--xp-color); border-radius: 6px;
   color: var(--text-color); padding: 10px 12px; text-align: left; cursor: pointer;
   font-size: 12px; line-height: 1.4; width: 100%;
 }
@@ -453,12 +458,12 @@ canvas {
 
 /* Shop */
 .shop-item-btn {
-  background-color: #141420; border: 1px solid #2e7d32; border-radius: 6px;
+  background-color: var(--card-bg); border: 1px solid #3c6b3e; border-radius: 6px;
   color: var(--text-color); padding: 8px 12px;
   display: flex; justify-content: space-between; align-items: center;
   cursor: pointer; font-size: 11px; width: 100%;
 }
-.shop-item-btn:hover:not(:disabled), .shop-item-btn:active:not(:disabled) { background-color: #1b2e1b; }
+.shop-item-btn:hover:not(:disabled), .shop-item-btn:active:not(:disabled) { background-color: #1d2a19; }
 .shop-item-btn:disabled { opacity: .45; cursor: not-allowed; }
 .shop-cost { color: var(--accent-color); font-weight: bold; font-size: 10px; }
 
@@ -493,16 +498,16 @@ canvas {
 
 /* ── Run Modifier modal ─────────────────────────────────────────────────── */
 .modifier-btn {
-  background-color: #1a1a30; border: 1px solid #ff9100; border-radius: 6px;
+  background-color: var(--card-bg); border: 1px solid #c27b38; border-radius: 6px;
   color: var(--text-color); padding: 10px 12px;
   display: flex; align-items: center; gap: 10px;
   text-align: left; cursor: pointer; width: 100%;
   transition: background-color .12s ease, border-color .12s ease;
 }
-.modifier-btn:hover, .modifier-btn:active { background-color: #2d2210; border-color: #ffd54f; }
+.modifier-btn:hover, .modifier-btn:active { background-color: #241f12; border-color: var(--accent-color); }
 .modifier-emoji { flex-shrink: 0; display: inline-flex; }
 .modifier-info { display: flex; flex-direction: column; gap: 2px; }
-.modifier-info strong { color: #ffd54f; font-size: 12px; font-family: var(--font-pixel); }
+.modifier-info strong { color: var(--accent-color); font-size: 12px; font-family: var(--font-pixel); }
 .modifier-info span   { color: #888; font-size: 10px; line-height: 1.3; }
 
 /* Gold reroll button on altar / tattoo offers */
@@ -567,8 +572,8 @@ canvas {
   display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
 }
 .class-chip {
-  background: #10101c; border: 1px solid #2c2c44; border-radius: 3px;
-  padding: 1px 5px; font-size: 9px; color: #9a9ab8; white-space: nowrap;
+  background: var(--inset-bg); border: 1px solid var(--card-border); border-radius: 3px;
+  padding: 1px 5px; font-size: 9px; color: #a8b39a; white-space: nowrap;
 }
 #altar-modal .modifier-btn:hover {
   border-color: #b98fc4;
@@ -588,7 +593,7 @@ canvas {
   gap: 6px; margin-top: 10px; text-align: center;
 }
 .stat-cell {
-  background-color: #0c0c12; border: 1px solid #252538;
+  background-color: var(--inset-bg); border: 1px solid var(--card-border);
   border-radius: 4px; padding: 6px 4px; font-size: 11px; line-height: 1.4;
 }
 .stat-cell b { color: var(--accent-color); font-size: 13px; display: block; }
@@ -596,23 +601,23 @@ canvas {
 
 /* ── Share / copy button ───────────────────────────────────────────────── */
 #share-text {
-  width: 100%; box-sizing: border-box; background-color: #0c0c12;
-  border: 1px solid #252538; border-radius: 4px; color: #aaa;
+  width: 100%; box-sizing: border-box; background-color: var(--inset-bg);
+  border: 1px solid var(--card-border); border-radius: 4px; color: #aaa;
   font-size: 9px; font-family: monospace; padding: 5px 7px;
   resize: none; margin-top: 8px;
 }
 .share-btn {
-  background-color: #1a1a30; border: 1px solid #29b6f6; border-radius: 4px;
-  color: #29b6f6; font-size: 10px; padding: 5px 10px; cursor: pointer;
+  background-color: var(--card-bg); border: 1px solid var(--block-accent); border-radius: 4px;
+  color: var(--block-accent); font-size: 10px; padding: 5px 10px; cursor: pointer;
   margin-top: 4px; width: 100%;
   transition: background-color .12s ease;
 }
-.share-btn:hover, .share-btn:active { background-color: #0d2333; }
+.share-btn:hover, .share-btn:active { background-color: #12251f; }
 
 /* ── Full run log (game-over/victory modal) ────────────────────────────── */
 .run-log-full {
   text-align: left; max-height: 160px; overflow-y: auto;
-  background-color: #0c0c12; border: 1px solid #252538; border-radius: 4px;
+  background-color: var(--inset-bg); border: 1px solid var(--card-border); border-radius: 4px;
   padding: 6px 7px; font-family: monospace; font-size: 10px;
   display: flex; flex-direction: column; gap: 2px;
 }
@@ -747,7 +752,7 @@ canvas {
   }
 
   .dpad-btn {
-    background-color: #141420;
+    background-color: var(--card-bg);
     opacity: 1;
     font-size: 14px;
   }

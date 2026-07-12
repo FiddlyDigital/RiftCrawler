@@ -6,7 +6,8 @@
     "tileRgb": "52,44,78",
     "monsterHpMult": 1.0,
     "gravityPctBonus": -25,
-    "desc": "Bres's unfinished bridge to Ériu warps the world around it. Blocks fall 25% faster."
+    "desc": "Bres's unfinished bridge to Ériu warps the world around it. Blocks fall 25% faster.",
+    "moteColor": "#e8a06a"
   },
   {
     "id": "cavern",
@@ -15,7 +16,8 @@
     "tileRgb": "45,120,110",
     "monsterHpMult": 1.25,
     "gravityPctBonus": 0,
-    "desc": "Otherworld light hardens all who dwell here. Monsters have +25% HP."
+    "desc": "Otherworld light hardens all who dwell here. Monsters have +25% HP.",
+    "moteColor": "#9fe3c0"
   },
   {
     "id": "stone",
@@ -24,6 +26,7 @@
     "tileRgb": "60,70,55",
     "monsterHpMult": 1.0,
     "gravityPctBonus": 0,
-    "desc": "Old passage-tombs, half-swallowed by moss. Standard difficulty."
+    "desc": "Old passage-tombs, half-swallowed by moss. Standard difficulty.",
+    "moteColor": "#cfc6b0"
   }
 ]

@@ -273,7 +273,7 @@ function handleAudio(event: AudioEvent, data?: number): void {
       break;
     case 'descend':         audio.playDescend();          break;
     case 'poison':          audio.playPoison();           break;
-    case 'bossWarn':        audio.playBossWarn();         vibrate([40, 60, 40, 60, 50]); break;
+    case 'bossWarn':        audio.playBossWarn();         renderer.triggerShake(6, 18); vibrate([40, 60, 40, 60, 50]); break;
     case 'teleport':        audio.playTeleport();         break;
     case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
   }
@@ -290,6 +290,12 @@ function startGame(startPaused = false): void {
     onParticle: (x, y, text, col, fontSize, icon) => renderer.spawnParticle(x, y, text, col, fontSize, icon),
     onParticleBurst: (x, y, count, col, icon)     => renderer.spawnBurst(x, y, count, col, icon),
     onImpactGlow: (x, y, rgb, frames)             => renderer.triggerImpactGlow(x, y, rgb, frames),
+    onRowClear: (rows)                            => renderer.triggerRowClear(rows),
+    onHardDrop: (columns, color)                  => renderer.spawnDropTrail(columns, color),
+    onMonsterDeath: (x, y, char)                  => { renderer.flashDeath(x, y, char); renderer.spawnBurst(x, y, 3, '#9aa08a'); },
+    onHitStop: (frames)                           => renderer.triggerHitStop(frames),
+    onRingPulse: (x, y, rgb)                      => renderer.triggerRing(x, y, rgb),
+    onBeam: (x)                                   => renderer.triggerBeam(x),
     onAudio:  (event, data)        => handleAudio(event, data),
     onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
     onCombo:     (mult)            => renderer.showCombo(mult),

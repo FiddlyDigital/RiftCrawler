@@ -16,6 +16,7 @@ export interface BiomeDef {
   name: string;
   minFloor: number;
   tileRgb: string;
+  moteColor: string;  // ambient dust-mote tint — each depth gets its own air
   monsterHpMult: number;
   gravityPctBonus: number;
   desc: string;
@@ -220,6 +221,12 @@ export interface GameCallbacks {
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number, icon?: string) => void;
   onParticleBurst?: (gridX: number, gridY: number, count: number, color: string, icon?: string) => void;
   onImpactGlow?: (gridX: number, gridY: number, rgb: string, frames?: number) => void;
+  onRowClear?: (rows: number[]) => void;
+  onHardDrop?: (columns: Array<{ x: number; fromY: number; toY: number }>, color: string) => void;
+  onMonsterDeath?: (x: number, y: number, char: string) => void;
+  onHitStop?: (frames: number) => void;
+  onRingPulse?: (x: number, y: number, rgb: string) => void;
+  onBeam?: (x: number) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, close: () => void) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;

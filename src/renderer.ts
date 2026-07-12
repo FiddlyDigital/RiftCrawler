@@ -27,6 +27,17 @@ export class Renderer {
   private reducedMotion = false;
   private impactGlow: { x: number; y: number; rgb: string; frames: number; maxFrames: number } | null = null;
 
+  // One-shot "juice" effects (all gated by reducedMotion at the trigger)
+  private hitStopFrames = 0;
+  private rowFlash: { ys: number[]; frames: number; maxFrames: number } | null = null;
+  private rowSlide: { belowY: number; count: number; frames: number; maxFrames: number } | null = null;
+  private dropTrails: Array<{ x: number; fromY: number; toY: number; color: string; frames: number; maxFrames: number }> = [];
+  private deathFlashes: Array<{ x: number; y: number; char: string; frames: number; maxFrames: number }> = [];
+  private rings: Array<{ x: number; y: number; rgb: string; frames: number; maxFrames: number }> = [];
+  private beam: { x: number; frames: number; maxFrames: number } | null = null;
+  private moteColor = '#cfc6b0';
+  private readonly flashCanvas = document.createElement('canvas');  // scratch for white death-flash tinting
+
   constructor(canvas: HTMLCanvasElement) {
     canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
     canvas.height = CONFIG.ROWS * CONFIG.TILE_SIZE;
@@ -48,6 +59,56 @@ export class Renderer {
   triggerImpactGlow(gx: number, gy: number, rgb: string, frames = 16): void {
     if (this.reducedMotion) return;
     this.impactGlow = { x: gx, y: gy, rgb, frames, maxFrames: frames };
+  }
+
+  // Freeze rendering for a couple of frames on big hits — classic impact trick.
+  triggerHitStop(frames: number): void {
+    if (this.reducedMotion) return;
+    this.hitStopFrames = Math.max(this.hitStopFrames, frames);
+  }
+
+  // Cleared rows: white flash along the rows + everything above sliding down
+  // into place, plus a sweep of spark particles across each row.
+  triggerRowClear(rows: number[]): void {
+    if (this.reducedMotion || rows.length === 0) return;
+    this.rowFlash = { ys: [...rows], frames: 8, maxFrames: 8 };
+    this.rowSlide = { belowY: Math.max(...rows), count: rows.length, frames: 5, maxFrames: 5 };
+    for (const y of rows) {
+      for (let x = 0; x < CONFIG.COLS; x++) {
+        if (Math.random() < 0.7) {
+          this.particles.spawn(
+            x + Math.random() * 0.6, y, Math.random() < 0.5 ? '✦' : '·', '#ffe9b0', 9, '',
+            (Math.random() - 0.5) * 1.6, -0.4 - Math.random() * 1.2, 0.92,
+          );
+        }
+      }
+    }
+  }
+
+  // Ghostly streaks along a hard drop's travel path.
+  spawnDropTrail(columns: Array<{ x: number; fromY: number; toY: number }>, color: string): void {
+    if (this.reducedMotion) return;
+    for (const c of columns) {
+      if (c.toY > c.fromY) this.dropTrails.push({ ...c, color, frames: 9, maxFrames: 9 });
+    }
+  }
+
+  // A killed monster flashes white for a few frames instead of just vanishing.
+  flashDeath(gx: number, gy: number, char: string): void {
+    if (this.reducedMotion) return;
+    this.deathFlashes.push({ x: gx, y: gy, char, frames: 5, maxFrames: 5 });
+  }
+
+  // Expanding ring pulse (ability flourishes: Time Dilation, Consecrate).
+  triggerRing(gx: number, gy: number, rgb: string, frames = 22): void {
+    if (this.reducedMotion) return;
+    this.rings.push({ x: gx, y: gy, rgb, frames, maxFrames: frames });
+  }
+
+  // Vertical column of light on the player (level-ups).
+  triggerBeam(gx: number, frames = 26): void {
+    if (this.reducedMotion) return;
+    this.beam = { x: gx, frames, maxFrames: frames };
   }
 
   spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
@@ -108,6 +169,10 @@ export class Renderer {
   private draw(game: Game): void {
     const { ctx } = this;
     const TS = CONFIG.TILE_SIZE;
+
+    // Hit-stop: hold the previous frame on screen for a beat.
+    if (this.hitStopFrames > 0) { this.hitStopFrames--; return; }
+
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -117,9 +182,12 @@ export class Renderer {
       this.floorTransitionFrames = 30;
       const biome = getBiomeForFloor(game.dungeonLevel);
       this.floorTransitionColor = biome.tileRgb || '10,10,20';
+      this.moteColor = biome.moteColor || '#cfc6b0';
     }
 
-    // ── Screen shake ─────────────────────────────────────────────────────
+    // ── Screen shake + line-clear settle ─────────────────────────────────
+    // The settle is a brief downward camera drop as cleared rows collapse —
+    // sells the weight of the clear without re-simulating pre-shift rows.
     ctx.save();
     if (this.shakeFrames > 0) {
       ctx.translate(
@@ -127,6 +195,12 @@ export class Renderer {
         (Math.random() - 0.5) * this.shakeIntensity * 2,
       );
       this.shakeFrames--;
+    }
+    if (this.rowSlide) {
+      const t = this.rowSlide.frames / this.rowSlide.maxFrames;
+      ctx.translate(0, -this.rowSlide.count * TS * t * t * 0.55);
+      this.rowSlide.frames--;
+      if (this.rowSlide.frames <= 0) this.rowSlide = null;
     }
 
     // ── Damage flash overlay ──────────────────────────────────────────────
@@ -199,6 +273,31 @@ export class Renderer {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     ctx.globalAlpha = 1.0;
+
+    // ── Cleared-row white flash ───────────────────────────────────────────
+    if (this.rowFlash) {
+      const a = 0.5 * (this.rowFlash.frames / this.rowFlash.maxFrames);
+      ctx.fillStyle = `rgba(255,244,214,${a})`;
+      for (const y of this.rowFlash.ys) ctx.fillRect(0, y * TS, CONFIG.COLS * TS, TS);
+      this.rowFlash.frames--;
+      if (this.rowFlash.frames <= 0) this.rowFlash = null;
+    }
+
+    // ── Hard-drop afterimage streaks ─────────────────────────────────────
+    for (let i = this.dropTrails.length - 1; i >= 0; i--) {
+      const t = this.dropTrails[i]!;
+      const a = 0.22 * (t.frames / t.maxFrames);
+      const grad = ctx.createLinearGradient(0, t.fromY * TS, 0, (t.toY + 1) * TS);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(1, t.color);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = grad;
+      ctx.fillRect(t.x * TS + 2, t.fromY * TS, TS - 4, (t.toY - t.fromY + 1) * TS);
+      ctx.restore();
+      t.frames--;
+      if (t.frames <= 0) this.dropTrails.splice(i, 1);
+    }
 
     // ── Ambient dust motes ──────────────────────────────────────────────────
     this.updateMotes();
@@ -405,6 +504,14 @@ export class Renderer {
       }
     }
 
+    // ── Death flashes — a killed monster burns white for a beat ──────────
+    for (let i = this.deathFlashes.length - 1; i >= 0; i--) {
+      const d = this.deathFlashes[i]!;
+      this.drawWhiteSprite(d.char, d.x * TS, d.y * TS, TS, TS, 0.9 * (d.frames / d.maxFrames));
+      d.frames--;
+      if (d.frames <= 0) this.deathFlashes.splice(i, 1);
+    }
+
     // ── Player ────────────────────────────────────────────────────────────
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
@@ -444,8 +551,48 @@ export class Renderer {
       if (this.impactGlow.frames <= 0) this.impactGlow = null;
     }
 
+    // ── Expanding ability rings (Time Dilation, Consecrate) ─────────────
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i]!;
+      const t = 1 - r.frames / r.maxFrames;
+      const radius = TS * (0.6 + t * 4.5);
+      ctx.save();
+      ctx.globalAlpha = 0.55 * (r.frames / r.maxFrames);
+      ctx.strokeStyle = `rgb(${r.rgb})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(r.x * TS + TS / 2, r.y * TS + TS / 2, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      r.frames--;
+      if (r.frames <= 0) this.rings.splice(i, 1);
+    }
+
+    // ── Level-up column of light ─────────────────────────────────────────
+    if (this.beam) {
+      const a = 0.4 * (this.beam.frames / this.beam.maxFrames);
+      const bx = this.beam.x * TS;
+      const grad = ctx.createLinearGradient(bx, 0, bx + TS, 0);
+      grad.addColorStop(0, 'rgba(217,164,65,0)');
+      grad.addColorStop(0.5, `rgba(255,228,150,${a})`);
+      grad.addColorStop(1, 'rgba(217,164,65,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(bx - TS * 0.2, 0, TS * 1.4, ctx.canvas.height);
+      this.beam.frames--;
+      if (this.beam.frames <= 0) this.beam = null;
+    }
+
     // ── Particles ─────────────────────────────────────────────────────────
     this.particles.tick(ctx);
+
+    // ── Edge vignettes: critical HP (oxblood) and Bres's presence ───────
+    const hpFrac = game.player.maxHp > 0 ? game.player.hp / game.player.maxHp : 1;
+    if (game.player.hp > 0 && hpFrac < 0.3) {
+      this.drawVignette(`193,68,60`, 0.16 + 0.07 * Math.sin(performance.now() / 350));
+    }
+    if (game.gorgothSummoned) {
+      this.drawVignette(`52,30,74`, 0.30 + 0.05 * Math.sin(performance.now() / 900));
+    }
 
     // ── Combo overlay ─────────────────────────────────────────────────────
     if (this.comboOverlay) {
@@ -522,7 +669,7 @@ export class Renderer {
   private drawMotes(): void {
     const { ctx } = this;
     ctx.save();
-    ctx.fillStyle = '#aeeaff';
+    ctx.fillStyle = this.moteColor;
     for (const m of this.motes) {
       ctx.globalAlpha = m.alpha;
       ctx.beginPath();
@@ -530,6 +677,39 @@ export class Renderer {
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  // Edge-darkening ring in the given rgb — center stays clear.
+  private drawVignette(rgb: string, alpha: number): void {
+    const { ctx } = this;
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.72);
+    grad.addColorStop(0, `rgba(${rgb},0)`);
+    grad.addColorStop(1, `rgba(${rgb},${Math.max(0, alpha)})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Draws a sprite silhouetted in white via a scratch canvas (death flash).
+  private drawWhiteSprite(key: string, dx: number, dy: number, dw: number, dh: number, alpha: number): void {
+    const coord = SPRITE_MAP[key];
+    if (!coord || !coord.sheet) return;
+    const img = getSpriteImage(coord.sheet);
+    if (!img) return;
+    const fc = this.flashCanvas;
+    fc.width = coord.sw; fc.height = coord.sh;  // setting size also clears
+    const fctx = fc.getContext('2d')!;
+    fctx.drawImage(img, coord.sx, coord.sy, coord.sw, coord.sh, 0, 0, coord.sw, coord.sh);
+    fctx.globalCompositeOperation = 'source-in';
+    fctx.fillStyle = '#ffffff';
+    fctx.fillRect(0, 0, fc.width, fc.height);
+    fctx.globalCompositeOperation = 'source-over';
+    const scale = Math.min(dw / coord.sw, dh / coord.sh);
+    const fw = coord.sw * scale, fh = coord.sh * scale;
+    this.ctx.save();
+    this.ctx.globalAlpha = Math.max(0, alpha);
+    this.ctx.drawImage(fc, dx + (dw - fw) / 2, dy + (dh - fh) / 2, fw, fh);
+    this.ctx.restore();
   }
 
   public showCombo(multiplier: number): void {

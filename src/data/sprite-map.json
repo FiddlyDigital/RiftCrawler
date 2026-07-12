@@ -71,6 +71,9 @@
 
   "item_heart":         { "sheet": "items", "sx": 0,   "sy": 512, "sw": 32, "sh": 32 },
   "item_gold_pouch":    { "sheet": "items", "sx": 96,  "sy": 768, "sw": 32, "sh": 32 },
+  "item_coins":         { "sheet": "items", "sx": 43,  "sy": 780, "sw": 11, "sh": 12 },
+  "tile_stairs_up":     { "sheet": "tiles", "sx": 256, "sy": 513, "sw": 32, "sh": 28 },
+  "icon_hp_potion":     { "sheet": "items", "sx": 42,  "sy": 618, "sw": 11, "sh": 15 },
   "item_book":          { "sheet": "items", "sx": 32,  "sy": 672, "sw": 32, "sh": 32 },
   "item_scroll":        { "sheet": "items", "sx": 0,   "sy": 672, "sw": 32, "sh": 32 },
   "item_droplet":       { "sheet": "items", "sx": 64,  "sy": 640, "sw": 32, "sh": 32 },

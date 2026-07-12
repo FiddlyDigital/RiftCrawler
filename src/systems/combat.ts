@@ -129,6 +129,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     game.cb.log(`CRITICAL on ${monster.name}! (${rollNote}) — ${dmg} dmg${bossTag}`, 'log-combo');
     game.cb.onParticle(monster.x, monster.y, 'CRIT!', '#ffd54f', 18, 'fx_impact');
     game.cb.onParticleBurst?.(monster.x, monster.y, 6, '#d9a441', 'fx_impact');
+    game.cb.onHitStop?.(3);
     if (!monster.isStunned) {
       monster.statuses.push({ type: 'stun', duration: COMBAT_BALANCE.critStun.duration, power: COMBAT_BALANCE.critStun.power });
       game.cb.log(`${monster.name} is stunned!`, 'log-success');
@@ -232,6 +233,8 @@ export function monsterAttackPlayer(m: Monster, game: Game): void {
 
 export function killMonster(m: Monster, game: Game): void {
   game.cb.onAudio?.('kill');
+  game.cb.onMonsterDeath?.(m.x, m.y, m.char);  // white flash + poof at the corpse
+  game.cb.onHitStop?.(2);
   // Gorgoth's fall wins the run — short-circuit before XP/level-up so the
   // victory screen isn't stepped on by a level-up modal. Covers every death
   // path (melee, ranged, poison, thorns) since they all route through here.
