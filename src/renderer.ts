@@ -37,14 +37,40 @@ export class Renderer {
   private beam: { x: number; frames: number; maxFrames: number } | null = null;
   private moteColor = '#cfc6b0';
   private readonly flashCanvas = document.createElement('canvas');  // scratch for white death-flash tinting
+  // Logical (CSS-pixel) canvas size — everything in draw() is written in
+  // these units. The actual backing buffer is sized in fitToDisplaySize() to
+  // match the canvas's real on-screen size × devicePixelRatio, so sprites
+  // render crisp instead of getting blurrily upscaled by the browser (mobile
+  // "canvas maximization" can stretch the canvas 2-4× this logical size).
+  private readonly logicalW = CONFIG.COLS * CONFIG.TILE_SIZE;
+  private readonly logicalH = CONFIG.ROWS * CONFIG.TILE_SIZE;
 
   constructor(canvas: HTMLCanvasElement) {
-    canvas.width = CONFIG.COLS * CONFIG.TILE_SIZE;
-    canvas.height = CONFIG.ROWS * CONFIG.TILE_SIZE;
     this.ctx = canvas.getContext('2d')!;
     this.particles = new ParticlePool(90);
     this.motes = Array.from({ length: 14 }, () => this.spawnMote(true));
     this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
+    this.fitToDisplaySize(canvas);
+    // Re-fits on window resize, orientation change, and fullscreen toggle —
+    // anything that changes the canvas's actual on-screen box size.
+    new ResizeObserver(() => this.fitToDisplaySize(canvas)).observe(canvas);
+  }
+
+  // Matches the canvas's backing pixel buffer to its real displayed size ×
+  // devicePixelRatio, then rescales the drawing context so every existing
+  // TILE_SIZE-based draw call keeps working unmodified in the same logical
+  // (0..logicalW / 0..logicalH) coordinate space.
+  private fitToDisplaySize(canvas: HTMLCanvasElement): void {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;  // not laid out yet
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const scale = (rect.width / this.logicalW) * dpr;
+    const w = Math.round(this.logicalW * scale);
+    const h = Math.round(this.logicalH * scale);
+    if (canvas.width === w && canvas.height === h) return;
+    canvas.width = w;
+    canvas.height = h;
+    this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
   }
 
   spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
@@ -174,7 +200,7 @@ export class Renderer {
     if (this.hitStopFrames > 0) { this.hitStopFrames--; return; }
 
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.clearRect(0, 0, this.logicalW, this.logicalH);
 
     if (game.dungeonLevel !== this.lastDungeonLevel) {
       this.revealFrames.fill(0);
@@ -206,7 +232,7 @@ export class Renderer {
     // ── Damage flash overlay ──────────────────────────────────────────────
     if (this.damageFlashFrames > 0) {
       ctx.fillStyle = 'rgba(220,20,20,0.22)';
-      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillRect(0, 0, this.logicalW, this.logicalH);
       this.damageFlashFrames--;
     }
 
@@ -577,7 +603,7 @@ export class Renderer {
       grad.addColorStop(0.5, `rgba(255,228,150,${a})`);
       grad.addColorStop(1, 'rgba(217,164,65,0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(bx - TS * 0.2, 0, TS * 1.4, ctx.canvas.height);
+      ctx.fillRect(bx - TS * 0.2, 0, TS * 1.4, this.logicalH);
       this.beam.frames--;
       if (this.beam.frames <= 0) this.beam = null;
     }
@@ -597,7 +623,7 @@ export class Renderer {
     // ── Combo overlay ─────────────────────────────────────────────────────
     if (this.comboOverlay) {
       const { text, alpha, mult } = this.comboOverlay;
-      const cw = ctx.canvas.width, ch = ctx.canvas.height;
+      const cw = this.logicalW, ch = this.logicalH;
       const fontSize = 22 + Math.min(mult, 8) * 2;
       const color = mult >= 5 ? '#ff1744' : '#ff9100';
       ctx.save();
@@ -618,21 +644,21 @@ export class Renderer {
     const biome = getBiomeForFloor(game.dungeonLevel);
     if (biome.tileRgb) {
       ctx.fillStyle = `rgba(${biome.tileRgb},0.07)`;
-      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillRect(0, 0, this.logicalW, this.logicalH);
     }
 
     // ── Floor transition flash ────────────────────────────────────────────
     if (this.floorTransitionFrames > 0) {
       const flashAlpha = (this.floorTransitionFrames / 30) * 0.88;
       ctx.fillStyle = `rgba(${this.floorTransitionColor},${flashAlpha})`;
-      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillRect(0, 0, this.logicalW, this.logicalH);
       this.floorTransitionFrames--;
     }
 
     // ── Low-HP vignette ──────────────────────────────────────────────────
     if (game.player.hp > 0 && game.player.hp / game.player.maxHp <= 0.25) {
       const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 300);
-      const w = ctx.canvas.width, h = ctx.canvas.height;
+      const w = this.logicalW, h = this.logicalH;
       const vignette = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
       vignette.addColorStop(0, 'rgba(180,0,0,0)');
       vignette.addColorStop(1, `rgba(180,0,0,${pulse})`);
@@ -642,7 +668,7 @@ export class Renderer {
 
     // ── Pause overlay ─────────────────────────────────────────────────────
     if (game.paused && game.player.hp > 0) {
-      const W = ctx.canvas.width, H = ctx.canvas.height;
+      const W = this.logicalW, H = this.logicalH;
       ctx.save();
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = '#000';
@@ -682,7 +708,7 @@ export class Renderer {
   // Edge-darkening ring in the given rgb — center stays clear.
   private drawVignette(rgb: string, alpha: number): void {
     const { ctx } = this;
-    const W = ctx.canvas.width, H = ctx.canvas.height;
+    const W = this.logicalW, H = this.logicalH;
     const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.72);
     grad.addColorStop(0, `rgba(${rgb},0)`);
     grad.addColorStop(1, `rgba(${rgb},${Math.max(0, alpha)})`);

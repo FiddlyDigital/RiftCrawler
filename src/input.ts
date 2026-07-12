@@ -45,12 +45,13 @@ const HARD_DROP_VELOCITY    = 1.0;  // px/ms — a fast flick down is a hard dro
 export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter, onInspect: InspectCallback): void {
   let startX = 0, startY = 0, startT = 0;
 
+  // Grid-fraction based, not canvas.width/TILE_SIZE based — stays correct
+  // regardless of the canvas's internal backing-buffer resolution (which is
+  // scaled by devicePixelRatio for sprite crispness; see renderer.ts).
   function toGrid(clientX: number, clientY: number): { gx: number; gy: number } {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const gx = Math.floor((clientX - rect.left) * scaleX / CONFIG.TILE_SIZE);
-    const gy = Math.floor((clientY - rect.top) * scaleY / CONFIG.TILE_SIZE);
+    const gx = Math.floor((clientX - rect.left) / rect.width * CONFIG.COLS);
+    const gy = Math.floor((clientY - rect.top) / rect.height * CONFIG.ROWS);
     return { gx, gy };
   }
 
