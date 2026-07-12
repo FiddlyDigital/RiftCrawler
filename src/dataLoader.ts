@@ -27,7 +27,7 @@ interface RawClassAbility {
   params?: Record<string, number | string>;
 }
 interface RawClass {
-  id: string; emoji: string; name: string; tagline: string; statPreview: string;
+  id: string; emoji: string; name: string; tagline: string; statChips: string[];
   tPieceCdReduction?: number;
   effects?: EffectSpec[];
   ability?: RawClassAbility;
@@ -282,7 +282,7 @@ export const CLASSES: ClassDef[] = (classesData as unknown as RawClass[]).map(ra
   emoji: raw.emoji,
   name: raw.name,
   tagline: raw.tagline,
-  statPreview: raw.statPreview,
+  statChips: raw.statChips,
   tPieceCdReduction: raw.tPieceCdReduction ?? 2,
   apply: (p: Player): void => {
     applyToPlayer(p, raw.effects);

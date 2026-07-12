@@ -38,7 +38,9 @@ export class UIManager {
       hudHp:            document.getElementById('hud-hp-text')!,
       hudHpBar:         document.getElementById('hud-hp-bar')!,
       hudFloor:         document.getElementById('hud-floor-num')!,
+      hudGold:          document.getElementById('hud-gold-num')!,
       hudNextPreview:   document.getElementById('hud-next-preview')!,
+      gold:             document.getElementById('stat-gold')!,
       deathTitle:       document.getElementById('death-title')!,
       deathReason:      document.getElementById('death-reason')!,
       finalFloor:       document.getElementById('final-floor')!,
@@ -80,7 +82,9 @@ export class UIManager {
     this.els['floor']!.textContent       = String(state.floor);
     this.els['xpTotal']!.textContent     = String(state.totalXpEarned);
     this.els['hp']!.textContent          = `${state.hp}/${state.maxHp}`;
-    this.els['rate']!.textContent        = `${state.gravityRate}ms`;
+    this.els['gold']!.textContent        = state.gold.toLocaleString();
+    // Seconds-per-turn reads as a game fact; raw milliseconds read as debug output.
+    this.els['rate']!.textContent        = `${(state.gravityRate / 1000).toFixed(1)}s/turn`;
     const hpBar = this.els['hpBar']!;
     hpBar.style.width = `${Math.max(0, (state.hp / state.maxHp) * 100)}%`;
     const hpPct = state.maxHp > 0 ? state.hp / state.maxHp : 1;
@@ -99,6 +103,8 @@ export class UIManager {
     // visibility while the full sidebar lives behind the slide-in drawer.
     this.els['hudHp']!.textContent = `${state.hp}/${state.maxHp}`;
     this.els['hudFloor']!.textContent = String(state.floor);
+    // Abbreviate in the narrow HUD strip; the sidebar shows the full figure.
+    this.els['hudGold']!.textContent = state.gold >= 10000 ? `${(state.gold / 1000).toFixed(1)}k` : String(state.gold);
     const hudHpBar = this.els['hudHpBar']!;
     hudHpBar.style.width = hpBar.style.width;
     hudHpBar.classList.remove('hp-full', 'hp-warning', 'hp-critical');
@@ -182,7 +188,7 @@ export class UIManager {
       this.els['rangedAbility']!.style.display = '';
       this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
       this.els['rangedAbility']!.style.fontSize = '9px';
-      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}  (Q)`;
+      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)</span>`;
       if (rangedBtn) {
         // Short generic label (not the ability name) so the button stays as
         // narrow as the Hold button — full detail lives in the sidebar badge.
@@ -322,7 +328,8 @@ export class UIManager {
     for (const cls of classes) {
       const btn = document.createElement('button');
       btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${spriteIconHTML(cls.emoji, 24)}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span style="color:#555;font-size:9px;">${cls.statPreview}</span></div>`;
+      const chips = cls.statChips.map(c => `<span class="class-chip">${escapeHtml(c)}</span>`).join('');
+      btn.innerHTML = `<span class="modifier-emoji">${spriteIconHTML(cls.emoji, 24)}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span class="class-chip-row">${chips}</span></div>`;
       btn.addEventListener('click', () => {
         this.classModal.style.display = 'none';
         onSelect(cls.id);

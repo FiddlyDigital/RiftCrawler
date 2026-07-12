@@ -115,6 +115,15 @@ function togglePauseMenu(): void {
   else openPauseMenu();
 }
 
+// Auto-pause when the app is backgrounded (phone: switching apps / locking;
+// desktop: switching tabs) — otherwise gravity keeps ticking while the player
+// can't see or act, which is a death sentence mid-run. openPauseMenu's guards
+// make this a no-op on the start screen, over modals, or when already paused;
+// resume stays a deliberate tap on the pause menu.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) openPauseMenu();
+});
+
 function restartRun(): void {
   manualPaused = false;
   ui.hidePauseMenu();

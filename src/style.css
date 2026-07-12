@@ -96,9 +96,11 @@ body {
 #fullscreen-btn:hover, #fullscreen-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
 #fullscreen-btn.is-active { border-color: var(--block-accent); color: var(--block-accent); }
 
-/* Floating drawer-toggle button (mobile) — mirrors #pause-btn, sits top-left */
+/* Floating drawer-toggle button (mobile) — mirrors #pause-btn, sits top-left.
+   z-index must beat the backdrop scrim (35) or the ✕ becomes untappable
+   while the drawer is open. */
 #drawer-toggle-btn {
-  position: absolute; top: 8px; left: 8px; z-index: 5;
+  position: absolute; top: 8px; left: 8px; z-index: 45;
   width: 40px; height: 40px; border-radius: 8px; line-height: 1;
   background: rgba(10,10,18,.72); border: 1px solid var(--border-color);
   color: #cfcfe0; font-size: 17px; cursor: pointer;
@@ -125,7 +127,13 @@ body {
   border-radius: 2px; overflow: hidden; margin-top: 2px;
 }
 .hud-floor { text-align: center; font-family: var(--font-pixel); font-size: 11px; }
+.hud-gold  { text-align: center; font-family: var(--font-pixel); font-size: 11px; }
 .hud-next-preview { display: flex; align-items: center; justify-content: center; }
+
+/* ── Input-mode visibility helpers ──────────────────────────────────────────
+   Mobile-first: keyboard hints/cards are hidden by default and re-enabled in
+   the desktop breakpoint; .touch-only content does the reverse. */
+.kbd-hint, .kbd-only { display: none; }
 
 /* Backdrop scrim behind the sidebar drawer (mobile) */
 #sidebar-backdrop {
@@ -552,6 +560,15 @@ canvas {
   border-color: var(--accent-color);
   color: var(--accent-color);
 }
+
+/* Class-card stat chips — short labeled facts instead of a jargon line */
+.class-chip-row {
+  display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+}
+.class-chip {
+  background: #10101c; border: 1px solid #2c2c44; border-radius: 3px;
+  padding: 1px 5px; font-size: 9px; color: #9a9ab8; white-space: nowrap;
+}
 #altar-modal .modifier-btn:hover {
   border-color: #b98fc4;
 }
@@ -668,6 +685,11 @@ canvas {
   /* Mobile-only chrome — not used on desktop */
   #sidebar-backdrop, #drawer-toggle-btn, #hud-strip { display: none; }
 
+  /* Desktop is keyboard-first: show key hints, hide the touch-controls card */
+  .kbd-hint { display: inline; }
+  .kbd-only { display: block; }
+  .touch-only { display: none; }
+
   .card-title { font-size: 10px; }
 
   #log-panel {
@@ -736,4 +758,9 @@ canvas {
   }
 
   #sidebar-backdrop, #drawer-toggle-btn, #hud-strip { display: none; }
+
+  /* A landscape phone matches the ≥640px desktop query too, but it's still a
+     touch device — undo the desktop keyboard-first treatment. */
+  .kbd-hint, .kbd-only { display: none; }
+  .touch-only { display: block; }
 }

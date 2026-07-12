@@ -4,7 +4,7 @@
     "emoji": "class_chronomancer",
     "name": "Chronomancer",
     "tagline": "Bend time to your will. Slow the rift, outlast everything.",
-    "statPreview": "−5 HP  gravity 25% slower  D6 dice  Time Dilation (Q, +100 slow/15t, cd 14)",
+    "statChips": ["−5 Max HP", "Gravity 25% slower", "D6 combat dice", "Q: Time Dilation — stop gravity for 15 turns"],
     "tPieceCdReduction": 2,
     "effects": [
       {
@@ -40,7 +40,7 @@
     "emoji": "class_architect",
     "name": "The Architect",
     "tagline": "Master the Tetris layer. Every clear is your weapon.",
-    "statPreview": "+15 HP  −2 ATK  line XP ×2  O vault 80%  T cd −4  D8 dice  Consecrate (Q, vision-wide, cd 10)",
+    "statChips": ["+15 Max HP", "−2 ATK", "×2 line-clear XP", "D8 combat dice", "Q: Consecrate — bless all floor in sight"],
     "tPieceCdReduction": 4,
     "effects": [
       {

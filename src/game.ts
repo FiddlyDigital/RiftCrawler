@@ -1568,6 +1568,7 @@ export class Game {
       maxHp: Math.round(this.player.maxHp),
       floor: this.dungeonLevel,
       totalXpEarned: this.player.totalXpEarned,
+      gold: this.gold,
       gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
       nextType: this.nextType,
       heldType: this.heldType,

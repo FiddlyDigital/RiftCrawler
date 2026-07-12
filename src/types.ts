@@ -6,7 +6,7 @@ export interface ClassDef {
   emoji: string;
   name: string;
   tagline: string;
-  statPreview: string;
+  statChips: string[];  // short labeled facts rendered as chips on the class card
   tPieceCdReduction: number;
   apply: (player: Player) => void;
 }
@@ -176,6 +176,7 @@ export interface UIState {
   maxHp: number;
   floor: number;
   totalXpEarned: number;
+  gold: number;
   gravityRate: number;
   nextType: ShapeKey;
   heldType: ShapeKey | null;
