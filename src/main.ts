@@ -4,7 +4,6 @@ import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
 import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion } from './storage';
-import { trackGameStart, trackGameOver, trackInstall, trackError } from './analytics';
 import { formatCrashInfo, shouldReport } from './errorReporting';
 import { audio } from './audio';
 import { vibrate, setHapticsEnabled } from './haptics';
@@ -25,7 +24,6 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 function handleFatalError(err: unknown, context: string): void {
   const info = formatCrashInfo(err, context);
   console.error(`[Fatal:${info.context}]`, err);
-  trackError(info.context, info.message);
   if (!shouldReport()) return;  // already showing the crash modal for an earlier error
   stopTick();
   game.active = false;  // the renderer's RAF loop checks this and stops itself
@@ -330,7 +328,6 @@ function startGame(startPaused = false): void {
       audio.stopAmbient();
       audio.playDeath();
       const { highXp, history } = recordRunEnd(game, reason, stats);
-      trackGameOver(totalXpEarned, floor);
       ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, stats);
       ui.updateBestScore(highXp);
     },
@@ -340,7 +337,6 @@ function startGame(startPaused = false): void {
       audio.stopAmbient();
       audio.playLevelUp();
       const { highXp, history } = recordRunEnd(game, 'Defeated Bres the Beautiful', stats);
-      trackGameOver(totalXpEarned, floor);
       ui.showVictory(floor, totalXpEarned, highXp, history, stats);
       ui.updateBestScore(highXp);
     },
@@ -403,7 +399,6 @@ function startGame(startPaused = false): void {
   if (startPaused) game.paused = true;
   renderer.start(game, (err) => handleFatalError(err, 'render'));
   if (!startPaused) startTick();
-  trackGameStart(1);
 }
 
 // ── Class + Modifier picker then launch ──────────────────────────────────────
@@ -509,7 +504,7 @@ installBtn.addEventListener('click', async () => {
   installBanner.hidden = true;
   await installPrompt.prompt();
   const { outcome } = await installPrompt.userChoice;
-  if (outcome === 'accepted') trackInstall();
+  console.log('PWA install prompt outcome:', outcome);  
   installPrompt = null;
 });
 

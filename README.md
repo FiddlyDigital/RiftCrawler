@@ -10,15 +10,21 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 
 ## Table of contents
 
-- [The game](#the-game)
-- [Core systems](#core-systems)
-- [Tech stack](#tech-stack)
-- [Getting started](#getting-started)
-- [Project structure](#project-structure)
-- [Data files](#data-files)
-- [Adding & tuning content](#adding--tuning-content)
-- [Testing](#testing)
-- [Notes & gotchas](#notes--gotchas)
+- [Causeway to Ériu](#causeway-to-ériu)
+  - [Table of contents](#table-of-contents)
+  - [The game](#the-game)
+  - [Core systems](#core-systems)
+  - [Tech stack](#tech-stack)
+  - [Getting started](#getting-started)
+  - [Project structure](#project-structure)
+  - [Data files](#data-files)
+    - [`monsters.json`](#monstersjson)
+    - [`bosses.json`](#bossesjson)
+    - [`boons.json`, `brands.json`, `modifiers.json` — the effect system](#boonsjson-brandsjson-modifiersjson--the-effect-system)
+    - [Support files](#support-files)
+  - [Adding \& tuning content](#adding--tuning-content)
+  - [Testing](#testing)
+  - [Notes \& gotchas](#notes--gotchas)
 
 ---
 
@@ -98,7 +104,6 @@ src/
   content.ts       Re-export barrel for the data tables
   storage.ts       localStorage (high XP, run history, mute, reduced-motion)
   audio.ts         Web Audio SFX
-  analytics.ts     Optional Plausible hooks
   systems/
     combat.ts        Dice engine, player/monster attacks, kill & victory
     monsterAI.ts     Per-behaviour monster turns (melee/ranged/berserker/…, gorgoth)
