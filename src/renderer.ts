@@ -50,10 +50,19 @@ export class Renderer {
     this.particles = new ParticlePool(90);
     this.motes = Array.from({ length: 14 }, () => this.spawnMote(true));
     this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
+    // The canvas's own CSS box (width:auto;height:100%) derives its width
+    // from ITS OWN aspect ratio — which is exactly the canvas.width/height
+    // attributes fitToDisplaySize() is about to set. Observing (or reading
+    // the rect of) the canvas itself is circular: resize the buffer, its
+    // aspect ratio shifts a hair, its "auto" width recomputes, the observer
+    // fires again — the browser eventually kills the tab-visible loop with
+    // "ResizeObserver loop completed with undelivered notifications". The
+    // container's HEIGHT is never derived from the canvas across any of
+    // this app's layout breakpoints (always a `1fr`/`minmax(0,1fr)` grid
+    // row), so that's the one dimension safe to measure and observe.
+    const container = canvas.parentElement;
     this.fitToDisplaySize(canvas);
-    // Re-fits on window resize, orientation change, and fullscreen toggle —
-    // anything that changes the canvas's actual on-screen box size.
-    new ResizeObserver(() => this.fitToDisplaySize(canvas)).observe(canvas);
+    if (container) new ResizeObserver(() => this.fitToDisplaySize(canvas)).observe(container);
   }
 
   // Matches the canvas's backing pixel buffer to its real displayed size ×
@@ -61,16 +70,18 @@ export class Renderer {
   // TILE_SIZE-based draw call keeps working unmodified in the same logical
   // (0..logicalW / 0..logicalH) coordinate space.
   private fitToDisplaySize(canvas: HTMLCanvasElement): void {
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width < 1 || rect.height < 1) return;  // not laid out yet
+    const container = canvas.parentElement;
+    const dispH = container?.getBoundingClientRect().height ?? 0;
+    if (dispH < 1) return;  // not laid out yet
+    const dispW = dispH * (this.logicalW / this.logicalH);  // canvas is always height-driven — see constructor note
+
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const scale = (rect.width / this.logicalW) * dpr;
-    const w = Math.round(this.logicalW * scale);
-    const h = Math.round(this.logicalH * scale);
+    const w = Math.round(dispW * dpr);
+    const h = Math.round(dispH * dpr);
     if (canvas.width === w && canvas.height === h) return;
     canvas.width = w;
     canvas.height = h;
-    this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    this.ctx.setTransform(w / this.logicalW, 0, 0, h / this.logicalH, 0, 0);
   }
 
   spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
@@ -273,16 +284,17 @@ export class Renderer {
         ctx.globalAlpha = alpha;
 
         if (type === Tile.FLOOR || type === Tile.STAIRS || isMerchant) {
-          // Draw block color base first — preserves tetris color identity
+          // Stone-block base (alternating crop for non-repeating texture),
+          // then the tetromino's own color as a translucent wash on top —
+          // keeps piece-color identity readable while the stone's cracks
+          // and shading show through underneath.
+          this.drawSprite((x + y) % 2 === 0 ? 'tile_stone_a' : 'tile_stone_b', x * TS, y * TS, TS, TS);
+          ctx.globalAlpha = alpha * 0.6;
           ctx.fillStyle = isMerchant ? '#0d2d0d' : (game.colors[x]![y] ?? '#444');
           ctx.fillRect(x * TS, y * TS, TS - 1, TS - 1);
+          ctx.globalAlpha = alpha;
           ctx.strokeStyle = 'rgba(0,0,0,0.2)';
           ctx.strokeRect(x * TS, y * TS, TS, TS);
-
-          // Overlay floor texture at ~45% to add pixel-art depth without hiding color
-          ctx.globalAlpha = alpha * 0.45;
-          this.drawSprite('FLOOR', x * TS, y * TS, TS, TS);
-          ctx.globalAlpha = alpha;
 
           // Tile-feature glyphs (stairs / tattoo artist / altar) are drawn in a
           // later pass so a descending tetromino never hides what's on the tile.
@@ -341,8 +353,13 @@ export class Renderer {
         const tx = game.blockX + c, ty = game.blockY + r;
         if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
 
+        // Same stone-base + color-wash treatment as locked blocks, so the
+        // falling piece and the trail it leaves behind read as one material.
+        this.drawSprite((tx + ty) % 2 === 0 ? 'tile_stone_a' : 'tile_stone_b', tx * TS, ty * TS, TS, TS);
+        ctx.globalAlpha = 0.6;
         ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
+        ctx.globalAlpha = 1.0;
         if (cell === Cell.BOSS) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
         } else if (game.currentCursed) {
