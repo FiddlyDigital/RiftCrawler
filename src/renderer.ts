@@ -182,6 +182,23 @@ export class Renderer {
     return true;
   }
 
+  // Ambient "alive" aura + gentle idle bob — shared by the player, monsters,
+  // wandering NPCs, and the tattoo artist, so anything you can interact with
+  // reads as alive rather than a static tile icon. `phase` staggers the bob
+  // so multiple instances on screen don't sway in perfect unison; `inset`
+  // matches the smaller centered draw used for altar/NPC-style icons.
+  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0): void {
+    const TS = CONFIG.TILE_SIZE;
+    const idleBob = Math.sin(performance.now() / 500 + phase) * 1.5;
+    const px = gx * TS + TS / 2, py = gy * TS + TS / 2 + idleBob;
+    const glow = this.ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
+    glow.addColorStop(0, `rgba(${rgb},0.38)`);
+    glow.addColorStop(1, `rgba(${rgb},0)`);
+    this.ctx.fillStyle = glow;
+    this.ctx.fillRect(gx * TS - TS, gy * TS - TS, TS * 3, TS * 3);
+    this.drawSprite(char, gx * TS + inset, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
+  }
+
   private drawPulseGlow(gx: number, gy: number, rgb: string): void {
     const TS = CONFIG.TILE_SIZE;
     const alpha = 0.18 + 0.18 * Math.sin(performance.now() / 400);
@@ -425,8 +442,8 @@ export class Renderer {
           if (visible) this.drawPulseGlow(x, y, '168,132,184');
           this.drawSprite('tile_stairs', x * TS, y * TS, TS, TS);
         } else if (isMerchant) {
-          if (visible) this.drawPulseGlow(x, y, '122,58,150');
-          this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
+          if (visible) this.drawLivingSprite('tile_merchant', x, y, '217,164,65', x * 7 + y * 13);
+          else this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
         } else if (altar) {
           if (visible) {
             this.drawPulseGlow(x, y, TIER_COLORS[altar.tier].rgb);
@@ -434,10 +451,10 @@ export class Renderer {
           const inset = TS * 0.1;
           this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         } else if (npcHere) {
-          if (visible) this.drawPulseGlow(x, y, '89,159,124');
           const npcDef = NPCS.find(n => n.id === npcHere.npcId);
           const inset = TS * 0.1;
-          this.drawSprite(npcDef?.char ?? 'npc_fili', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
+          if (visible) this.drawLivingSprite(npcDef?.char ?? 'npc_fili', x, y, '89,159,124', x * 7 + y * 13, inset);
+          else this.drawSprite(npcDef?.char ?? 'npc_fili', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         }
         ctx.globalAlpha = 1.0;
       }
@@ -528,7 +545,7 @@ export class Renderer {
         ctx.font = `${TS * 0.7}px Arial`;
       }
 
-      this.drawSprite(m.char, m.x * TS, m.y * TS, TS, TS);
+      this.drawLivingSprite(m.char, m.x, m.y, '198,58,50', m.x * 7 + m.y * 13);
 
       if (m.isElite) {
         ctx.strokeStyle = '#ffd700';
@@ -565,16 +582,7 @@ export class Renderer {
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
 
-      const idleBob = Math.sin(performance.now() / 500) * 1.5;
-      const px = game.player.x * TS + TS / 2;
-      const py = game.player.y * TS + TS / 2 + idleBob;
-      const glow = ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
-      glow.addColorStop(0, 'rgba(102,187,106,0.38)');
-      glow.addColorStop(1, 'rgba(102,187,106,0)');
-      ctx.fillStyle = glow;
-      ctx.fillRect(game.player.x * TS - TS, game.player.y * TS - TS, TS * 3, TS * 3);
-
-      this.drawSprite(game.player.char, game.player.x * TS, game.player.y * TS + idleBob, TS, TS);
+      this.drawLivingSprite(game.player.char, game.player.x, game.player.y, '102,187,106');
 
       if (game.player.statuses.length > 0) {
         const iconSize = 8;
