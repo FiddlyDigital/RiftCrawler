@@ -2,6 +2,7 @@ import type { Game } from '../game';
 import type { Monster } from '../entities';
 import { pctOf } from '../entities';
 import { COMBAT_BALANCE, numOr } from '../balance';
+import { BOONS_BY_TIER } from '../content';
 
 export function triggerDeath(game: Game, title: string, reason: string): void {
   // Deathward Rune: survive the killing blow once per floor per charge
@@ -269,6 +270,18 @@ export function killMonster(m: Monster, game: Game): void {
     game.cb.onParticle(m.x, m.y, 'BOSS!', '#ffd54f', undefined, 'item_trophy');
     game.cb.onParticleBurst?.(m.x, m.y, 14, '#c1443c');
     game.cb.onImpactGlow?.(m.x, m.y, '139,26,26', 20);
+
+    // Vengeance bounty fulfilled — covers every death path (melee, ranged,
+    // poison, thorns, line-clear AoE) since they all route through here.
+    const bounty = game.activeBountyQuest;
+    if (bounty && bounty.bossName === m.name && game.dungeonLevel >= bounty.floor) {
+      game.activeBountyQuest = null;
+      const rewardPool = BOONS_BY_TIER[3];
+      const reward = rewardPool[Math.floor(Math.random() * rewardPool.length)]!;
+      game.player.addBoon(reward);
+      game.cb.log(`An oath fulfilled — Otherworld power settles over you. Gained ${reward.name}!`, 'log-perk', reward.char);
+      game.cb.onParticleBurst?.(m.x, m.y, 10, '#8d6fd4');
+    }
   } else {
     if (m.isElite) {
       const bonus = COMBAT_BALANCE.rewards.eliteGoldBonusPerFloor * game.dungeonLevel;

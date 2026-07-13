@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/npcs.schema.json",
+  "title": "Npcs",
+  "description": "Wandering-stranger encounters, triggered by bumping into their tile. Mirrors NpcDef in src/types.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "char", "name", "kind"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "char": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "kind": { "type": "string", "enum": ["flavor", "bounty", "trade"] },
+      "lines": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "type": "string", "minLength": 1 }
+      },
+      "introLine": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+[
+  {
+    "id": "fionnuala",
+    "char": "npc_fili",
+    "name": "Fionnuala the Wandering Fili",
+    "kind": "flavor",
+    "lines": [
+      "The rift hums with half-remembered verses, wanderer. I have lost my meter chasing Bres's bridge — perhaps you'll finish the poem where I could not."
+    ]
+  },
+  {
+    "id": "cairn_keeper",
+    "char": "npc_cairn_keeper",
+    "name": "The Cairn-Keeper",
+    "kind": "flavor",
+    "lines": [
+      "I have watched over these stones since before the causeway split the dark. Every fallen thing bruises Bres's bridge a little more. Keep bruising it."
+    ]
+  },
+  {
+    "id": "fomorian_deserter",
+    "char": "npc_deserter",
+    "name": "A Fomorian Deserter",
+    "kind": "flavor",
+    "lines": [
+      "I want no more of Bres's bridge-building. Let it stay unfinished — for all our sakes, and yours."
+    ]
+  },
+  {
+    "id": "aoife",
+    "char": "npc_sidhe",
+    "name": "Aoife, Oath-Bound",
+    "kind": "bounty",
+    "introLine": "Long ago I swore an oath the Otherworld itself couldn't unmake."
+  },
+  {
+    "id": "fomorian_tinker",
+    "char": "npc_tinker",
+    "name": "A Fomorian Tinker",
+    "kind": "trade",
+    "introLine": "Otherworld power for Otherworld power, wanderer. Hand me one of your Geasa, and I'll press something rarer into your palm."
+  }
+]

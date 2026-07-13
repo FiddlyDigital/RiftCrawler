@@ -7,7 +7,8 @@ import modifiersData      from './data/modifiers.json';
 import classesData        from './data/classes.json';
 import biomesData         from './data/biomes.json';
 import floorEventsData    from './data/floor-events.json';
-import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec } from './types';
+import npcsData           from './data/npcs.json';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
@@ -449,4 +450,12 @@ export const FLOOR_EVENTS: FloorEventDef[] = (floorEventsData as RawFloorEvent[]
 
 export function getRandomFloorEvent(): FloorEventDef {
   return FLOOR_EVENTS[Math.floor(Math.random() * FLOOR_EVENTS.length)]!;
+}
+
+// ── Wandering NPCs ────────────────────────────────────────────────────────────
+
+export const NPCS: NpcDef[] = npcsData as NpcDef[];
+
+export function getRandomNpc(): NpcDef {
+  return NPCS[Math.floor(Math.random() * NPCS.length)]!;
 }

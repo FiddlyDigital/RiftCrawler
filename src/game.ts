@@ -1,7 +1,7 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type ShopItem, type CharacterSheetSection } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef } from './types';
 import { Player, Monster, pctOf } from './entities';
-import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, type ClassDef } from './content';
+import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
@@ -112,6 +112,11 @@ export class Game {
   private tattooTiles: Array<{ x: number; y: number }> = [];
   private tattooTilesSpawnedThisFloor = 0;  // caps Ogham Mark tiles per floor
   public altarTiles: AltarTile[] = [];
+  public npcTiles: NpcTile[] = [];
+  private npcTilesSpawnedThisFloor = 0;  // caps wandering-NPC tiles per floor
+  // A vengeance bounty accepted from an NPC — persists across floors (no
+  // per-floor reset) until the named boss falls, whenever/wherever that is.
+  public activeBountyQuest: { bossName: string; floor: number } | null = null;
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
@@ -226,6 +231,7 @@ export class Game {
     let bossInjected = false;
     let merchantInjected = false;
     let altarInjected = false;
+    let npcInjected = false;
     let trapInjected = false;
     let monsterInjected = false;
 
@@ -259,6 +265,15 @@ export class Game {
         if (!altarInjected && Math.random() < BALANCE.spawnRates.altarChance) {
           altarInjected = true;
           return Cell.ALTAR;
+        }
+        // Wandering NPC — rare, one per floor, a narrative aside rather than a
+        // resource to farm.
+        if (!npcInjected
+            && this.npcTilesSpawnedThisFloor < BALANCE.spawnRates.maxNpcTilesPerFloor
+            && Math.random() < BALANCE.spawnRates.npcChance) {
+          npcInjected = true;
+          this.npcTilesSpawnedThisFloor++;
+          return Cell.NPC;
         }
         // Hazard traps — one type per block
         if (!trapInjected) {
@@ -395,6 +410,12 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = altarColor;
           this.altarTiles.push({ x: tx, y: ty, tier });
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.NPC) {
+          const npc = getRandomNpc();
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#1c2418';
+          this.npcTiles.push({ x: tx, y: ty, npcId: npc.id });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -625,6 +646,80 @@ export class Game {
     }
   }
 
+  // Boss selection is deterministic per floor (cycles through the pool in a
+  // fixed order, biome permitting), and biome is itself purely a function of
+  // floor number — so this can truthfully preview a boss on a floor the
+  // player hasn't reached yet (used by the vengeance-bounty NPC).
+  private previewBossForFloor(floor: number): BossDef {
+    const biome = getBiomeForFloor(floor);
+    const biomeBosses   = BOSSES.filter(b => b.biomeId === biome.id);
+    const genericBosses = BOSSES.filter(b => !b.biomeId);
+    const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
+    return bossPool[(Math.floor(floor / BALANCE.floors.bossFloorInterval) - 1) % bossPool.length]!;
+  }
+
+  // ── Wandering NPCs ─────────────────────────────────────────────────────────
+  // Reuses the floor-event modal/plumbing entirely — an NPC encounter is just
+  // a FloorEventDef built at runtime instead of loaded from JSON, so no new
+  // UI or callback wiring is needed.
+
+  private triggerNpcEncounter(npc: NpcDef): void {
+    let event: FloorEventDef;
+
+    if (npc.kind === 'bounty') {
+      const targetFloor = (Math.floor(this.dungeonLevel / BALANCE.floors.bossFloorInterval) + 1) * BALANCE.floors.bossFloorInterval;
+      const targetBoss = this.previewBossForFloor(targetFloor);
+      event = {
+        id: npc.id, emoji: npc.char, title: npc.name,
+        flavor: `${npc.introLine} ${targetBoss.name} still draws breath at Floor ${targetFloor} — finish what I started, and I'll see you rewarded.`,
+        options: [
+          {
+            label: `Swear vengeance on ${targetBoss.name}`,
+            desc: `Slay ${targetBoss.name} at Floor ${targetFloor} or beyond for a rare Geis.`,
+            apply: (game): string => {
+              game.activeBountyQuest = { bossName: targetBoss.name, floor: targetFloor };
+              return `You swear vengeance upon ${targetBoss.name}, in ${npc.name}'s name.`;
+            },
+          },
+          { label: 'Not now', desc: '', apply: (): string => `${npc.name} nods, unsurprised, and fades back into the dark.` },
+        ],
+      };
+    } else if (npc.kind === 'trade') {
+      if (this.player.boons.length === 0) {
+        this.cb.log(`${npc.name}: "You carry nothing worth trading." `, 'log-neutral', npc.char);
+        return;
+      }
+      const boonOptions = this.player.boons.map(b => ({
+        label: `Give up ${b.def.name} (×${b.stacks})`,
+        desc: b.def.desc,
+        apply: (game: Game): string => {
+          game.player.removeBoon(b.id);
+          const pool = BOONS_BY_TIER[3].filter(x => x.id !== b.def.id);
+          const reward = (pool.length > 0 ? pool : BOONS_BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : BOONS_BY_TIER[3].length))]!;
+          game.player.addBoon(reward);
+          return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
+        },
+      }));
+      event = {
+        id: npc.id, emoji: npc.char, title: npc.name, flavor: npc.introLine!,
+        options: [...boonOptions, { label: 'Never mind', desc: '', apply: (): string => 'You keep your Geasa close.' }],
+      };
+    } else {
+      event = {
+        id: npc.id, emoji: npc.char, title: npc.name, flavor: npc.lines!.join(' '),
+        options: [{ label: 'Farewell', desc: '', apply: (): string => 'You part ways.' }],
+      };
+    }
+
+    this.paused = true;
+    this.cb.onFloorEvent?.(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', npc.char);
+      this.paused = false;
+      this.cb.onAction();
+    });
+  }
+
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
     if (cell === Cell.MONSTER_RAT)    { this.spawnMonster('rat',            tx, ty); return; }
     if (cell === Cell.MONSTER_SKEL)   { this.spawnMonster('skeleton',       tx, ty); return; }
@@ -634,11 +729,7 @@ export class Game {
     if (cell === Cell.MONSTER_BAT)    { this.spawnMonster('plague_bat',     tx, ty); return; }
 
     if (cell === Cell.BOSS) {
-      // Prefer a biome-specific boss; fall back to generic pool
-      const biomeBosses   = BOSSES.filter(b => b.biomeId === this.biomeId);
-      const genericBosses = BOSSES.filter(b => !b.biomeId);
-      const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
-      const bossDef = bossPool[(Math.floor(this.dungeonLevel / BALANCE.floors.bossFloorInterval) - 1) % bossPool.length]!;
+      const bossDef = this.previewBossForFloor(this.dungeonLevel);
       const baseHp = BALANCE.boss.baseHpFloor1 + (this.dungeonLevel - 1) * BALANCE.boss.baseHpPerDungeonLevel;
       const baseAtk = BALANCE.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * BALANCE.boss.baseAtkPerDungeonLevel;
       const hp = Math.floor(baseHp * bossDef.hpMult);
@@ -694,6 +785,9 @@ export class Game {
       this.altarTiles = this.altarTiles
         .filter(a => a.y !== y)
         .map(a => a.y < y ? { ...a, y: a.y + 1 } : a);
+      this.npcTiles = this.npcTiles
+        .filter(n => n.y !== y)
+        .map(n => n.y < y ? { ...n, y: n.y + 1 } : n);
       this.hazards = this.hazards
         .filter(h => h.y !== y)
         .map(h => h.y < y ? { ...h, y: h.y + 1 } : h);
@@ -836,6 +930,8 @@ export class Game {
     this.tattooTiles = [];
     this.tattooTilesSpawnedThisFloor = 0;
     this.altarTiles = [];
+    this.npcTiles = [];
+    this.npcTilesSpawnedThisFloor = 0;
     this.hazards = [];
     this.specialTiles = [];
     this.killsThisFloor = 0;
@@ -1152,6 +1248,16 @@ export class Game {
       this.player.x = nx; this.player.y = ny;
       this.altarTiles = this.altarTiles.filter(a => a !== altar);
       this.openAltar(altar.tier);
+      return;
+    }
+
+    // Wandering NPC — bump to talk, consumed on interaction
+    const npcTile = this.npcTiles.find(n => n.x === nx && n.y === ny);
+    if (npcTile) {
+      this.player.x = nx; this.player.y = ny;
+      this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
+      const npc = NPCS.find(n => n.id === npcTile.npcId);
+      if (npc) this.triggerNpcEncounter(npc);
       return;
     }
 
@@ -1630,6 +1736,11 @@ export class Game {
     if (altarInfo) {
       const tierName = altarInfo.tier === 3 ? 'Grand Altar (Tier III)' : altarInfo.tier === 2 ? 'Ruined Altar (Tier II)' : 'Minor Altar (Tier I)';
       return { icon: 'tile_altar', title: tierName, lines: ['Step on to choose a stackable geis'] };
+    }
+
+    const npcInfo = this.npcTiles.find(n => n.x === x && n.y === y);
+    if (npcInfo) {
+      return { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
     }
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);

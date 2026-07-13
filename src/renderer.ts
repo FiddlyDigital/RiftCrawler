@@ -2,7 +2,7 @@ import { CONFIG } from './config';
 import { TIER_COLORS } from './colors';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
-import { getBiomeForFloor } from './content';
+import { getBiomeForFloor, NPCS } from './content';
 import { MONSTERS } from './dataLoader';
 import { SPRITE_MAP, getSpriteImage } from './sprites';
 import type { Game } from './game';
@@ -357,7 +357,7 @@ export class Renderer {
         // falling piece and the trail it leaves behind read as one material.
         this.drawSprite((tx + ty) % 2 === 0 ? 'tile_stone_a' : 'tile_stone_b', tx * TS, ty * TS, TS, TS);
         ctx.globalAlpha = 0.6;
-        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : game.blockColor;
+        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : cell === Cell.NPC ? '#182418' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         ctx.globalAlpha = 1.0;
         if (cell === Cell.BOSS) {
@@ -417,7 +417,8 @@ export class Renderer {
         const type = game.map[x]![y]!;
         const isMerchant = this.isMerchantTile(game, x, y);
         const altar = this.getAltarAt(game, x, y);
-        if (type !== Tile.STAIRS && !isMerchant && !altar) continue;
+        const npcHere = game.npcTiles.find(n => n.x === x && n.y === y);
+        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere) continue;
 
         ctx.globalAlpha = visible ? 1.0 : 0.5;
         if (type === Tile.STAIRS) {
@@ -432,6 +433,11 @@ export class Renderer {
           }
           const inset = TS * 0.1;
           this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
+        } else if (npcHere) {
+          if (visible) this.drawPulseGlow(x, y, '89,159,124');
+          const npcDef = NPCS.find(n => n.id === npcHere.npcId);
+          const inset = TS * 0.1;
+          this.drawSprite(npcDef?.char ?? 'npc_fili', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         }
         ctx.globalAlpha = 1.0;
       }
@@ -789,6 +795,7 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.MERCHANT]:       'tile_merchant',
   [Cell.BOSS]:           'ui_warning',
   [Cell.ALTAR]:          'tile_altar',
+  [Cell.NPC]:            'npc_sidhe',
   [Cell.TRAP_SPIKE]:     'trap_spike',
   [Cell.TRAP_SMOKE]:     'trap_smoke',
   [Cell.TRAP_TELEPORT]:  'trap_teleport',

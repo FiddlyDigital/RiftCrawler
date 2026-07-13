@@ -153,7 +153,7 @@
       "additionalProperties": false,
       "required": [
         "cursedPieceChance", "blessedPieceChance", "stairsForcedAfterBlocks", "stairsRandomChance",
-        "merchantChance", "maxTattooTilesPerFloor", "altarChance", "trapWeights",
+        "merchantChance", "maxTattooTilesPerFloor", "altarChance", "npcChance", "maxNpcTilesPerFloor", "trapWeights",
         "monsterBaseChance", "monsterChancePerDungeonLevel", "monsterChanceCap",
         "hauntedMonsterChanceMult", "monsterWeights", "oPieceAltarChance", "oPieceAltarChanceArchitect"
       ],
@@ -165,6 +165,8 @@
         "merchantChance": { "type": "number" },
         "maxTattooTilesPerFloor": { "type": "number" },
         "altarChance": { "type": "number" },
+        "npcChance": { "type": "number" },
+        "maxNpcTilesPerFloor": { "type": "number" },
         "trapWeights": {
           "type": "object",
           "additionalProperties": false,

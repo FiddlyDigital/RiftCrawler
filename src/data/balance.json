@@ -96,6 +96,8 @@
     "merchantChance": 0.04,
     "maxTattooTilesPerFloor": 2,
     "altarChance": 0.035,
+    "npcChance": 0.025,
+    "maxNpcTilesPerFloor": 1,
     "trapWeights": {
       "spike": 0.02,
       "smoke": 0.02,

@@ -156,6 +156,15 @@ export class Player {
     this.recomputeVoidPrism();
   }
 
+  // Removes a boon entirely (all stacks) — used by the trade-up NPC. Doesn't
+  // undo the boon's already-applied stat effects (matches how brands work:
+  // Ogham Marks don't unwind their bonuses on death/removal either), but does
+  // recompute Void Prism's distinct-boon-count bonus since that scales live.
+  removeBoon(id: string): void {
+    this.boons = this.boons.filter(b => b.id !== id);
+    this.recomputeVoidPrism();
+  }
+
   addBrand(slot: BodyPart, def: BrandDef): void {
     this.brands.push({ slot, brand: def });
     this.brandsAcquiredTotal++;

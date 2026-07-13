@@ -57,6 +57,7 @@ export const Cell = {
   TRAP_SMOKE: 17,
   TRAP_TELEPORT: 18,
   ALTAR: 19,
+  NPC: 20,
 } as const;
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
@@ -133,6 +134,24 @@ export interface AltarTile {
   x: number;
   y: number;
   tier: 1 | 2 | 3;
+}
+
+export interface NpcTile {
+  x: number;
+  y: number;
+  npcId: string;
+}
+
+// A wandering stranger, met by bumping into their tile. `flavor` is pure
+// dialogue; `bounty` names an upcoming boss for a reward on its death;
+// `trade` swaps one of the player's current Geasa for a guaranteed rarer one.
+export interface NpcDef {
+  id: string;
+  char: string;
+  name: string;
+  kind: 'flavor' | 'bounty' | 'trade';
+  lines?: string[];
+  introLine?: string;
 }
 
 export interface HazardTile {

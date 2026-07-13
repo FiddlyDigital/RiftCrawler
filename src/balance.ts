@@ -85,6 +85,7 @@ export interface BalanceConfig {
     cursedPieceChance: number; blessedPieceChance: number;
     stairsForcedAfterBlocks: number; stairsRandomChance: number;
     merchantChance: number; maxTattooTilesPerFloor: number; altarChance: number;
+    npcChance: number; maxNpcTilesPerFloor: number;
     trapWeights: Record<'spike' | 'smoke' | 'teleport', number>;
     monsterBaseChance: number; monsterChancePerDungeonLevel: number; monsterChanceCap: number;
     hauntedMonsterChanceMult: number;
