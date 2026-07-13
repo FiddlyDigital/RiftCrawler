@@ -5,6 +5,11 @@ export class AudioEngine {
   private ambientOscs: OscillatorNode[] = [];
   private ambientGain: GainNode | null = null;
 
+  // All output routes through one master gain so a single volume setting
+  // scales every effect and the ambient bed together.
+  private master: GainNode | null = null;
+  private volume = 1;
+
   private getCtx(): AudioContext | null {
     if (!this.enabled) return null;
     if (!this.ctx) {
@@ -12,6 +17,20 @@ export class AudioEngine {
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
+  }
+
+  private masterNode(ctx: AudioContext): GainNode {
+    if (!this.master) {
+      this.master = ctx.createGain();
+      this.master.gain.value = this.volume;
+      this.master.connect(ctx.destination);
+    }
+    return this.master;
+  }
+
+  setVolume(v: number): void {
+    this.volume = Math.min(1, Math.max(0, v));
+    if (this.master && this.ctx) this.master.gain.setValueAtTime(this.volume, this.ctx.currentTime);
   }
 
   // Called on first user gesture to unlock AudioContext in all browsers
@@ -27,7 +46,7 @@ export class AudioEngine {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.connect(g);
-    g.connect(ctx.destination);
+    g.connect(this.masterNode(ctx));
     o.type = type;
     o.frequency.setValueAtTime(freq, t);
     if (freqEnd !== undefined) o.frequency.exponentialRampToValueAtTime(freqEnd, t + duration);
@@ -49,7 +68,7 @@ export class AudioEngine {
     src.buffer = buf;
     const g = ctx.createGain();
     src.connect(g);
-    g.connect(ctx.destination);
+    g.connect(this.masterNode(ctx));
     g.gain.setValueAtTime(gainVal, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + duration);
     src.start(t);
@@ -110,6 +129,28 @@ export class AudioEngine {
     this.noise(0.06, 0.10, 0.22);
   }
 
+  // Warm two-note hail — a friendly stranger noticing you.
+  playNpcGreeting(): void {
+    this.osc(440, 0.12, 'sine', 0.16);
+    this.osc(550, 0.14, 'sine', 0.14, 0.11);
+    this.osc(660, 0.18, 'sine', 0.10, 0.22);
+  }
+
+  // Eerie, hollow descent — detuned sines sliding down with a cold hiss.
+  playGhost(): void {
+    this.osc(620, 0.9, 'sine', 0.12, 0, 210);
+    this.osc(624, 0.9, 'sine', 0.10, 0.05, 205);
+    this.osc(311, 0.5, 'triangle', 0.08, 0.35, 155);
+    this.noise(0.5, 0.05, 0.15);
+  }
+
+  // Triumphant oath-fulfilled fanfare — brighter than a plain perk.
+  playBountyFulfilled(): void {
+    [392, 494, 587, 784].forEach((f, i) => this.osc(f, 0.13, 'square', 0.14, i * 0.09));
+    this.osc(988, 0.22, 'sine', 0.12, 0.36);
+    this.noise(0.08, 0.08, 0.36);
+  }
+
   playComboMilestone(mult: number): void {
     const freqs = mult >= 5 ? [300, 420, 560, 750, 1000] : [300, 420, 560, 750];
     freqs.forEach((f, i) => this.osc(f, 0.09, 'square', 0.16, i * 0.07));
@@ -123,7 +164,7 @@ export class AudioEngine {
     const master = ctx.createGain();
     master.gain.setValueAtTime(0, ctx.currentTime);
     master.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 3.0);
-    master.connect(ctx.destination);
+    master.connect(this.masterNode(ctx));
     this.ambientGain = master;
 
     const o1 = ctx.createOscillator();

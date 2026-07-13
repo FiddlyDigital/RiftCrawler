@@ -58,6 +58,7 @@ export const Cell = {
   TRAP_TELEPORT: 18,
   ALTAR: 19,
   NPC: 20,
+  GHOST: 21,
 } as const;
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
@@ -234,13 +235,26 @@ export type AudioEvent =
   | 'blockLand' | 'blockRotate' | 'blockMove'
   | 'hit' | 'playerDamage' | 'kill'
   | 'lineClear' | 'descend' | 'poison' | 'bossWarn'
-  | 'teleport' | 'comboMilestone';
+  | 'teleport' | 'comboMilestone'
+  | 'npcEncounter' | 'ghostEncounter' | 'bountyFulfilled';
+
+// A fallen character from a previous run — may reappear as a wandering ghost
+// in later runs when the current hero's level is close to theirs.
+export interface GhostRecord {
+  id: string;
+  playerLevel: number;
+  floor: number;
+  classId: string | null;
+  cause: string;
+  date: string;
+}
 
 export interface GameCallbacks {
   log: (text: string, cls: LogClass, icon?: string) => void;
   updateUI: (state: UIState) => void;
-  onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats) => void;
-  onVictory?: (floor: number, totalXpEarned: number, stats: RunStats) => void;
+  onDeath: (title: string, reason: string, floor: number, totalXpEarned: number, stats: RunStats, story?: string) => void;
+  onVictory?: (floor: number, totalXpEarned: number, stats: RunStats, story?: string) => void;
+  onGhostLaidToRest?: (id: string) => void;
   onParticle: (gridX: number, gridY: number, text: string, color: string, fontSize?: number, icon?: string) => void;
   onParticleBurst?: (gridX: number, gridY: number, count: number, color: string, icon?: string) => void;
   onImpactGlow?: (gridX: number, gridY: number, rgb: string, frames?: number) => void;

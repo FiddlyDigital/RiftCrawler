@@ -1,5 +1,5 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord } from './types';
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, type ClassDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
@@ -117,6 +117,18 @@ export class Game {
   // A vengeance bounty accepted from an NPC — persists across floors (no
   // per-floor reset) until the named boss falls, whenever/wherever that is.
   public activeBountyQuest: { bossName: string; floor: number } | null = null;
+
+  // Ghost files — fallen characters from previous runs (loaded by main.ts
+  // after construction; the first floor therefore never rolls a ghost).
+  // activeGhost is this floor's haunting, chosen at floor start when a stored
+  // ghost's level is within tolerance of the current hero's.
+  public availableGhosts: GhostRecord[] = [];
+  private activeGhost: GhostRecord | null = null;
+  private ghostPlaced = false;
+
+  // Notable moments this run — feeds the death/victory screen's short "tale
+  // of the run" recap.
+  public storyBeats: string[] = [];
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
@@ -275,6 +287,12 @@ export class Game {
           this.npcTilesSpawnedThisFloor++;
           return Cell.NPC;
         }
+        // This floor's ghost haunting (rolled at floor start) — a modest
+        // per-cell chance so it drifts in within the first few blocks.
+        if (this.activeGhost && !this.ghostPlaced && Math.random() < 0.08) {
+          this.ghostPlaced = true;
+          return Cell.GHOST;
+        }
         // Hazard traps — one type per block
         if (!trapInjected) {
           const trapKey = weightedPick(BALANCE.spawnRates.trapWeights, Math.random());
@@ -416,6 +434,11 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1c2418';
           this.npcTiles.push({ x: tx, y: ty, npcId: npc.id });
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.GHOST) {
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#101820';
+          this.npcTiles.push({ x: tx, y: ty, npcId: '__ghost__' });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -678,6 +701,7 @@ export class Game {
             desc: `Slay ${targetBoss.name} at Floor ${targetFloor} or beyond for a rare Geis.`,
             apply: (game): string => {
               game.activeBountyQuest = { bossName: targetBoss.name, floor: targetFloor };
+              game.storyBeats.push(`swore vengeance on ${targetBoss.name}`);
               return `You swear vengeance upon ${targetBoss.name}, in ${npc.name}'s name.`;
             },
           },
@@ -697,6 +721,7 @@ export class Game {
           const pool = BOONS_BY_TIER[3].filter(x => x.id !== b.def.id);
           const reward = (pool.length > 0 ? pool : BOONS_BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : BOONS_BY_TIER[3].length))]!;
           game.player.addBoon(reward);
+          game.storyBeats.push(`traded ${b.def.name} to a Fomorian tinker for ${reward.name}`);
           return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
         },
       }));
@@ -711,6 +736,8 @@ export class Game {
       };
     }
 
+    this.storyBeats.push(`crossed paths with ${npc.name}`);
+    this.cb.onAudio?.('npcEncounter');
     this.paused = true;
     this.cb.onFloorEvent?.(event, (index) => {
       const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
@@ -718,6 +745,61 @@ export class Game {
       this.paused = false;
       this.cb.onAction();
     });
+  }
+
+  // A fallen character from a previous run, met again. Laying them to rest
+  // grants a fragment of their old power and removes them from the ghost
+  // file permanently; turning away leaves them haunting future runs.
+  private triggerGhostEncounter(): void {
+    const ghost = this.activeGhost;
+    if (!ghost) return;
+    const className = CLASSES.find(c => c.id === ghost.classId)?.name ?? 'wanderer';
+    const event: FloorEventDef = {
+      id: '__ghost__', emoji: 'sprite_boss_wraith', title: 'A Ghost of Yourself',
+      flavor: `The mist gathers into a familiar shape — a ${className} of level ${ghost.playerLevel}, who fell on Floor ${ghost.floor} (${ghost.date}). ${ghost.cause}. It watches you with your own eyes.`,
+      options: [
+        {
+          label: 'Lay them to rest',
+          desc: 'Receive a fragment of their power. They will not return.',
+          apply: (game: Game): string => {
+            const pool = BOONS_BY_TIER[2];
+            const reward = pool[Math.floor(Math.random() * pool.length)]!;
+            game.player.addBoon(reward);
+            game.availableGhosts = game.availableGhosts.filter(g => g.id !== ghost.id);
+            game.cb.onGhostLaidToRest?.(ghost.id);
+            game.storyBeats.push('laid a ghost of yourself to rest');
+            return `The ghost smiles — your smile — and dissolves into light. Gained ${reward.name}.`;
+          },
+        },
+        {
+          label: 'Turn away',
+          desc: 'Leave them wandering. You may meet again.',
+          apply: (): string => 'The ghost lingers at the edge of sight, keening softly, waiting for another meeting.',
+        },
+      ],
+    };
+    this.activeGhost = null;
+    this.cb.onAudio?.('ghostEncounter');
+    this.paused = true;
+    this.cb.onFloorEvent?.(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', 'sprite_boss_wraith');
+      this.paused = false;
+      this.cb.onAction();
+    });
+  }
+
+  // Short narrative recap for the death/victory screen, built from the
+  // notable moments recorded in storyBeats over the run.
+  buildRunStory(): string {
+    const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'wanderer';
+    const beats = this.storyBeats.slice(0, 4);
+    if (beats.length === 0) return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}.`;
+    const joined = beats.length === 1
+      ? beats[0]!
+      : `${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
+    const more = this.storyBeats.length > 4 ? ' …and more besides.' : '';
+    return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}. Along the way you ${joined}.${more}`;
   }
 
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
@@ -932,6 +1014,16 @@ export class Game {
     this.altarTiles = [];
     this.npcTiles = [];
     this.npcTilesSpawnedThisFloor = 0;
+    // Ghost haunting roll — a fallen character close to your current level
+    // may drift up from a previous run's save.
+    this.activeGhost = null;
+    this.ghostPlaced = false;
+    const eligibleGhosts = this.availableGhosts.filter(
+      g => Math.abs(g.playerLevel - this.player.playerLevel) <= BALANCE.ghosts.levelTolerance,
+    );
+    if (eligibleGhosts.length > 0 && Math.random() < BALANCE.ghosts.encounterChance) {
+      this.activeGhost = eligibleGhosts[Math.floor(Math.random() * eligibleGhosts.length)]!;
+    }
     this.hazards = [];
     this.specialTiles = [];
     this.killsThisFloor = 0;
@@ -1251,11 +1343,15 @@ export class Game {
       return;
     }
 
-    // Wandering NPC — bump to talk, consumed on interaction
+    // Wandering NPC / ghost — bump to talk, consumed on interaction
     const npcTile = this.npcTiles.find(n => n.x === nx && n.y === ny);
     if (npcTile) {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
+      if (npcTile.npcId === '__ghost__') {
+        this.triggerGhostEncounter();
+        return;
+      }
       const npc = NPCS.find(n => n.id === npcTile.npcId);
       if (npc) this.triggerNpcEncounter(npc);
       return;
@@ -1566,6 +1662,7 @@ export class Game {
   summonGorgoth(): void {
     if (this.gorgothSummoned) return;
     this.gorgothSummoned = true;
+    if (!this.gorgothEverSummoned) this.storyBeats.push('called Bres the Beautiful forth to battle');
     this.gorgothEverSummoned = true;
 
     // The board the player built stays exactly as it is — no arena reset; only
@@ -1622,7 +1719,7 @@ export class Game {
     this.won = true;
     this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
     this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
-    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats());
+    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory());
   }
 
   handleBlockLeft(): void {
@@ -1740,7 +1837,9 @@ export class Game {
 
     const npcInfo = this.npcTiles.find(n => n.x === x && n.y === y);
     if (npcInfo) {
-      return { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
+      return npcInfo.npcId === '__ghost__'
+        ? { icon: 'sprite_boss_wraith', title: 'A Restless Ghost', lines: ['A fallen wanderer... something about them is familiar'] }
+        : { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
     }
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);

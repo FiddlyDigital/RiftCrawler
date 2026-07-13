@@ -187,16 +187,24 @@ export class Renderer {
   // reads as alive rather than a static tile icon. `phase` staggers the bob
   // so multiple instances on screen don't sway in perfect unison; `inset`
   // matches the smaller centered draw used for altar/NPC-style icons.
-  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0): void {
+  // `twitch` adds a brief horizontal shiver every few seconds (monsters only)
+  // so a crowd of idlers doesn't read as one synchronized metronome.
+  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0, twitch = false): void {
     const TS = CONFIG.TILE_SIZE;
     const idleBob = Math.sin(performance.now() / 500 + phase) * 1.5;
+    let jitterX = 0;
+    if (twitch && !this.reducedMotion) {
+      const t = performance.now() / 1000 + phase;
+      const cycle = t % 3.7;
+      if (cycle < 0.22) jitterX = Math.sin(cycle * 60) * 1.2;
+    }
     const px = gx * TS + TS / 2, py = gy * TS + TS / 2 + idleBob;
     const glow = this.ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
     glow.addColorStop(0, `rgba(${rgb},0.38)`);
     glow.addColorStop(1, `rgba(${rgb},0)`);
     this.ctx.fillStyle = glow;
     this.ctx.fillRect(gx * TS - TS, gy * TS - TS, TS * 3, TS * 3);
-    this.drawSprite(char, gx * TS + inset, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
+    this.drawSprite(char, gx * TS + inset + jitterX, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
   }
 
   private drawPulseGlow(gx: number, gy: number, rgb: string): void {
@@ -451,10 +459,12 @@ export class Renderer {
           const inset = TS * 0.1;
           this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         } else if (npcHere) {
-          const npcDef = NPCS.find(n => n.id === npcHere.npcId);
+          const isGhost = npcHere.npcId === '__ghost__';
+          const char = isGhost ? 'sprite_boss_wraith' : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
           const inset = TS * 0.1;
-          if (visible) this.drawLivingSprite(npcDef?.char ?? 'npc_fili', x, y, '89,159,124', x * 7 + y * 13, inset);
-          else this.drawSprite(npcDef?.char ?? 'npc_fili', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
+          if (isGhost) ctx.globalAlpha *= 0.75;  // translucent — it isn't quite here
+          if (visible) this.drawLivingSprite(char, x, y, isGhost ? '176,196,222' : '89,159,124', x * 7 + y * 13, inset);
+          else this.drawSprite(char, x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         }
         ctx.globalAlpha = 1.0;
       }
@@ -545,7 +555,7 @@ export class Renderer {
         ctx.font = `${TS * 0.7}px Arial`;
       }
 
-      this.drawLivingSprite(m.char, m.x, m.y, '198,58,50', m.x * 7 + m.y * 13);
+      this.drawLivingSprite(m.char, m.x, m.y, '198,58,50', m.x * 7 + m.y * 13, 0, true);
 
       if (m.isElite) {
         ctx.strokeStyle = '#ffd700';

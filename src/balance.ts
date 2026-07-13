@@ -93,5 +93,6 @@ export interface BalanceConfig {
     oPieceAltarChance: number; oPieceAltarChanceArchitect: number;
   };
   eliteMonsters: { spawnChance: number; hpMult: number; atkMult: number; combatLevelBonus: number };
+  ghosts: { encounterChance: number; levelTolerance: number; maxStored: number };
 }
 export const BALANCE = balanceData as BalanceConfig;

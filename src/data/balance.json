@@ -123,5 +123,10 @@
     "hpMult": 2.0,
     "atkMult": 1.5,
     "combatLevelBonus": 1
+  },
+  "ghosts": {
+    "encounterChance": 0.15,
+    "levelTolerance": 1,
+    "maxStored": 10
   }
 }

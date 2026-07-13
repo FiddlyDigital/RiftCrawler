@@ -3,7 +3,7 @@ import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
-import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion } from './storage';
+import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion, saveVolume, loadVolume, loadGhosts, saveGhostRecord, removeGhostRecord } from './storage';
 import { trackGameStart, trackGameOver, trackInstall, trackError } from './analytics';
 import { formatCrashInfo, shouldReport } from './errorReporting';
 import { audio } from './audio';
@@ -68,6 +68,17 @@ let reducedMotion = loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduce
 renderer.setReducedMotion(reducedMotion);
 setHapticsEnabled(!reducedMotion);
 let manualPaused = false;
+let masterVolume = loadVolume();
+audio.setVolume(masterVolume);
+
+// Cycles 100% → 75% → 50% → 25% → back to 100%.
+function cycleVolume(): void {
+  masterVolume = masterVolume > 0.75 ? 0.75 : masterVolume > 0.5 ? 0.5 : masterVolume > 0.25 ? 0.25 : 1;
+  audio.setVolume(masterVolume);
+  saveVolume(masterVolume);
+  audio.playBlockRotate();  // instant audible feedback at the new level
+  if (manualPaused) refreshPauseMenu();
+}
 
 function toggleMute(): void {
   soundOn = audio.toggle();
@@ -86,10 +97,11 @@ function toggleReducedMotion(): void {
 }
 
 function refreshPauseMenu(): void {
-  ui.showPauseMenu({ soundOn, reducedMotion }, {
+  ui.showPauseMenu({ soundOn, reducedMotion, volumePct: Math.round(masterVolume * 100) }, {
     onResume:       closePauseMenu,
     onToggleMute:   toggleMute,
     onToggleMotion: toggleReducedMotion,
+    onCycleVolume:  cycleVolume,
     onRestart:      restartRun,
   });
 }
@@ -301,6 +313,9 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'bossWarn':        audio.playBossWarn();         renderer.triggerShake(6, 18); vibrate([40, 60, 40, 60, 50]); break;
     case 'teleport':        audio.playTeleport();         break;
     case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
+    case 'npcEncounter':    audio.playNpcGreeting();      break;
+    case 'ghostEncounter':  audio.playGhost();            vibrate([15, 40, 15]); break;
+    case 'bountyFulfilled': audio.playBountyFulfilled();  vibrate([20, 30, 20, 30, 40]); break;
   }
 }
 
@@ -325,25 +340,36 @@ function startGame(startPaused = false): void {
     onBlockLand: (cells)           => renderer.spawnLandingDust(cells),
     onCombo:     (mult)            => renderer.showCombo(mult),
 
-    onDeath: (title, reason, floor, totalXpEarned, stats) => {
+    onDeath: (title, reason, floor, totalXpEarned, stats, story) => {
       stopTick();
       audio.stopAmbient();
       audio.playDeath();
       const { highXp, history } = recordRunEnd(game, reason, stats);
+      // This fallen character may return as a ghost in a future run.
+      saveGhostRecord({
+        id: String(Date.now()),
+        playerLevel: game.player.playerLevel,
+        floor,
+        classId: game.activeClassId,
+        cause: reason,
+        date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      });
       trackGameOver(totalXpEarned, floor);
-      ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, stats);
+      ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, stats, story);
       ui.updateBestScore(highXp);
     },
 
-    onVictory: (floor, totalXpEarned, stats) => {
+    onVictory: (floor, totalXpEarned, stats, story) => {
       stopTick();
       audio.stopAmbient();
       audio.playLevelUp();
       const { highXp, history } = recordRunEnd(game, 'Defeated Bres the Beautiful', stats);
       trackGameOver(totalXpEarned, floor);
-      ui.showVictory(floor, totalXpEarned, highXp, history, stats);
+      ui.showVictory(floor, totalXpEarned, highXp, history, stats, story);
       ui.updateBestScore(highXp);
     },
+
+    onGhostLaidToRest: (id) => removeGhostRecord(id),
 
     onLevelUp: (choices, onChoice) => {
       stopTick();
@@ -399,6 +425,11 @@ function startGame(startPaused = false): void {
       }, undefined, reroll);
     },
   });
+
+  // Fallen characters from previous runs — the first floor never rolls a
+  // ghost (this loads just after the constructor's initial floor setup), but
+  // every descent after can.
+  game.availableGhosts = loadGhosts();
 
   if (startPaused) game.paused = true;
   renderer.start(game, (err) => handleFatalError(err, 'render'));

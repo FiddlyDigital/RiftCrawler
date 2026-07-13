@@ -226,6 +226,7 @@
   <div class="modal-card">
     <div class="modal-title" id="death-title">DUNGEON COLLAPSE</div>
     <p style="color:#888;margin:5px 0 10px 0;" id="death-reason">Dungeon ceiling collapsed.</p>
+    <p id="run-story" style="display:none;color:#9d8f6f;font-style:italic;font-size:11px;margin:0 0 10px 0;line-height:1.5;"></p>
     <div style="text-align:left;padding:10px;background-color:#0c0c12;border-radius:4px;font-size:12px;">
       <p style="margin:3px 0;"><span class="spr" data-sprite="tile_stairs_up" data-size="14"></span> Floor: <b id="final-floor" style="color:var(--accent-color);">1</b></p>
       <p style="margin:3px 0;"><span class="spr" data-sprite="fx_arcane"></span> XP Earned: <b id="final-score" style="color:var(--accent-color);">0</b></p>
@@ -337,6 +338,7 @@
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
       <button class="restart-btn" id="pause-resume" style="font-size:15px;letter-spacing:1px;">▶ Resume</button>
       <button class="settings-row" id="pause-mute"><span>🔊 Sound</span><span id="pause-mute-state" class="settings-val">On</span></button>
+      <button class="settings-row" id="pause-volume"><span>🔉 Volume</span><span id="pause-volume-state" class="settings-val">100%</span></button>
       <button class="settings-row" id="pause-motion"><span>🎬 Reduced Motion</span><span id="pause-motion-state" class="settings-val">Off</span></button>
       <button class="restart-btn" id="pause-restart" style="background-color:#3a1414;color:#ffab91;margin-top:4px;">↻ New Run</button>
     </div>
