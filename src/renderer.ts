@@ -430,9 +430,81 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
-    // ── Tile-feature glyphs (stairs / tattoo artist / altar) ───────────────
-    // Drawn AFTER the falling block + ghost so a descending piece can never
-    // hide the feature underneath it — the player always sees what's on a tile.
+    // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
+    // Drawn BEFORE the tile-feature glyphs below (stairs/merchant/altar/NPC)
+    // so an entity standing on one of these terrain tiles is never painted
+    // over by the terrain's own overlay.
+    for (const t of game.specialTiles) {
+      if (!game.visibility[t.x]?.[t.y]) continue;
+      const sx = t.x * TS, sy = t.y * TS;
+      const inset = TS * 0.22;
+      if (t.type === 'swamp') {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#388e3c';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        this.drawSprite('special_swamp', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
+      } else if (t.type === 'sacred') {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ffb74d';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        this.drawSprite('special_sacred', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
+      } else if (t.type === 'ice') {
+        ctx.globalAlpha = 0.50;
+        ctx.fillStyle = '#81d4fa';
+        ctx.fillRect(sx, sy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        this.drawSprite('special_ice', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ── Hazard overlays ───────────────────────────────────────────────────
+    // Also drawn before tile-feature glyphs, for the same reason — a trap
+    // tile must never paint over an NPC/altar/merchant standing on it.
+    for (const h of game.hazards) {
+      if (!game.visibility[h.x]?.[h.y]) continue;
+      const hx = h.x * TS, hy = h.y * TS;
+      const inset = TS * 0.22;
+      if (h.type === 'spike') {
+        ctx.globalAlpha = h.warning ? 0.6 : 0.25;
+        ctx.fillStyle = h.warning ? '#ff1744' : '#ff9100';
+        ctx.fillRect(hx, hy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        this.drawSprite('trap_spike', hx + inset, hy + inset, TS - 2 * inset, TS - 2 * inset);
+        if (h.warning) {
+          ctx.font = '5px monospace';
+          ctx.fillStyle = '#ff1744';
+          ctx.fillText(String(h.timer), hx + TS - 5, hy + 7);
+          ctx.font = `${TS * 0.7}px Arial`;
+        }
+      } else if (h.type === 'smoke') {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#546e7a';
+        ctx.fillRect(hx, hy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.8;
+        this.drawSprite('trap_smoke', hx + inset, hy + inset, TS - 2 * inset, TS - 2 * inset);
+      } else if (h.type === 'teleport') {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#7c4dff';
+        ctx.fillRect(hx, hy, TS - 1, TS - 1);
+        ctx.globalAlpha = 0.9;
+        ctx.save();
+        ctx.translate(hx + TS / 2, hy + TS / 2);
+        ctx.rotate(performance.now() / 600);
+        this.drawSprite('trap_teleport', -(TS - 2 * inset) / 2, -(TS - 2 * inset) / 2, TS - 2 * inset, TS - 2 * inset);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ── Tile-feature glyphs (stairs / tattoo artist / altar / NPCs) ────────
+    // Drawn AFTER the falling block + ghost (so a descending piece can never
+    // hide the feature underneath it) and AFTER the special-tile/hazard
+    // overlays above (so an NPC standing on a swamp/ice/trap tile is never
+    // hidden beneath that tile's own overlay) — the player always sees what's
+    // on a tile, and who's standing on it.
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     for (let x = 0; x < CONFIG.COLS; x++) {
@@ -468,70 +540,6 @@ export class Renderer {
         }
         ctx.globalAlpha = 1.0;
       }
-    }
-
-    // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
-    for (const t of game.specialTiles) {
-      if (!game.visibility[t.x]?.[t.y]) continue;
-      const sx = t.x * TS, sy = t.y * TS;
-      const inset = TS * 0.22;
-      if (t.type === 'swamp') {
-        ctx.globalAlpha = 0.45;
-        ctx.fillStyle = '#388e3c';
-        ctx.fillRect(sx, sy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.9;
-        this.drawSprite('special_swamp', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
-      } else if (t.type === 'sacred') {
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = '#ffb74d';
-        ctx.fillRect(sx, sy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.9;
-        this.drawSprite('special_sacred', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
-      } else if (t.type === 'ice') {
-        ctx.globalAlpha = 0.50;
-        ctx.fillStyle = '#81d4fa';
-        ctx.fillRect(sx, sy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.9;
-        this.drawSprite('special_ice', sx + inset, sy + inset, TS - 2 * inset, TS - 2 * inset);
-      }
-      ctx.globalAlpha = 1.0;
-    }
-
-    // ── Hazard overlays ───────────────────────────────────────────────────
-    for (const h of game.hazards) {
-      if (!game.visibility[h.x]?.[h.y]) continue;
-      const hx = h.x * TS, hy = h.y * TS;
-      const inset = TS * 0.22;
-      if (h.type === 'spike') {
-        ctx.globalAlpha = h.warning ? 0.6 : 0.25;
-        ctx.fillStyle = h.warning ? '#ff1744' : '#ff9100';
-        ctx.fillRect(hx, hy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.9;
-        this.drawSprite('trap_spike', hx + inset, hy + inset, TS - 2 * inset, TS - 2 * inset);
-        if (h.warning) {
-          ctx.font = '5px monospace';
-          ctx.fillStyle = '#ff1744';
-          ctx.fillText(String(h.timer), hx + TS - 5, hy + 7);
-          ctx.font = `${TS * 0.7}px Arial`;
-        }
-      } else if (h.type === 'smoke') {
-        ctx.globalAlpha = 0.45;
-        ctx.fillStyle = '#546e7a';
-        ctx.fillRect(hx, hy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.8;
-        this.drawSprite('trap_smoke', hx + inset, hy + inset, TS - 2 * inset, TS - 2 * inset);
-      } else if (h.type === 'teleport') {
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = '#7c4dff';
-        ctx.fillRect(hx, hy, TS - 1, TS - 1);
-        ctx.globalAlpha = 0.9;
-        ctx.save();
-        ctx.translate(hx + TS / 2, hy + TS / 2);
-        ctx.rotate(performance.now() / 600);
-        this.drawSprite('trap_teleport', -(TS - 2 * inset) / 2, -(TS - 2 * inset) / 2, TS - 2 * inset, TS - 2 * inset);
-        ctx.restore();
-      }
-      ctx.globalAlpha = 1.0;
     }
 
     // ── Monsters (only if visible) ────────────────────────────────────────
