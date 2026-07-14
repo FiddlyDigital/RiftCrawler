@@ -24,6 +24,7 @@ export function bindKeyboard(getGame: GameGetter): void {
       case 'd': case 'ArrowRight': heroMove(game, 1, 0);   break;
       case ' ':                    game.handleHeroWait();        break;
       case 'q': case 'Q':          game.handleRangedAttack();    break;
+      case 'e': case 'E':          game.handleCycleSpell();      break;
       case 'j':                    game.handleBlockLeft();       break;
       case 'l':                    game.handleBlockRight();      break;
       case 'i':                    game.handleBlockRotate();     break;
@@ -154,6 +155,7 @@ export function bindGamepad(getGame: GameGetter): void {
       case 'hero-right':     heroMove(game,  1, 0);  break;
       case 'hero-wait':      game.handleHeroWait();        break;
       case 'hero-ranged':    game.handleRangedAttack();    break;
+      case 'spell-cycle':    game.handleCycleSpell();      break;
       case 'block-left':     game.handleBlockLeft();       break;
       case 'block-right':    game.handleBlockRight();      break;
       case 'block-rotate':   game.handleBlockRotate();     break;
@@ -229,6 +231,7 @@ function performButtonAction(game: Game, btn: HTMLElement): void {
     case 'block-hold':     game.handleBlockHold();     break;
     case 'hero-wait':      game.handleHeroWait();      break;
     case 'hero-ranged':    game.handleRangedAttack();  break;
+    case 'spell-cycle':    game.handleCycleSpell();    break;
     case 'hero-move': {
       const dx = Number(btn.dataset['dx'] ?? 0);
       const dy = Number(btn.dataset['dy'] ?? 0);
@@ -240,7 +243,7 @@ function performButtonAction(game: Game, btn: HTMLElement): void {
 
 // Buttons that only make sense as a single press — holding them fires once,
 // not repeatedly, matching the gamepad's ONE_SHOT set.
-const BUTTON_ONE_SHOT = new Set(['block-drop', 'hero-ranged']);
+const BUTTON_ONE_SHOT = new Set(['block-drop', 'hero-ranged', 'spell-cycle']);
 const BUTTON_INITIAL_DELAY = 200; // ms before auto-repeat kicks in
 const BUTTON_REPEAT_MS     = 120; // ms between repeated fires
 

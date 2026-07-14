@@ -1047,12 +1047,90 @@ describe('An Draoi (HP-pact magic)', () => {
     game.applyClass('draoi');
   });
 
-  it('PATRONS loads all three deities, each with an hpCostPct spell', () => {
+  it('PATRONS loads all three deities, each with a 3-spell book, all HP-costed, signature at level 1', () => {
     expect(PATRONS.map(p => p.id)).toEqual(['morrigan', 'manannan', 'tethra']);
     for (const p of PATRONS) {
-      expect(typeof p.ability.params?.['hpCostPct']).toBe('number');
-      expect(p.ability.params!['hpCostPct'] as number).toBeGreaterThan(0);
+      expect(p.spells.length).toBe(3);
+      expect(p.spells[0]!.unlockLevel).toBe(1);
+      for (const s of p.spells) {
+        expect(typeof s.params?.['hpCostPct']).toBe('number');
+        expect(s.params!['hpCostPct'] as number).toBeGreaterThan(0);
+      }
     }
+  });
+
+  it('applyPatron grants only level-appropriate spells; level-ups unlock the rest', () => {
+    game.applyPatron('morrigan');
+    expect(game.player.spellbook.map(s => s.name)).toEqual(["Badb's Shriek"]);
+
+    game.player.playerLevel = 4;
+    game.openLevelUpBoons();  // choke point that runs syncSpellUnlocks
+    expect(game.player.spellbook.map(s => s.name)).toEqual(["Badb's Shriek", 'Fog of Blood']);
+
+    game.player.playerLevel = 8;
+    game.openLevelUpBoons();
+    expect(game.player.spellbook.map(s => s.name)).toEqual(["Badb's Shriek", 'Fog of Blood', 'Rain of Fire']);
+  });
+
+  it('swearing the pact at a high level grants everything already earned', () => {
+    game.player.playerLevel = 8;
+    game.applyPatron('tethra');
+    expect(game.player.spellbook.length).toBe(3);
+  });
+
+  it('handleCycleSpell rotates the active spell without resetting the shared cooldown', () => {
+    game.player.playerLevel = 8;
+    game.applyPatron('morrigan');
+    game.paused = false;
+    game.player.rangedCooldown = 2;
+    expect(game.player.rangedAbility?.name).toBe("Badb's Shriek");
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe('Fog of Blood');
+    expect(game.player.rangedCooldown).toBe(2);
+    game.handleCycleSpell();
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe("Badb's Shriek");
+  });
+
+  it('cycling is a no-op with fewer than two spells', () => {
+    game.applyPatron('manannan');
+    game.paused = false;
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe('Féth Fíada');
+    expect(game.player.activeSpellIndex).toBe(0);
+  });
+
+  it("Tethra's Maw devours a target below the execute threshold", () => {
+    game.player.playerLevel = 8;
+    game.applyPatron('tethra');
+    game.paused = false;
+    // cycle to Tethra's Maw (index 2)
+    game.handleCycleSpell();
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe("Tethra's Maw");
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Tank', 30, 100, 1, 5); // 30% hp < 35%
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    game.map[game.player.x]![game.player.y - 1] = Tile.FLOOR;
+    game.map[m.x]![m.y] = Tile.FLOOR;
+    game.handleRangedAttack();
+    expect(game.monsters).not.toContain(m); // devoured outright despite 100 maxHp
+  });
+
+  it('Blight of the Deep poisons every visible monster with HP-scaled power', () => {
+    game.player.playerLevel = 4;
+    game.applyPatron('tethra');
+    game.paused = false;
+    game.handleCycleSpell(); // → Blight of the Deep
+    expect(game.player.rangedAbility?.name).toBe('Blight of the Deep');
+    const a = new Monster(game.player.x, game.player.y - 3, 'sprite_berserker_orc', 'A', 50, 50, 1, 5);
+    const b = new Monster(game.player.x + 2, game.player.y - 3, 'sprite_berserker_orc', 'B', 50, 50, 1, 5);
+    game.monsters = [a, b];
+    game.visibility[a.x]![a.y] = true;
+    game.visibility[b.x]![b.y] = true;
+    game.handleRangedAttack();
+    expect(a.statuses.some(s => s.type === 'poison')).toBe(true);
+    expect(b.statuses.some(s => s.type === 'poison')).toBe(true);
   });
 
   it('casting Wild Surge deducts the HP cost and deals dmgMult × the HP paid', () => {

@@ -198,12 +198,14 @@ export interface RangedAbility {
   damageMult: number;
   cooldownMax: number;
   statusEffect?: 'stun';
-  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain';
+  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain' | 'blight' | 'blink';
   params?: Record<string, number | string>;
+  unlockLevel?: number;  // patron spells: player level required (1 = signature)
 }
 
-// A deity pact for An Draoi — swears mid-run, granting a signature HP-cost
-// spell (replaces the starting cantrip) plus a small passive.
+// A deity pact for An Draoi — sworn mid-run, granting a spellbook of HP-cost
+// spells (the signature at pact, the rest unlocking at player levels) plus a
+// small passive. Only 2 of the 3 deities call on any given run.
 export interface PatronDef {
   id: string;
   char: string;
@@ -211,7 +213,7 @@ export interface PatronDef {
   deity: string;
   tagline: string;
   effects: EffectSpec[];
-  ability: RangedAbility;
+  spells: RangedAbility[];
 }
 
 export interface CharacterSheetStat { label: string; value: string; }
@@ -239,7 +241,7 @@ export interface UIState {
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
-  rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null } | null;
+  rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
 }
 

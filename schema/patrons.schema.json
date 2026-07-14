@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://causeway-to-eriu.local/schema/patrons.schema.json",
   "title": "Patrons",
-  "description": "Deity pacts for An Draoi — each grants an HP-cost spell and a passive. Mirrors PatronDef in src/types.ts.",
+  "description": "Deity pacts for An Draoi — each grants a spellbook of HP-cost spells (unlocked by player level) and a passive. Mirrors PatronDef in src/types.ts.",
   "type": "array",
   "items": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["id", "char", "name", "deity", "tagline", "effects", "ability"],
+    "required": ["id", "char", "name", "deity", "tagline", "effects", "spells"],
     "properties": {
       "id": { "type": "string", "minLength": 1 },
       "char": { "type": "string", "minLength": 1 },
@@ -18,25 +18,30 @@
         "type": "array",
         "items": { "$ref": "_effect-spec.schema.json" }
       },
-      "ability": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "emoji", "abilityType", "range", "damageMult", "cooldownMax", "params"],
-        "properties": {
-          "name": { "type": "string", "minLength": 1 },
-          "emoji": { "type": "string", "minLength": 1 },
-          "abilityType": { "type": "string", "enum": ["shriek", "veil", "drain"] },
-          "range": { "type": "number" },
-          "damageMult": { "type": "number" },
-          "cooldownMax": { "type": "number" },
-          "statusEffect": { "type": "string", "enum": ["stun"] },
-          "params": {
-            "type": "object",
-            "required": ["hpCostPct"],
-            "properties": {
-              "hpCostPct": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.9 }
-            },
-            "additionalProperties": { "type": ["number", "string"] }
+      "spells": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "emoji", "abilityType", "range", "damageMult", "cooldownMax", "unlockLevel", "params"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "emoji": { "type": "string", "minLength": 1 },
+            "abilityType": { "type": "string", "enum": ["shriek", "veil", "drain", "blight", "blink", "gravity_well"] },
+            "range": { "type": "number" },
+            "damageMult": { "type": "number" },
+            "cooldownMax": { "type": "number" },
+            "unlockLevel": { "type": "integer", "minimum": 1 },
+            "statusEffect": { "type": "string", "enum": ["stun"] },
+            "params": {
+              "type": "object",
+              "required": ["hpCostPct"],
+              "properties": {
+                "hpCostPct": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.9 }
+              },
+              "additionalProperties": { "type": ["number", "string"] }
+            }
           }
         }
       }

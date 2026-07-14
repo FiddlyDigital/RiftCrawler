@@ -3,7 +3,7 @@ import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallba
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, PATRONS, applyToPlayer, type ClassDef, type PatronDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
-import { processHazards, checkHazardTrigger } from './systems/hazards';
+import { processHazards, checkHazardTrigger, teleportEntity } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 import { spriteIconHTML } from './sprites';
@@ -14,12 +14,13 @@ const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
 };
 
-// Human-readable summary of a patron's HP-cost spell for the pact ceremony.
+// Human-readable summary of a patron's signature spell for the pact ceremony.
 function describePatronSpell(p: PatronDef): string {
-  const params = p.ability.params ?? {};
+  const spell = p.spells[0]!;
+  const params = spell.params ?? {};
   const num = (k: string, d: number): number => typeof params[k] === 'number' ? params[k] as number : d;
   const costPct = Math.round(num('hpCostPct', 0) * 100);
-  switch (p.ability.abilityType) {
+  switch (spell.abilityType) {
     case 'shriek':
       return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to EVERY visible foe (${Math.round(num('stunChance', 0) * 100)}% terror-stun).`;
     case 'veil':
@@ -817,12 +818,14 @@ export class Game {
     if (this.activeClassId !== 'draoi' || this.activePatronId !== null) return false;
     if (this.dungeonLevel < 2 || !this.cb.onFloorEvent) return false;
 
+    // Only 2 of the 3 deities call on any given run — which two is the rift's whim.
+    const offered = [...PATRONS].sort(() => Math.random() - 0.5).slice(0, 2);
     const event: FloorEventDef = {
       id: '__pact__', emoji: 'fx_arcane', title: 'The Deities Call',
-      flavor: 'Three voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',
-      options: PATRONS.map(p => ({
+      flavor: 'Two voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',
+      options: offered.map(p => ({
         label: p.deity,
-        desc: `${p.tagline} — ${p.ability.name}: ${describePatronSpell(p)}`,
+        desc: `${p.tagline} — ${p.spells[0]!.name}: ${describePatronSpell(p)} More spells unlock as you level.`,
         apply: (game: Game): string => {
           game.applyPatron(p.id);
           return `The pact is sworn. ${p.deity} marks you as their own.`;
@@ -846,13 +849,44 @@ export class Game {
     this.activePatronId = id;
     applyToPlayer(this.player, patron.effects);
     this.player.hp = Math.min(this.player.hp, this.player.maxHp);
-    this.player.rangedAbility = { ...patron.ability };
+    this.player.spellbook = patron.spells
+      .filter(s => (s.unlockLevel ?? 1) <= this.player.playerLevel)
+      .map(s => ({ ...s }));
+    this.player.activeSpellIndex = 0;
+    this.player.rangedAbility = this.player.spellbook[0] ?? null;
     this.player.rangedCooldown = 0;
     this.storyBeats.push(`swore a pact with ${patron.deity}`);
-    this.cb.log(`${patron.name} — ${patron.ability.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
+    this.cb.log(`${patron.name} — ${patron.spells[0]!.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
     this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#8d6fd4', patron.char);
     this.cb.onRingPulse?.(this.player.x, this.player.y, '141,111,212');
     this.cb.onAudio?.('pactSworn');
+    this.pushUI();
+  }
+
+  // Adds any patron spells whose unlockLevel the player has now reached.
+  // Called from openLevelUpBoons — the single choke point every level-up
+  // passes through (kills, tomes, scholars, line-clear XP).
+  private syncSpellUnlocks(): void {
+    const patron = PATRONS.find(p => p.id === this.activePatronId);
+    if (!patron) return;
+    for (const spell of patron.spells) {
+      if ((spell.unlockLevel ?? 1) > this.player.playerLevel) continue;
+      if (this.player.spellbook.some(s => s.name === spell.name)) continue;
+      this.player.spellbook.push({ ...spell });
+      this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (E cycles spells)`, 'log-perk', spell.emoji);
+      this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4', spell.emoji);
+    }
+  }
+
+  // Cycle the active spell (An Draoi with 2+ unlocked spells). Shared
+  // cooldown — switching is free but doesn't dodge the wait.
+  handleCycleSpell(): void {
+    if (this.player.hp <= 0 || this.paused) return;
+    const book = this.player.spellbook;
+    if (book.length < 2) return;
+    this.player.activeSpellIndex = (this.player.activeSpellIndex + 1) % book.length;
+    this.player.rangedAbility = book[this.player.activeSpellIndex]!;
+    this.cb.log(`Spell ready: ${this.player.rangedAbility.name}`, 'log-neutral', this.player.rangedAbility.emoji);
     this.pushUI();
   }
 
@@ -1213,6 +1247,7 @@ export class Game {
 
   openLevelUpBoons(): void {
     this.paused = true;
+    this.syncSpellUnlocks();  // patron spells gated on the level just reached
     this.cb.onBeam?.(this.player.x);
     const tier = getBoonTierForFloor(this.dungeonLevel);
     const pool = BOONS_BY_TIER[tier];
@@ -1557,11 +1592,20 @@ export class Game {
         this.cb.log(`The pact will not take your last breath. (${ability.name} costs ${cost} HP — you have ${Math.round(this.player.hp)})`, 'log-neutral', ability.emoji);
         return;
       }
-      // Drain-type spells need a target BEFORE the price is paid — a whiffed
+      // Targeted spells need a target BEFORE the price is paid — a whiffed
       // cast shouldn't cost blood.
       if (ability.abilityType === 'drain' && !this.findRangedTarget(ability.range)) {
         this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
         return;
+      }
+      if (ability.abilityType === 'gravity_well') {
+        const anyInRange = this.monsters.some(m =>
+          Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) <= ability.range
+          && (this.visibility[m.x]?.[m.y] ?? false));
+        if (!anyInRange) {
+          this.cb.log(`Nothing within reach of the tide (${ability.range} tiles).`, 'log-neutral', ability.emoji);
+          return;
+        }
       }
       this.player.hp -= cost;
       hpPaid = cost;
@@ -1578,6 +1622,8 @@ export class Game {
       case 'shriek':        this.activateShriek(ability, hpPaid); break;
       case 'veil':          this.activateVeil(ability);           break;
       case 'drain':         this.activateDrain(ability, hpPaid);  break;
+      case 'blight':        this.activateBlight(ability, hpPaid); break;
+      case 'blink':         this.activateBlink(ability);          break;
       default:              this.activateBolt(ability);          break;
     }
   }
@@ -1585,13 +1631,17 @@ export class Game {
   // Badb's Shriek (the Morrígan): raining fire and mass terror — damage every
   // visible monster for a multiple of the HP paid; survivors may be stunned.
   private activateShriek(ability: import('./types').RangedAbility, hpPaid: number): void {
-    const dmg = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'dmgMult', 2)));
+    const dmgMult = this.abilityNum(ability, 'dmgMult', 2);
+    // dmgMult 0 = a pure-terror variant (Fog of Blood): stun-only, no damage
+    const dmg = dmgMult > 0 ? Math.max(1, Math.round(hpPaid * dmgMult)) : 0;
     const stunChance = this.abilityNum(ability, 'stunChance', 0.35);
     const stunDuration = this.abilityNum(ability, 'stunDuration', 1);
     const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
     for (const m of targets) {
-      m.hp -= dmg;
-      this.cb.onParticle(m.x, m.y, `-${dmg}`, '#c3272a', 16, 'fx_fire');
+      if (dmg > 0) {
+        m.hp -= dmg;
+        this.cb.onParticle(m.x, m.y, `-${dmg}`, '#c3272a', 16, 'fx_fire');
+      }
       if (m.hp > 0 && !m.isStunned && Math.random() < stunChance) {
         m.statuses.push({ type: 'stun', duration: stunDuration, power: 0 });
         this.cb.onParticle(m.x, m.y, 'TERROR', '#b98fc4', 11);
@@ -1601,10 +1651,48 @@ export class Game {
     this.monsters = this.monsters.filter(m => m.hp > 0);
     for (const m of killed) killMonster(m, this);
     this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`BADB'S SHRIEK! ${targets.length} foe(s) seared for ${dmg} — the Morrígan takes her due.`, 'log-combo', ability.emoji);
+    this.cb.log(
+      dmg > 0
+        ? `${ability.name.toUpperCase()}! ${targets.length} foe(s) seared for ${dmg} — the Morrígan takes her due.`
+        : `${ability.name.toUpperCase()}! Terror grips ${targets.length} foe(s) — the Morrígan takes her due.`,
+      'log-combo', ability.emoji,
+    );
     this.cb.onRingPulse?.(this.player.x, this.player.y, '195,39,42');
     this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#c3272a', 'fx_fire');
     this.cb.onAudio?.('bossWarn');
+    this.advanceTurn();
+  }
+
+  // Blight of the Deep (Tethra): poison every visible monster; the venom's
+  // power scales with the HP paid.
+  private activateBlight(ability: import('./types').RangedAbility, hpPaid: number): void {
+    const duration = this.abilityNum(ability, 'poisonDuration', 4);
+    const power = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'poisonPowerPct', 0.5)));
+    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
+    for (const m of targets) {
+      m.statuses = m.statuses.filter(s => s.type !== 'poison');
+      m.statuses.push({ type: 'poison', duration, power });
+      this.cb.onParticle(m.x, m.y, 'BLIGHT', '#7cb342', 11, 'status_poison');
+    }
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log(`${ability.name}! ${targets.length} foe(s) wither — ${power} poison/turn for ${duration} turns.`, 'log-combo', ability.emoji);
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '124,179,66');
+    this.cb.onAudio?.('poison');
+    this.advanceTurn();
+  }
+
+  // Sea-Road (Manannán): step through the Otherworld to a random floor tile,
+  // trailing a brief wisp of the Féth Fíada.
+  private activateBlink(ability: import('./types').RangedAbility): void {
+    const fromX = this.player.x, fromY = this.player.y;
+    teleportEntity(this.player, this);
+    this.player.veiledTurns = Math.max(this.player.veiledTurns, this.abilityNum(ability, 'veilTurns', 2));
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.onParticle(fromX, fromY, '', '#9fe3c0', undefined, 'trap_smoke');
+    this.cb.onParticle(this.player.x, this.player.y, '', '#9fe3c0', undefined, 'trap_teleport');
+    this.cb.log(`${ability.name} — you step through the Otherworld and out again.`, 'log-perk', ability.emoji);
+    this.cb.onAudio?.('teleport');
+    this.updateVisibility();
     this.advanceTurn();
   }
 
@@ -1630,14 +1718,23 @@ export class Game {
       this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
       return;
     }
-    const dmg = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'dmgMult', 2)));
+    let dmg = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'dmgMult', 2)));
     const healPct = this.abilityNum(ability, 'healPct', 0);
     const refundOnKill = this.abilityNum(ability, 'refundOnKill', 0) > 0;
+    // Tethra's Maw: a target already near death is devoured outright
+    const executeBelowPct = this.abilityNum(ability, 'executeBelowPct', 0);
+    const executed = executeBelowPct > 0 && target.hp <= target.maxHp * executeBelowPct;
+    if (executed) dmg = target.hp;
 
     this.emitProjectileTrail(target.x, target.y, ability.emoji);
     target.hp -= dmg;
-    this.cb.onParticle(target.x, target.y, `-${dmg}`, '#8d6fd4', 16, ability.emoji);
-    this.cb.log(`${ability.name} rends ${target.name} for ${dmg}!`, 'log-combo', ability.emoji);
+    this.cb.onParticle(target.x, target.y, executed ? 'DEVOURED' : `-${dmg}`, '#8d6fd4', 16, ability.emoji);
+    this.cb.log(
+      executed
+        ? `${ability.name} DEVOURS ${target.name} whole!`
+        : `${ability.name} rends ${target.name} for ${dmg}!`,
+      'log-combo', ability.emoji,
+    );
 
     if (healPct > 0) {
       const healed = this.player.heal(Math.round(dmg * healPct));
@@ -2098,7 +2195,11 @@ export class Game {
           { label: 'Line-Clear XP', value: p.lineClearXpMult !== 1 ? `×${p.lineClearXpMult}` : '—' },
           { label: 'Sworn Patron', value: PATRONS.find(pt => pt.id === this.activePatronId)?.deity ?? '—' },
           {
-            label: 'Spell Cost',
+            label: 'Spells Known',
+            value: p.spellbook.length > 0 ? p.spellbook.map(s => s.name).join(', ') : '—',
+          },
+          {
+            label: 'Active Spell Cost',
             value: typeof p.rangedAbility?.params?.['hpCostPct'] === 'number'
               ? `${Math.round((p.rangedAbility.params['hpCostPct'] as number) * 100)}% Max HP (${pctOf(p.maxHp, p.rangedAbility.params['hpCostPct'] as number)} HP)`
               : '—',
@@ -2161,6 +2262,8 @@ export class Game {
             hpCostPct:   typeof this.player.rangedAbility.params?.['hpCostPct'] === 'number'
               ? this.player.rangedAbility.params['hpCostPct'] as number
               : null,
+            spellIndex:  this.player.activeSpellIndex,
+            spellCount:  this.player.spellbook.length,
           }
         : null,
       characterSheet: this.buildCharacterSheet(),

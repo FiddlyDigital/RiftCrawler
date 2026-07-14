@@ -195,17 +195,20 @@ export class UIManager {
 
     // Ranged ability badge + button state
     const rangedBtn = document.getElementById('ranged-btn') as HTMLButtonElement | null;
+    const cycleBtn  = document.getElementById('spell-cycle-btn') as HTMLButtonElement | null;
     if (state.rangedAbility) {
       const ra = state.rangedAbility;
       const ready = ra.cooldown === 0 && ra.ammo !== 0;
       const ammoText  = ra.ammo !== null ? ` ×${ra.ammo}` : '';
       const costText  = ra.hpCostPct !== null ? ` · ${Math.round(ra.hpCostPct * 100)}% HP` : '';
+      const bookText  = ra.spellCount > 1 ? ` (${ra.spellIndex + 1}/${ra.spellCount})` : '';
       const cdText    = ra.cooldown > 0 ? ` [${ra.cooldown}t]` : ' [Ready]';
-      const label = `${escapeHtml(ra.name)}${ammoText}${cdText}${costText}`;
+      const label = `${escapeHtml(ra.name)}${bookText}${ammoText}${cdText}${costText}`;
       this.els['rangedAbility']!.style.display = '';
       this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
       this.els['rangedAbility']!.style.fontSize = '9px';
-      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)</span>`;
+      const cycleHint = ra.spellCount > 1 ? ' · E switches' : '';
+      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)${cycleHint}</span>`;
       if (rangedBtn) {
         // Short generic label (not the ability name) so the button stays as
         // narrow as the Hold button — full detail lives in the sidebar badge.
@@ -213,9 +216,11 @@ export class UIManager {
         rangedBtn.disabled = !ready;
         rangedBtn.style.opacity = ready ? '1' : '0.4';
       }
+      if (cycleBtn) cycleBtn.style.display = ra.spellCount > 1 ? '' : 'none';
     } else {
       this.els['rangedAbility']!.style.display = 'none';
       if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Special'; }
+      if (cycleBtn) cycleBtn.style.display = 'none';
     }
   }
 
