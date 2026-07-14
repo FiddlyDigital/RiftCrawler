@@ -2,7 +2,7 @@ import { GameConfig } from './config';
 import { Colors } from './colors';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
-import { getBiomeForFloor, NPCS } from './content';
+import { Biome, NPCS } from './content';
 import { MONSTERS } from './dataLoader';
 import { SpriteService } from './sprites';
 import type { Game } from './game';
@@ -242,7 +242,7 @@ export class Renderer {
       this.revealFrames.fill(0);
       this.lastDungeonLevel = game.dungeonLevel;
       this.floorTransitionFrames = 30;
-      const biome = getBiomeForFloor(game.dungeonLevel);
+      const biome = Biome.forFloor(game.dungeonLevel);
       this.floorTransitionColor = biome.tileRgb || '10,10,20';
       this.moteColor = biome.moteColor || '#cfc6b0';
     }
@@ -695,7 +695,7 @@ export class Renderer {
     }
 
     // ── Biome tint overlay ────────────────────────────────────────────────
-    const biome = getBiomeForFloor(game.dungeonLevel);
+    const biome = Biome.forFloor(game.dungeonLevel);
     if (biome.tileRgb) {
       ctx.fillStyle = `rgba(${biome.tileRgb},0.07)`;
       ctx.fillRect(0, 0, this.logicalW, this.logicalH);

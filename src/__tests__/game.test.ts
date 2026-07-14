@@ -7,7 +7,7 @@ import { killMonster, playerAttackMonster, monsterAttackPlayer, estimateHitChanc
 import { processMonsterTurns } from '../systems/monsterAI';
 import { processHazards, checkHazardTrigger, teleportEntity } from '../systems/hazards';
 import { applyStatusEffects, applyRegen, applyAuraStun } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, getThreeRandomBoons } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, Boon } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -430,7 +430,7 @@ describe('Balance levers', () => {
   // Phase 2
   it('every boon offer spans at least two distinct roles', () => {
     for (let i = 0; i < 40; i++) {
-      const roles = new Set(getThreeRandomBoons(BOONS).map(b => b.role));
+      const roles = new Set(Boon.pickThree(BOONS).map(b => b.role));
       expect(roles.size).toBeGreaterThanOrEqual(2);
     }
   });

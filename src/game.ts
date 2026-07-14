@@ -1,7 +1,7 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, pctOf } from './entities';
-import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, PATRONS, applyToPlayer, type ClassDef, type PatronDef } from './content';
+import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, EffectResolver, type ClassDef, type PatronDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
 import { processHazards, checkHazardTrigger, teleportEntity } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
@@ -457,14 +457,14 @@ export class Game {
           this.tattooTiles.push({ x: tx, y: ty });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.ALTAR) {
-          const tier = getBoonTierForFloor(this.dungeonLevel);
+          const tier = Boon.tierForFloor(this.dungeonLevel);
           const altarColor = Colors.forTier(tier).bg;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = altarColor;
           this.altarTiles.push({ x: tx, y: ty, tier });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.NPC) {
-          const npc = getRandomNpc();
+          const npc = Npc.random();
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1c2418';
           this.npcTiles.push({ x: tx, y: ty, npcId: npc.id });
@@ -708,7 +708,7 @@ export class Game {
   // floor number — so this can truthfully preview a boss on a floor the
   // player hasn't reached yet (used by the vengeance-bounty NPC).
   private previewBossForFloor(floor: number): BossDef {
-    const biome = getBiomeForFloor(floor);
+    const biome = Biome.forFloor(floor);
     const biomeBosses   = BOSSES.filter(b => b.biomeId === biome.id);
     const genericBosses = BOSSES.filter(b => !b.biomeId);
     const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
@@ -752,8 +752,8 @@ export class Game {
         desc: b.def.desc,
         apply: (game: Game): string => {
           game.player.removeBoon(b.id);
-          const pool = BOONS_BY_TIER[3].filter(x => x.id !== b.def.id);
-          const reward = (pool.length > 0 ? pool : BOONS_BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : BOONS_BY_TIER[3].length))]!;
+          const pool = Boon.BY_TIER[3].filter(x => x.id !== b.def.id);
+          const reward = (pool.length > 0 ? pool : Boon.BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : Boon.BY_TIER[3].length))]!;
           game.player.addBoon(reward);
           game.storyBeats.push(`traded ${b.def.name} to a Fomorian tinker for ${reward.name}`);
           return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
@@ -796,7 +796,7 @@ export class Game {
           label: 'Lay them to rest',
           desc: 'Receive a fragment of their power. They will not return.',
           apply: (game: Game): string => {
-            const pool = BOONS_BY_TIER[2];
+            const pool = Boon.BY_TIER[2];
             const reward = pool[Math.floor(Math.random() * pool.length)]!;
             game.player.addBoon(reward);
             game.availableGhosts = game.availableGhosts.filter(g => g.id !== ghost.id);
@@ -862,11 +862,11 @@ export class Game {
     const patron = PATRONS.find(p => p.id === id);
     if (!patron) return;
     this.activePatronId = id;
-    applyToPlayer(this.player, patron.effects);
+    EffectResolver.applyToPlayer(this.player, patron.effects);
     this.player.spellbook = patron.spells
       .filter(s => (s.unlockLevel ?? 1) <= this.player.playerLevel)
       .map(s => ({ ...s }));
-    for (const spell of this.player.spellbook) applyToPlayer(this.player, spell.toll);
+    for (const spell of this.player.spellbook) EffectResolver.applyToPlayer(this.player, spell.toll);
     this.player.hp = Math.min(this.player.hp, this.player.maxHp);
     this.player.activeSpellIndex = 0;
     this.player.rangedAbility = this.player.spellbook[0] ?? null;
@@ -890,7 +890,7 @@ export class Game {
       if ((spell.unlockLevel ?? 1) > this.player.playerLevel) continue;
       if (this.player.spellbook.some(s => s.name === spell.name)) continue;
       this.player.spellbook.push({ ...spell });
-      applyToPlayer(this.player, spell.toll);
+      EffectResolver.applyToPlayer(this.player, spell.toll);
       this.player.hp = Math.min(this.player.hp, this.player.maxHp);
       const toll = describeToll(spell.toll);
       this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (${toll} — E cycles spells)`, 'log-perk', spell.emoji);
@@ -1120,7 +1120,7 @@ export class Game {
   }
 
   private updateBiome(): void {
-    const biome = getBiomeForFloor(this.dungeonLevel);
+    const biome = Biome.forFloor(this.dungeonLevel);
     this.biomeId = biome.id;
     this.biomeMonsterHpMult = biome.monsterHpMult;
     this.biomeGravityPct = biome.gravityPctBonus;
@@ -1270,9 +1270,9 @@ export class Game {
     this.paused = true;
     this.syncSpellUnlocks();  // patron spells gated on the level just reached
     this.cb.onBeam?.(this.player.x);
-    const tier = getBoonTierForFloor(this.dungeonLevel);
-    const pool = BOONS_BY_TIER[tier];
-    const choices = getThreeRandomBoons(pool, this.player.boons.map(b => b.id));
+    const tier = Boon.tierForFloor(this.dungeonLevel);
+    const pool = Boon.BY_TIER[tier];
+    const choices = Boon.pickThree(pool, this.player.boons.map(b => b.id));
     this.cb.onLevelUp?.(choices, (index) => {
       this.player.addBoon(choices[index]!);
       this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4');
@@ -1320,7 +1320,7 @@ export class Game {
     this.paused = true;
     const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
     let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
-    let choices = getThreeRandomBrands(ownedIds());
+    let choices = Brand.pickThree(ownedIds());
     const commit = (index: number): void => {
       const slot = BODY_PARTS[this.player.brands.length % BODY_PARTS.length]!;
       const chosen = choices[index]!;
@@ -1339,7 +1339,7 @@ export class Game {
         if (this.gold < cost) return null;
         this.gold -= cost;
         cost = Math.floor(cost * Balance.CONFIG.economy.ogmRerollCostGrowth);
-        choices = getThreeRandomBrands(ownedIds());
+        choices = Brand.pickThree(ownedIds());
         this.pushUI();
         return { choices, gold: this.gold, cost };
       },
@@ -1380,10 +1380,10 @@ export class Game {
 
   openAltar(tier: 1 | 2 | 3): void {
     this.paused = true;
-    const pool = BOONS_BY_TIER[tier];
+    const pool = Boon.BY_TIER[tier];
     const ownedIds = (): string[] => this.player.boons.map(b => b.id);
     let cost = Balance.CONFIG.economy.geasaRerollBaseCost;
-    let choices = getThreeRandomBoons(pool, ownedIds());
+    let choices = Boon.pickThree(pool, ownedIds());
     const commit = (index: number): void => {
       this.player.addBoon(choices[index]!);
       this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#b98fc4');
@@ -1398,7 +1398,7 @@ export class Game {
         if (this.gold < cost) return null;
         this.gold -= cost;
         cost = Math.floor(cost * Balance.CONFIG.economy.geasaRerollCostGrowth);
-        choices = getThreeRandomBoons(pool, ownedIds());
+        choices = Boon.pickThree(pool, ownedIds());
         this.pushUI();
         return { choices, gold: this.gold, cost };
       },
@@ -1533,7 +1533,7 @@ export class Game {
       // can never stack modals on the same floor).
       const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
       if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
-        const event = getRandomFloorEvent();
+        const event = FloorEvent.random();
         this.paused = true;
         this.cb.onFloorEvent(event, (index) => {
           const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
@@ -2236,7 +2236,7 @@ export class Game {
     const activeMod = MODIFIERS.find(m => m.id === this.activeModifierId);
     const activeCls = CLASSES.find(c => c.id === this.activeClassId);
     const activePatron = PATRONS.find(p => p.id === this.activePatronId);
-    const biome = getBiomeForFloor(this.dungeonLevel);
+    const biome = Biome.forFloor(this.dungeonLevel);
     this.cb.updateUI({
       // atk/maxHp/hp can carry fractional precision internally (percentage
       // boons compound on them) — round only here, at the display boundary.
