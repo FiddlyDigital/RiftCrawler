@@ -1,6 +1,6 @@
 import type { Game } from './game';
-import { CONFIG } from './config';
-import { vibrate } from './haptics';
+import { GameConfig } from './config';
+import { HapticsController } from './haptics';
 
 type GameGetter = () => Game;
 type InspectCallback = (gx: number, gy: number, clientX: number, clientY: number) => void;
@@ -51,8 +51,8 @@ export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter
   // scaled by devicePixelRatio for sprite crispness; see renderer.ts).
   function toGrid(clientX: number, clientY: number): { gx: number; gy: number } {
     const rect = canvas.getBoundingClientRect();
-    const gx = Math.floor((clientX - rect.left) / rect.width * CONFIG.COLS);
-    const gy = Math.floor((clientY - rect.top) / rect.height * CONFIG.ROWS);
+    const gx = Math.floor((clientX - rect.left) / rect.width * GameConfig.COLS);
+    const gy = Math.floor((clientY - rect.top) / rect.height * GameConfig.ROWS);
     return { gx, gy };
   }
 
@@ -76,18 +76,18 @@ export function bindCanvasInspect(canvas: HTMLCanvasElement, getGame: GameGetter
       onInspect(gx, gy, t.clientX, t.clientY);
     } else if (absDx > absDy && absDx > SWIPE_THRESHOLD) {
       if (dx < 0) game.handleBlockLeft(); else game.handleBlockRight();
-      vibrate(4);
+      HapticsController.vibrate(4);
     } else if (absDy > SWIPE_THRESHOLD) {
       const elapsedMs = Math.max(1, performance.now() - startT);
       if (dy < 0) {
         game.handleBlockRotate();
-        vibrate(4);
+        HapticsController.vibrate(4);
       } else if (absDy > HARD_DROP_DISTANCE || absDy / elapsedMs > HARD_DROP_VELOCITY) {
         game.handleBlockDrop();
-        vibrate(12);
+        HapticsController.vibrate(12);
       } else {
         game.handleBlockSoftDrop();
-        vibrate(4);
+        HapticsController.vibrate(4);
       }
     }
     e.preventDefault();
@@ -282,7 +282,7 @@ export function bindButtons(getGame: GameGetter): void {
       // the button) — some browsers throw NotFoundError on a fast tap when
       // the pointer is no longer "active" by the time this call lands.
       try { btn.setPointerCapture?.(e.pointerId); } catch { /* not critical */ }
-      vibrate(4);
+      HapticsController.vibrate(4);
       fire();
       scheduleRepeat();
     });

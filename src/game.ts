@@ -1,4 +1,4 @@
-import { CONFIG, SHAPES, type ShapeKey } from './config';
+import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, PATRONS, applyToPlayer, type ClassDef, type PatronDef } from './content';
@@ -6,9 +6,9 @@ import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusE
 import { processHazards, checkHazardTrigger, teleportEntity } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
-import { spriteIconHTML } from './sprites';
-import { HAZARD_BALANCE, BALANCE, weightedPick } from './balance';
-import { TIER_COLORS } from './colors';
+import { SpriteService } from './sprites';
+import { Balance } from './balance';
+import { Colors } from './colors';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -62,12 +62,12 @@ export function rotateMatrix(matrix: CellValue[][]): CellValue[][] {
 }
 
 export function tickMsForLevel(level: number, slowPercent: number): number {
-  const base = Math.max(BALANCE.progression.tickMinMs, BALANCE.progression.tickBaseMs - (level - 1) * BALANCE.progression.tickMsPerDungeonLevel);
+  const base = Math.max(Balance.CONFIG.progression.tickMinMs, Balance.CONFIG.progression.tickBaseMs - (level - 1) * Balance.CONFIG.progression.tickMsPerDungeonLevel);
   return Math.floor(base * (1 + slowPercent / 100));
 }
 
 export function scoreForLines(count: number, level: number): number {
-  return (BALANCE.progression.lineClearScoreBase[count] ?? BALANCE.progression.lineClearScoreOverflow) * level;
+  return (Balance.CONFIG.progression.lineClearScoreBase[count] ?? Balance.CONFIG.progression.lineClearScoreOverflow) * level;
 }
 
 // ── Game class ───────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ export class Game {
   public gorgothSummoned = false;
   public won = false;
   private gorgothHintShown = false;   // one-time nudge toward the win condition
-  private gorgothHp = BALANCE.gorgoth.maxHp;  // carries over between summons (escape & retry)
+  private gorgothHp = Balance.CONFIG.gorgoth.maxHp;  // carries over between summons (escape & retry)
   private gorgothHalfTriggered = false;
   public gorgothEverSummoned = false;  // once true, line clears chip the causeway (his stored HP)
 
@@ -199,15 +199,15 @@ export class Game {
   // ── Grid helpers ─────────────────────────────────────────────────────────
 
   private emptyMap(): TileValue[][] {
-    return Array.from({ length: CONFIG.COLS }, () => Array<TileValue>(CONFIG.ROWS).fill(Tile.VOID));
+    return Array.from({ length: GameConfig.COLS }, () => Array<TileValue>(GameConfig.ROWS).fill(Tile.VOID));
   }
 
   private emptyColors(): (string | null)[][] {
-    return Array.from({ length: CONFIG.COLS }, () => Array<string | null>(CONFIG.ROWS).fill(null));
+    return Array.from({ length: GameConfig.COLS }, () => Array<string | null>(GameConfig.ROWS).fill(null));
   }
 
   private emptyBoolGrid(val: boolean): boolean[][] {
-    return Array.from({ length: CONFIG.COLS }, () => Array(CONFIG.ROWS).fill(val) as boolean[]);
+    return Array.from({ length: GameConfig.COLS }, () => Array(GameConfig.ROWS).fill(val) as boolean[]);
   }
 
   private generateStartPlatform(): void {
@@ -230,8 +230,8 @@ export class Game {
     if (this.gorgothSummoned) return;
     const onSmoke = this.hazards.some(h => h.type === 'smoke' && h.x === this.player.x && h.y === this.player.y);
     const r = onSmoke ? 1 : this.player.visionRadius;
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
         const dist = Math.hypot(x - this.player.x, y - this.player.y);
         const visible = dist <= r;
         this.visibility[x]![y] = visible;
@@ -243,7 +243,7 @@ export class Game {
       for (let c = 0; c < this.blockMatrix[r2]!.length; c++) {
         if (this.blockMatrix[r2]![c] !== Cell.EMPTY) {
           const tx = this.blockX + c, ty = this.blockY + r2;
-          if (tx >= 0 && tx < CONFIG.COLS && ty >= 0 && ty < CONFIG.ROWS) {
+          if (tx >= 0 && tx < GameConfig.COLS && ty >= 0 && ty < GameConfig.ROWS) {
             this.visibility[tx]![ty] = true;
             this.explored[tx]![ty] = true;
           }
@@ -255,10 +255,10 @@ export class Game {
   // ── Block spawning ───────────────────────────────────────────────────────
 
   // cursed/blessed are mutually exclusive independent shares of one roll
-  // (e.g. 8% cursed, 4% blessed, 88% normal) — see BALANCE.spawnRates.
+  // (e.g. 8% cursed, 4% blessed, 88% normal) — see Balance.CONFIG.spawnRates.
   private rollPieceCurseState(roll: number): { cursed: boolean; blessed: boolean } {
-    const cursed = roll < BALANCE.spawnRates.cursedPieceChance;
-    const blessed = !cursed && roll < BALANCE.spawnRates.cursedPieceChance + BALANCE.spawnRates.blessedPieceChance;
+    const cursed = roll < Balance.CONFIG.spawnRates.cursedPieceChance;
+    const blessed = !cursed && roll < Balance.CONFIG.spawnRates.cursedPieceChance + Balance.CONFIG.spawnRates.blessedPieceChance;
     return { cursed, blessed };
   }
 
@@ -293,7 +293,7 @@ export class Game {
         }
 
         // Stairs
-        if (!stairsInjected && (this.blocksPlacedSinceStairs >= BALANCE.spawnRates.stairsForcedAfterBlocks || Math.random() < BALANCE.spawnRates.stairsRandomChance)) {
+        if (!stairsInjected && (this.blocksPlacedSinceStairs >= Balance.CONFIG.spawnRates.stairsForcedAfterBlocks || Math.random() < Balance.CONFIG.spawnRates.stairsRandomChance)) {
           stairsInjected = true;
           this.blocksPlacedSinceStairs = 0;
           return Cell.STAIRS;
@@ -302,21 +302,21 @@ export class Game {
         // Special blocks — Ogham Mark tiles are capped per floor, independent
         // of the brands-lifetime cap, so they don't all cluster early.
         if (!merchantInjected && !this.player.brandsCapped
-            && this.tattooTilesSpawnedThisFloor < BALANCE.spawnRates.maxTattooTilesPerFloor
-            && Math.random() < BALANCE.spawnRates.merchantChance) {
+            && this.tattooTilesSpawnedThisFloor < Balance.CONFIG.spawnRates.maxTattooTilesPerFloor
+            && Math.random() < Balance.CONFIG.spawnRates.merchantChance) {
           merchantInjected = true;
           this.tattooTilesSpawnedThisFloor++;
           return Cell.MERCHANT;
         }
-        if (!altarInjected && Math.random() < BALANCE.spawnRates.altarChance) {
+        if (!altarInjected && Math.random() < Balance.CONFIG.spawnRates.altarChance) {
           altarInjected = true;
           return Cell.ALTAR;
         }
         // Wandering NPC — rare, one per floor, a narrative aside rather than a
         // resource to farm.
         if (!npcInjected
-            && this.npcTilesSpawnedThisFloor < BALANCE.spawnRates.maxNpcTilesPerFloor
-            && Math.random() < BALANCE.spawnRates.npcChance) {
+            && this.npcTilesSpawnedThisFloor < Balance.CONFIG.spawnRates.maxNpcTilesPerFloor
+            && Math.random() < Balance.CONFIG.spawnRates.npcChance) {
           npcInjected = true;
           this.npcTilesSpawnedThisFloor++;
           return Cell.NPC;
@@ -329,7 +329,7 @@ export class Game {
         }
         // Hazard traps — one type per block
         if (!trapInjected) {
-          const trapKey = weightedPick(BALANCE.spawnRates.trapWeights, Math.random());
+          const trapKey = Balance.weightedPick(Balance.CONFIG.spawnRates.trapWeights, Math.random());
           if (trapKey) {
             trapInjected = true;
             return TRAP_CELL[trapKey];
@@ -339,14 +339,14 @@ export class Game {
         // Monster spawn — at most one per block (no random dumps), and the rate
         // ramps gently with depth instead of a flat spike. Haunted doubles it.
         const baseMonsterChance = Math.min(
-          BALANCE.spawnRates.monsterChanceCap,
-          BALANCE.spawnRates.monsterBaseChance + this.dungeonLevel * BALANCE.spawnRates.monsterChancePerDungeonLevel,
+          Balance.CONFIG.spawnRates.monsterChanceCap,
+          Balance.CONFIG.spawnRates.monsterBaseChance + this.dungeonLevel * Balance.CONFIG.spawnRates.monsterChancePerDungeonLevel,
         );
-        const monsterChance = this.haunted ? baseMonsterChance * BALANCE.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
+        const monsterChance = this.haunted ? baseMonsterChance * Balance.CONFIG.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
         if (Math.random() < monsterChance) {
           if (monsterInjected) return Cell.FLOOR;  // cap: one monster per block
           monsterInjected = true;
-          const key = weightedPick(BALANCE.spawnRates.monsterWeights, Math.random()) ?? 'plague_bat';
+          const key = Balance.weightedPick(Balance.CONFIG.spawnRates.monsterWeights, Math.random()) ?? 'plague_bat';
           return MONSTERS[key]!.cellState;
         }
         return Cell.FLOOR;
@@ -355,7 +355,7 @@ export class Game {
 
     this.injectShapeBonusRiders();
 
-    this.blockX = Math.floor((CONFIG.COLS - this.blockMatrix[0]!.length) / 2);
+    this.blockX = Math.floor((GameConfig.COLS - this.blockMatrix[0]!.length) / 2);
     this.blockY = 0;
 
     // Stack topped out — the rift yields no more blocks and summons Gorgoth.
@@ -379,8 +379,8 @@ export class Game {
 
     // O-piece: a chance to carry an altar (Architect class rolls it more often).
     const oAltarChance = this.activeClassId === 'architect'
-      ? BALANCE.spawnRates.oPieceAltarChanceArchitect
-      : BALANCE.spawnRates.oPieceAltarChance;
+      ? Balance.CONFIG.spawnRates.oPieceAltarChanceArchitect
+      : Balance.CONFIG.spawnRates.oPieceAltarChance;
     if (this.currentType === 'O' && Math.random() < oAltarChance) {
       const p = take();
       if (p) this.blockMatrix[p.r]![p.c] = Cell.ALTAR;
@@ -399,7 +399,7 @@ export class Game {
       for (let c = 0; c < matrix[r]!.length; c++) {
         if (matrix[r]![c] !== Cell.EMPTY) {
           const tx = bx + c, ty = by + r;
-          if (tx < 0 || tx >= CONFIG.COLS || ty >= CONFIG.ROWS) return true;
+          if (tx < 0 || tx >= GameConfig.COLS || ty >= GameConfig.ROWS) return true;
           if (ty >= 0 && this.map[tx]![ty] !== Tile.VOID) return true;
         }
       }
@@ -417,7 +417,7 @@ export class Game {
   }
 
   isValidMove(x: number, y: number): boolean {
-    if (x < 0 || x >= CONFIG.COLS || y < 0 || y >= CONFIG.ROWS) return false;
+    if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return false;
     return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isTattooTile(x, y) || this.isAltarTile(x, y);
   }
 
@@ -445,7 +445,7 @@ export class Game {
         const cell = this.blockMatrix[r]![c]!;
         if (cell === Cell.EMPTY) continue;
         const tx = this.blockX + c, ty = this.blockY + r;
-        if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
+        if (tx < 0 || tx >= GameConfig.COLS || ty < 0 || ty >= GameConfig.ROWS) continue;
         landedCells.push({ x: tx, y: ty });
 
         if (cell === Cell.STAIRS) {
@@ -458,7 +458,7 @@ export class Game {
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.ALTAR) {
           const tier = getBoonTierForFloor(this.dungeonLevel);
-          const altarColor = TIER_COLORS[tier].bg;
+          const altarColor = Colors.forTier(tier).bg;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = altarColor;
           this.altarTiles.push({ x: tx, y: ty, tier });
@@ -477,7 +477,7 @@ export class Game {
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
-          this.hazards.push({ x: tx, y: ty, type: 'spike', timer: HAZARD_BALANCE.spike.rearmMinTurns + Math.floor(Math.random() * HAZARD_BALANCE.spike.rearmRandomTurns), warning: false });
+          this.hazards.push({ x: tx, y: ty, type: 'spike', timer: Balance.HAZARD.spike.rearmMinTurns + Math.floor(Math.random() * Balance.HAZARD.spike.rearmRandomTurns), warning: false });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SMOKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -518,7 +518,7 @@ export class Game {
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
               !this.tattooTiles.some(t => t.x === fc.x && t.y === fc.y)) {
-            this.hazards.push({ x: fc.x, y: fc.y, type: 'spike', timer: HAZARD_BALANCE.spike.fieldFixedTimer, warning: false });
+            this.hazards.push({ x: fc.x, y: fc.y, type: 'spike', timer: Balance.HAZARD.spike.fieldFixedTimer, warning: false });
           }
         }
         this.cb.log('Spike Field — fires every 5 ticks!', 'log-tetris', 'trap_spike');
@@ -556,9 +556,9 @@ export class Game {
   // player that topping out summons Gorgoth — the win condition.
   private maybeHintGorgoth(): void {
     if (this.gorgothHintShown || this.gorgothSummoned) return;
-    let stackTop: number = CONFIG.ROWS;
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
+    let stackTop: number = GameConfig.ROWS;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
         if (this.map[x]![y] === Tile.FLOOR) { if (y < stackTop) stackTop = y; break; }
       }
     }
@@ -595,11 +595,11 @@ export class Game {
   private spawnMonster(key: string, tx: number, ty: number): void {
     const def = MONSTERS[key];
     if (!def) return;
-    const isElite = Math.random() < BALANCE.eliteMonsters.spawnChance;
+    const isElite = Math.random() < Balance.CONFIG.eliteMonsters.spawnChance;
     const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
-    const hp  = isElite ? baseHp * BALANCE.eliteMonsters.hpMult : baseHp;
-    const atk = isElite ? Math.floor(baseAtk * BALANCE.eliteMonsters.atkMult) : baseAtk;
+    const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
+    const atk = isElite ? Math.floor(baseAtk * Balance.CONFIG.eliteMonsters.atkMult) : baseAtk;
     const name = isElite ? `Elite ${def.name}` : def.name;
     const m = new Monster(
       tx, ty, def.char, name, hp, hp, atk, def.xpReward,
@@ -610,7 +610,7 @@ export class Game {
       def.statusInflict,
     );
     m.isElite = isElite;
-    m.combatLevel = Math.min(6, def.combatLevel + (isElite ? BALANCE.eliteMonsters.combatLevelBonus : 0));
+    m.combatLevel = Math.min(6, def.combatLevel + (isElite ? Balance.CONFIG.eliteMonsters.combatLevelBonus : 0));
     if (this.frozenRift) {
       m.statuses.push({ type: 'stun', duration: 1, power: 0 });
     }
@@ -625,8 +625,8 @@ export class Game {
 
   // Called by Cailleach's Stoneward onDeath
   spawnCrystalShards(bx: number, by: number): void {
-    const shardHp  = BALANCE.crystalShards.baseHp + this.dungeonLevel * BALANCE.crystalShards.hpPerDungeonLevel;
-    const shardAtk = BALANCE.crystalShards.baseAtk + Math.floor(this.dungeonLevel * BALANCE.crystalShards.atkPerDungeonLevel);
+    const shardHp  = Balance.CONFIG.crystalShards.baseHp + this.dungeonLevel * Balance.CONFIG.crystalShards.hpPerDungeonLevel;
+    const shardAtk = Balance.CONFIG.crystalShards.baseAtk + Math.floor(this.dungeonLevel * Balance.CONFIG.crystalShards.atkPerDungeonLevel);
     const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     let spawned = 0;
     for (const [dx, dy] of dirs) {
@@ -654,7 +654,7 @@ export class Game {
   // ── Dungeon rooms ────────────────────────────────────────────────────────
 
   private maybeSpawnDungeonRoom(): void {
-    if (Math.random() > BALANCE.floors.dungeonRoomChance) return;
+    if (Math.random() > Balance.CONFIG.floors.dungeonRoomChance) return;
     this.spawnRoom(Math.random() < 0.5 ? 'vault' : 'den');
   }
 
@@ -670,8 +670,8 @@ export class Game {
     // This keeps the centre columns clear so falling blocks are never intercepted.
     const colors = { vault: '#3d2b00', den: '#2d0000' } as const;
     const side = Math.random() < 0.5 ? 'left' : 'right';
-    const roomX = side === 'left' ? 0 : CONFIG.COLS - 2;  // 0 or 8
-    const roomY = CONFIG.ROWS - 3;                         // 22 (rows 22..24)
+    const roomX = side === 'left' ? 0 : GameConfig.COLS - 2;  // 0 or 8
+    const roomY = GameConfig.ROWS - 3;                         // 22 (rows 22..24)
     const color = colors[type];
 
     for (let dx = 0; dx < 2; dx++) {
@@ -688,8 +688,8 @@ export class Game {
     if (type === 'vault') {
       // Place a bonus altar in the vault, guarded by a monster.
       const altarX = roomX + (side === 'left' ? 0 : 1);
-      const altarTier: 1 | 2 | 3 = this.dungeonLevel >= BALANCE.altars.vaultTierMinFloorT3 ? 3 : this.dungeonLevel >= BALANCE.altars.vaultTierMinFloorT2 ? 2 : 1;
-      const altarColor = TIER_COLORS[altarTier].bg;
+      const altarTier: 1 | 2 | 3 = this.dungeonLevel >= Balance.CONFIG.altars.vaultTierMinFloorT3 ? 3 : this.dungeonLevel >= Balance.CONFIG.altars.vaultTierMinFloorT2 ? 2 : 1;
+      const altarColor = Colors.forTier(altarTier).bg;
       this.colors[altarX]![midY] = altarColor;
       this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
       this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
@@ -712,7 +712,7 @@ export class Game {
     const biomeBosses   = BOSSES.filter(b => b.biomeId === biome.id);
     const genericBosses = BOSSES.filter(b => !b.biomeId);
     const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
-    return bossPool[(Math.floor(floor / BALANCE.floors.bossFloorInterval) - 1) % bossPool.length]!;
+    return bossPool[(Math.floor(floor / Balance.CONFIG.floors.bossFloorInterval) - 1) % bossPool.length]!;
   }
 
   // ── Wandering NPCs ─────────────────────────────────────────────────────────
@@ -724,7 +724,7 @@ export class Game {
     let event: FloorEventDef;
 
     if (npc.kind === 'bounty') {
-      const targetFloor = (Math.floor(this.dungeonLevel / BALANCE.floors.bossFloorInterval) + 1) * BALANCE.floors.bossFloorInterval;
+      const targetFloor = (Math.floor(this.dungeonLevel / Balance.CONFIG.floors.bossFloorInterval) + 1) * Balance.CONFIG.floors.bossFloorInterval;
       const targetBoss = this.previewBossForFloor(targetFloor);
       event = {
         id: npc.id, emoji: npc.char, title: npc.name,
@@ -933,12 +933,12 @@ export class Game {
 
     if (cell === Cell.BOSS) {
       const bossDef = this.previewBossForFloor(this.dungeonLevel);
-      const baseHp = BALANCE.boss.baseHpFloor1 + (this.dungeonLevel - 1) * BALANCE.boss.baseHpPerDungeonLevel;
-      const baseAtk = BALANCE.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * BALANCE.boss.baseAtkPerDungeonLevel;
+      const baseHp = Balance.CONFIG.boss.baseHpFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseHpPerDungeonLevel;
+      const baseAtk = Balance.CONFIG.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseAtkPerDungeonLevel;
       const hp = Math.floor(baseHp * bossDef.hpMult);
       const atk = Math.floor(baseAtk * bossDef.atkMult);
       const boss = new Monster(tx, ty, bossDef.char, bossDef.name, hp, hp, atk, bossDef.xpReward, true);
-      boss.combatLevel = BALANCE.boss.combatLevel;
+      boss.combatLevel = Balance.CONFIG.boss.combatLevel;
       this.monsters.push(boss);
       this.activeBossOnHalfHp = bossDef.onHalfHp ?? null;
       this.activeBossOnDeath   = bossDef.onDeath  ?? null;
@@ -961,26 +961,26 @@ export class Game {
     let rowsCleared = 0;
     const clearedRows: number[] = [];
 
-    for (let y = CONFIG.ROWS - 1; y >= 0; y--) {
+    for (let y = GameConfig.ROWS - 1; y >= 0; y--) {
       let rowFull = true;
-      for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let x = 0; x < GameConfig.COLS; x++) {
         if (this.map[x]![y] === Tile.VOID) { rowFull = false; break; }
       }
       if (!rowFull) continue;
 
       rowsCleared++;
       clearedRows.push(y);
-      for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let x = 0; x < GameConfig.COLS; x++) {
         this.map[x]![y] = Tile.VOID;
         this.colors[x]![y] = null;
       }
       for (let shiftY = y; shiftY > 0; shiftY--) {
-        for (let x = 0; x < CONFIG.COLS; x++) {
+        for (let x = 0; x < GameConfig.COLS; x++) {
           this.map[x]![shiftY] = this.map[x]![shiftY - 1]!;
           this.colors[x]![shiftY] = this.colors[x]![shiftY - 1]!;
         }
       }
-      for (let x = 0; x < CONFIG.COLS; x++) { this.map[x]![0] = Tile.VOID; this.colors[x]![0] = null; }
+      for (let x = 0; x < GameConfig.COLS; x++) { this.map[x]![0] = Tile.VOID; this.colors[x]![0] = null; }
       this.shiftEntitiesDown(y);
       this.tattooTiles = this.tattooTiles
         .filter(t => t.y !== y)
@@ -1072,15 +1072,15 @@ export class Game {
       // hit, but it only chips him down to a floor (a fraction of max HP):
       // you must still face him in person to finish it.
       if (this.gorgothEverSummoned && !this.gorgothSummoned) {
-        const chip = BALANCE.gorgoth.causewayDamagePerRowPerFloor * rowsCleared * this.dungeonLevel;
+        const chip = Balance.CONFIG.gorgoth.causewayDamagePerRowPerFloor * rowsCleared * this.dungeonLevel;
         const before = this.gorgothHp;
-        const chipFloor = Math.ceil(BALANCE.gorgoth.maxHp * BALANCE.gorgoth.causewayChipFloorPct);
+        const chipFloor = Math.ceil(Balance.CONFIG.gorgoth.maxHp * Balance.CONFIG.gorgoth.causewayChipFloorPct);
         if (this.gorgothHp > chipFloor) this.gorgothHp = Math.max(chipFloor, this.gorgothHp - chip);
         if (this.gorgothHp < before) {
           this.cb.log(`The causeway shudders — Bres feels it! (−${before - this.gorgothHp})`, 'log-boss', 'sprite_boss_gorgoth');
           // Stone shards rain from the unfinished bridge at the top of the board
-          this.cb.onParticleBurst?.(Math.floor(CONFIG.COLS / 2), 1, 8, '#b9a27e');
-          this.cb.onImpactGlow?.(Math.floor(CONFIG.COLS / 2), 0, '185,162,126', 12);
+          this.cb.onParticleBurst?.(Math.floor(GameConfig.COLS / 2), 1, 8, '#b9a27e');
+          this.cb.onImpactGlow?.(Math.floor(GameConfig.COLS / 2), 0, '185,162,126', 12);
         }
       }
 
@@ -1103,7 +1103,7 @@ export class Game {
     for (const m of this.monsters) { if (m.y < thresholdY) m.y++; }
     if (this.player.y < thresholdY) {
       this.player.y++;
-      if (this.player.y >= CONFIG.ROWS) this.transitionToNextFloor();
+      if (this.player.y >= GameConfig.ROWS) this.transitionToNextFloor();
     }
   }
 
@@ -1112,7 +1112,7 @@ export class Game {
   private transitionToNextFloor(): void {
     this.dungeonLevel++;
     this.floorsDescended++;
-    if (this.dungeonLevel % BALANCE.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
+    if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
     this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
@@ -1142,9 +1142,9 @@ export class Game {
     this.activeGhost = null;
     this.ghostPlaced = false;
     const eligibleGhosts = this.availableGhosts.filter(
-      g => Math.abs(g.playerLevel - this.player.playerLevel) <= BALANCE.ghosts.levelTolerance,
+      g => Math.abs(g.playerLevel - this.player.playerLevel) <= Balance.CONFIG.ghosts.levelTolerance,
     );
-    if (eligibleGhosts.length > 0 && Math.random() < BALANCE.ghosts.encounterChance) {
+    if (eligibleGhosts.length > 0 && Math.random() < Balance.CONFIG.ghosts.encounterChance) {
       this.activeGhost = eligibleGhosts[Math.floor(Math.random() * eligibleGhosts.length)]!;
     }
     this.hazards = [];
@@ -1159,7 +1159,7 @@ export class Game {
     this.player.y = 23;
     // Replenish finite ammo on descent (Rogue darts: +3, cap 5)
     if (this.player.rangedAmmo >= 0) {
-      this.player.rangedAmmo = Math.min(BALANCE.ammo.maxAmmo, this.player.rangedAmmo + BALANCE.ammo.replenishOnDescend);
+      this.player.rangedAmmo = Math.min(Balance.CONFIG.ammo.maxAmmo, this.player.rangedAmmo + Balance.CONFIG.ammo.replenishOnDescend);
     }
     // Cruelty Core: reset per-floor ATK bonus
     this.player.atk -= this.player.killAtkFloorBonus;
@@ -1319,7 +1319,7 @@ export class Game {
   openTattooArtist(): void {
     this.paused = true;
     const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
-    let cost = BALANCE.economy.ogmRerollBaseCost;
+    let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
     let choices = getThreeRandomBrands(ownedIds());
     const commit = (index: number): void => {
       const slot = BODY_PARTS[this.player.brands.length % BODY_PARTS.length]!;
@@ -1338,7 +1338,7 @@ export class Game {
       run: () => {
         if (this.gold < cost) return null;
         this.gold -= cost;
-        cost = Math.floor(cost * BALANCE.economy.ogmRerollCostGrowth);
+        cost = Math.floor(cost * Balance.CONFIG.economy.ogmRerollCostGrowth);
         choices = getThreeRandomBrands(ownedIds());
         this.pushUI();
         return { choices, gold: this.gold, cost };
@@ -1351,7 +1351,7 @@ export class Game {
   openPeddler(): void {
     if (!this.cb.onOpenShop) return;
     this.paused = true;
-    const prices = BALANCE.economy.shop.prices;
+    const prices = Balance.CONFIG.economy.shop.prices;
     const cost = (p: { base: number; perFloor: number }): number => p.base + p.perFloor * this.dungeonLevel;
     const stock: ShopItem[] = [
       { id: 'heal',  icon: 'sprite_potion',           name: 'Hearth Broth',       desc: 'Restore to full HP',                     cost: cost(prices.heal),  purchased: false },
@@ -1382,7 +1382,7 @@ export class Game {
     this.paused = true;
     const pool = BOONS_BY_TIER[tier];
     const ownedIds = (): string[] => this.player.boons.map(b => b.id);
-    let cost = BALANCE.economy.geasaRerollBaseCost;
+    let cost = Balance.CONFIG.economy.geasaRerollBaseCost;
     let choices = getThreeRandomBoons(pool, ownedIds());
     const commit = (index: number): void => {
       this.player.addBoon(choices[index]!);
@@ -1397,7 +1397,7 @@ export class Game {
       run: () => {
         if (this.gold < cost) return null;
         this.gold -= cost;
-        cost = Math.floor(cost * BALANCE.economy.geasaRerollCostGrowth);
+        cost = Math.floor(cost * Balance.CONFIG.economy.geasaRerollCostGrowth);
         choices = getThreeRandomBoons(pool, ownedIds());
         this.pushUI();
         return { choices, gold: this.gold, cost };
@@ -1416,7 +1416,7 @@ export class Game {
     }
 
     const nx = this.player.x + dx, ny = this.player.y + dy;
-    if (nx < 0 || nx >= CONFIG.COLS || ny < 0 || ny >= CONFIG.ROWS) return;
+    if (nx < 0 || nx >= GameConfig.COLS || ny < 0 || ny >= GameConfig.ROWS) return;
 
     // Combat has priority and reaches any adjacent tile — even one the hero
     // can't stand on (e.g. Gorgoth phasing down through the void/stack). An
@@ -1518,7 +1518,7 @@ export class Game {
       }
       this.dungeonLevel++;
       this.floorsDescended++;
-      if (this.dungeonLevel % BALANCE.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
+      if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
       this.cb.onAudio?.('descend');
       this.updateBiome();
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
@@ -1531,8 +1531,8 @@ export class Game {
       // Floor event fires every N voluntary descents (skip boss floors); the
       // wandering peddler takes the descents in between (offset so the two
       // can never stack modals on the same floor).
-      const isBossFloor = this.dungeonLevel % BALANCE.floors.bossFloorInterval === 0;
-      if (!isBossFloor && this.floorsDescended % BALANCE.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
+      const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
+      if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
         const event = getRandomFloorEvent();
         this.paused = true;
         this.cb.onFloorEvent(event, (index) => {
@@ -1542,7 +1542,7 @@ export class Game {
           this.cb.onAction();
         });
       } else if (!isBossFloor
-          && this.floorsDescended % BALANCE.economy.shop.descentModulo === BALANCE.economy.shop.descentRemainder
+          && this.floorsDescended % Balance.CONFIG.economy.shop.descentModulo === Balance.CONFIG.economy.shop.descentRemainder
           && this.cb.onOpenShop) {
         this.openPeddler();
       }
@@ -1862,8 +1862,8 @@ export class Game {
     const r = typeof radiusParam === 'number' ? radiusParam : this.player.visionRadius;
     const tileType = this.abilityStr(ability, 'tileType', 'sacred') as SpecialTile['type'];
     let count = 0;
-    for (let cx = 0; cx < CONFIG.COLS; cx++) {
-      for (let cy = 0; cy < CONFIG.ROWS; cy++) {
+    for (let cx = 0; cx < GameConfig.COLS; cx++) {
+      for (let cy = 0; cy < GameConfig.ROWS; cy++) {
         if (Math.hypot(cx - this.player.x, cy - this.player.y) > r) continue;
         if (this.map[cx]?.[cy] !== Tile.FLOOR) continue;
         if (this.specialTiles.some(t => t.x === cx && t.y === cy)) continue;
@@ -1958,7 +1958,7 @@ export class Game {
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR)
     );
-    this.blockX = Math.floor((CONFIG.COLS - this.blockMatrix[0]!.length) / 2);
+    this.blockX = Math.floor((GameConfig.COLS - this.blockMatrix[0]!.length) / 2);
     this.blockY = 0;
     if (this.checkBlockCollision(this.blockX, this.blockY, this.blockMatrix)) {
       this.summonGorgoth();
@@ -1982,9 +1982,9 @@ export class Game {
     // Gorgoth looms in at the very top-centre and grinds his way down to the
     // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
     // so descending floors only ever helps you.
-    const gx = Math.floor(CONFIG.COLS / 2);
-    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', this.gorgothHp, BALANCE.gorgoth.maxHp, BALANCE.gorgoth.atk, BALANCE.gorgoth.xpReward, true, 'gorgoth', 1, 1);
-    boss.combatLevel = BALANCE.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
+    const gx = Math.floor(GameConfig.COLS / 2);
+    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', this.gorgothHp, Balance.CONFIG.gorgoth.maxHp, Balance.CONFIG.gorgoth.atk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
+    boss.combatLevel = Balance.CONFIG.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
 
@@ -1995,7 +1995,7 @@ export class Game {
       g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
       for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
         const ax = boss.x + dx, ay = boss.y + dy;
-        if (ax >= 0 && ax < CONFIG.COLS && ay >= 0 && ay < CONFIG.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
+        if (ax >= 0 && ax < GameConfig.COLS && ay >= 0 && ay < GameConfig.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
           g.spawnMonster(g.getRandomMonsterKey(), ax, ay);
         }
       }
@@ -2004,8 +2004,8 @@ export class Game {
     this.bossHalfHpTriggered = this.gorgothHalfTriggered;
 
     // Reveal the whole arena — no fog for the finale.
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
         this.visibility[x]![y] = true;
         this.explored[x]![y] = true;
       }
@@ -2016,7 +2016,7 @@ export class Game {
 
     this.paused = true;
     this.cb.onBossWarning?.(
-      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: BALANCE.gorgoth.xpReward, flavorText: 'Beautiful and merciless, returned from the depths to complete the causeway home.' },
+      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: Balance.CONFIG.gorgoth.xpReward, flavorText: 'Beautiful and merciless, returned from the depths to complete the causeway home.' },
       () => { this.paused = false; },
     );
     this.pushUI();
@@ -2089,7 +2089,7 @@ export class Game {
   // ── Tap-to-inspect ───────────────────────────────────────────────────────
 
   getInspectInfo(x: number, y: number): InspectInfo | null {
-    if (x < 0 || x >= CONFIG.COLS || y < 0 || y >= CONFIG.ROWS) return null;
+    if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return null;
 
     if (this.player.x === x && this.player.y === y) {
       const lines = [
@@ -2097,7 +2097,7 @@ export class Game {
         `ATK ${Math.round(this.player.totalAtk)}  DEF ${this.player.totalDef}`,
         `Lv.${this.player.playerLevel}`,
       ];
-      if (this.player.boons.length > 0) lines.push(`Geasa: ${this.player.boons.map(b => `${spriteIconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
+      if (this.player.boons.length > 0) lines.push(`Geasa: ${this.player.boons.map(b => `${SpriteService.iconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
       return { icon: this.player.char, title: 'You', lines };
     }
 
@@ -2263,7 +2263,7 @@ export class Game {
         };
       }),
       brandsAcquiredTotal: this.player.brandsAcquiredTotal,
-      brandsMaxLifetime: BALANCE.brands.maxLifetime,
+      brandsMaxLifetime: Balance.CONFIG.brands.maxLifetime,
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
       activeClass: activeCls

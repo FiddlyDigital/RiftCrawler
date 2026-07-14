@@ -1,7 +1,7 @@
 import type { Game } from '../game';
 import type { Monster } from '../entities';
 import { pctOf } from '../entities';
-import { COMBAT_BALANCE, numOr } from '../balance';
+import { Balance } from '../balance';
 import { BOONS_BY_TIER } from '../content';
 
 export function triggerDeath(game: Game, title: string, reason: string): void {
@@ -32,7 +32,7 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
 export function dieSides(level: number): number {
   // The `6` cap is coupled to diceSidesByLevel's fixed 7-entry length (indices
   // 0-6) — see also the boss/Gorgoth/elite combatLevel caps in game.ts.
-  return numOr(COMBAT_BALANCE.diceSidesByLevel[Math.max(1, Math.min(6, level))], 4);
+  return Balance.numOr(Balance.COMBAT.diceSidesByLevel[Math.max(1, Math.min(6, level))], 4);
 }
 
 function rollDie(level: number): number {
@@ -41,7 +41,7 @@ function rollDie(level: number): number {
 
 type CombatOutcome = 'miss' | 'weak' | 'normal' | 'power' | 'critical';
 
-const OUTCOME_MULT = COMBAT_BALANCE.outcomeMultipliers;
+const OUTCOME_MULT = Balance.COMBAT.outcomeMultipliers;
 
 function resolveCombatRoll(
   attackerLevel: number,
@@ -56,8 +56,8 @@ function resolveCombatRoll(
   if (aRoll === dieSides(attackerLevel)) return { outcome: 'critical', aRoll, dRoll };
   if (aRoll <= dRoll) return { outcome: 'miss', aRoll, dRoll };
   const margin = aRoll - dRoll;
-  if (margin <= COMBAT_BALANCE.marginThresholds.weakMax) return { outcome: 'weak', aRoll, dRoll };
-  if (margin <= COMBAT_BALANCE.marginThresholds.normalMax) return { outcome: 'normal', aRoll, dRoll };
+  if (margin <= Balance.COMBAT.marginThresholds.weakMax) return { outcome: 'weak', aRoll, dRoll };
+  if (margin <= Balance.COMBAT.marginThresholds.normalMax) return { outcome: 'normal', aRoll, dRoll };
   return { outcome: 'power', aRoll, dRoll };
 }
 
@@ -87,7 +87,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
   // dice streak can't stall you to death. Any landed hit disarms it.
   let pityHit = false;
   if (outcome === 'miss') {
-    if (game.player.missStreak >= COMBAT_BALANCE.missPityStreak) {
+    if (game.player.missStreak >= Balance.COMBAT.missPityStreak) {
       outcome = 'weak';
       pityHit = true;
       game.player.missStreak = 0;
@@ -102,7 +102,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     // Graze floor: even a whiff chips for a little damage so no swing is wasted
     // while a block is bearing down on you. The miss-pity above still escalates a
     // cold streak from graze → weak hit, so poor rolls sting but never stall you.
-    const graze = Math.max(1, Math.round(game.player.totalAtk * COMBAT_BALANCE.grazeDamagePct * damageMult));
+    const graze = Math.max(1, Math.round(game.player.totalAtk * Balance.COMBAT.grazeDamagePct * damageMult));
     monster.hp -= graze;
     game.cb.log(`Graze on ${monster.name} (${aRoll} vs ${dRoll}) — ${graze} dmg`, 'log-neutral');
     game.cb.onParticle(monster.x, monster.y, `-${graze}`, '#b0bec5', 14);
@@ -132,7 +132,7 @@ export function playerAttackMonster(monster: Monster, game: Game, forceCrit = fa
     game.cb.onParticleBurst?.(monster.x, monster.y, 6, '#d9a441', 'fx_impact');
     game.cb.onHitStop?.(3);
     if (!monster.isStunned) {
-      monster.statuses.push({ type: 'stun', duration: COMBAT_BALANCE.critStun.duration, power: COMBAT_BALANCE.critStun.power });
+      monster.statuses.push({ type: 'stun', duration: Balance.COMBAT.critStun.duration, power: Balance.COMBAT.critStun.power });
       game.cb.log(`${monster.name} is stunned!`, 'log-success');
     }
   }
@@ -249,7 +249,7 @@ export function killMonster(m: Monster, game: Game): void {
   game.monstersKilled++;
   game.killsThisFloor++;
   if (m.isBoss) game.bossesKilled++;
-  game.gold += m.isBoss ? COMBAT_BALANCE.rewards.goldOnBossKill : COMBAT_BALANCE.rewards.goldOnKill;
+  game.gold += m.isBoss ? Balance.COMBAT.rewards.goldOnBossKill : Balance.COMBAT.rewards.goldOnKill;
   game.monsters = game.monsters.filter(x => x !== m);
   const levelled = game.player.gainXP(Math.floor(m.xpReward * game.xpMultiplier));
   if (levelled) {
@@ -287,13 +287,13 @@ export function killMonster(m: Monster, game: Game): void {
     }
   } else {
     if (m.isElite) {
-      const bonus = COMBAT_BALANCE.rewards.eliteGoldBonusPerFloor * game.dungeonLevel;
+      const bonus = Balance.COMBAT.rewards.eliteGoldBonusPerFloor * game.dungeonLevel;
       game.gold += bonus;
       game.cb.onParticle(m.x, m.y, `+${bonus}`, '#ffd700', undefined, 'item_gold_pouch');
       game.cb.onParticleBurst?.(m.x, m.y, 8, '#d4af37');
       game.cb.log(`Elite vanquished! +${bonus} gold.`, 'log-perk', 'special_sacred');
     }
-    const healBonus = game.player.heal(COMBAT_BALANCE.rewards.healOnKill);
+    const healBonus = game.player.heal(Balance.COMBAT.rewards.healOnKill);
     if (healBonus > 0) {
       game.cb.onParticle(game.player.x, game.player.y, `+${healBonus} HP`, '#69f0ae');
       if (!m.isElite) game.cb.log(`Siphoned essence of ${m.name}! +${healBonus} HP`, 'log-success');

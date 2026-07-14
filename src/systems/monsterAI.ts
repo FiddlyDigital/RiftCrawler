@@ -1,10 +1,10 @@
 import { Tile } from '../types';
-import { CONFIG } from '../config';
+import { GameConfig } from '../config';
 import type { Game } from '../game';
 import type { Monster } from '../entities';
 import { monsterAttackPlayer } from './combat';
 import { checkHazardTrigger } from './hazards';
-import { MONSTER_AI } from '../balance';
+import { Balance } from '../balance';
 
 export function processMonsterTurns(game: Game): void {
   if (game.player.hp <= 0) return;
@@ -55,7 +55,7 @@ function moveMonsterToward(m: Monster, game: Game): void {
 // diagonal reach either way — so a diagonally-touching enemy must first step
 // onto an orthogonal tile before it can strike.
 function inBaseContact(m: Monster, game: Game): boolean {
-  return manhattanToPlayer(m, game) === MONSTER_AI.common.contactDistance;
+  return manhattanToPlayer(m, game) === Balance.MONSTER_AI.common.contactDistance;
 }
 
 function manhattanToPlayer(m: Monster, game: Game): number {
@@ -81,7 +81,7 @@ export function hasLineOfSight(x1: number, y1: number, x2: number, y2: number, g
 
 function processMeleeMonster(m: Monster, game: Game): void {
   if (inBaseContact(m, game)) { monsterAttackPlayer(m, game); }
-  else if (manhattanToPlayer(m, game) <= MONSTER_AI.melee.chaseRange) { moveMonsterToward(m, game); }
+  else if (manhattanToPlayer(m, game) <= Balance.MONSTER_AI.melee.chaseRange) { moveMonsterToward(m, game); }
 }
 
 function processRangedMonster(m: Monster, game: Game): void {
@@ -90,10 +90,10 @@ function processRangedMonster(m: Monster, game: Game): void {
   const dist = Math.abs(dx) + Math.abs(dy);
   if (dist <= m.attackRange && hasLineOfSight(m.x, m.y, game.player.x, game.player.y, game)) {
     monsterAttackPlayer(m, game);
-  } else if (dist <= MONSTER_AI.ranged.retreatDistance) {
+  } else if (dist <= Balance.MONSTER_AI.ranged.retreatDistance) {
     const nx = m.x - Math.sign(dx), ny = m.y - Math.sign(dy);
     if (game.isValidMove(nx, ny) && !game.getMonsterAt(nx, ny)) { m.x = nx; m.y = ny; }
-  } else if (dist <= m.attackRange + MONSTER_AI.ranged.advanceRangeBonus) {
+  } else if (dist <= m.attackRange + Balance.MONSTER_AI.ranged.advanceRangeBonus) {
     moveMonsterToward(m, game);
   }
 }
@@ -101,10 +101,10 @@ function processRangedMonster(m: Monster, game: Game): void {
 function processHealerMonster(m: Monster, game: Game): void {
   const wounded = game.monsters.find(other =>
     other !== m && other.hp < other.maxHp &&
-    Math.abs(other.x - m.x) + Math.abs(other.y - m.y) <= MONSTER_AI.healer.healRadius,
+    Math.abs(other.x - m.x) + Math.abs(other.y - m.y) <= Balance.MONSTER_AI.healer.healRadius,
   );
   if (wounded) {
-    const healAmt = Math.max(1, Math.floor(wounded.maxHp * MONSTER_AI.healer.healFraction));
+    const healAmt = Math.max(1, Math.floor(wounded.maxHp * Balance.MONSTER_AI.healer.healFraction));
     wounded.hp = Math.min(wounded.maxHp, wounded.hp + healAmt);
     game.cb.onParticle(wounded.x, wounded.y, `+${healAmt}`, '#4caf50');
     game.cb.log(`${m.name} heals ${wounded.name}!`, 'log-damage');
@@ -115,13 +115,13 @@ function processHealerMonster(m: Monster, game: Game): void {
 
 function processBerserkerMonster(m: Monster, game: Game): void {
   if (inBaseContact(m, game)) {
-    const enraged = m.hp < m.maxHp * MONSTER_AI.berserker.enrageHpFraction;
+    const enraged = m.hp < m.maxHp * Balance.MONSTER_AI.berserker.enrageHpFraction;
     monsterAttackPlayer(m, game);
     if (enraged && game.player.hp > 0) {
       game.cb.log(`${m.name} rages and strikes again!`, 'log-damage');
       monsterAttackPlayer(m, game);
     }
-  } else if (manhattanToPlayer(m, game) <= MONSTER_AI.berserker.chaseRange) {
+  } else if (manhattanToPlayer(m, game) <= Balance.MONSTER_AI.berserker.chaseRange) {
     moveMonsterToward(m, game);
   }
 }
@@ -129,9 +129,9 @@ function processBerserkerMonster(m: Monster, game: Game): void {
 function processSwiftMonster(m: Monster, game: Game): void {
   if (inBaseContact(m, game)) {
     monsterAttackPlayer(m, game);
-  } else if (manhattanToPlayer(m, game) <= MONSTER_AI.swift.chaseRange) {
+  } else if (manhattanToPlayer(m, game) <= Balance.MONSTER_AI.swift.chaseRange) {
     moveMonsterToward(m, game);
-    if (MONSTER_AI.swift.doubleMoveOnChase && game.player.hp > 0 && !inBaseContact(m, game)) {
+    if (Balance.MONSTER_AI.swift.doubleMoveOnChase && game.player.hp > 0 && !inBaseContact(m, game)) {
       moveMonsterToward(m, game);
     }
   }
@@ -140,11 +140,11 @@ function processSwiftMonster(m: Monster, game: Game): void {
 // Gorgoth the Returned: a slow, unstoppable descent from the top of the arena.
 // He pursues from ANY distance (unlike the melee chase-range gate) and
 // phases through terrain — walls and void never wall him out of the stack — so
-// his arrival is inevitable. One tile every MONSTER_AI.gorgoth.stepTurns turns.
+// his arrival is inevitable. One tile every Balance.MONSTER_AI.gorgoth.stepTurns turns.
 function processGorgoth(m: Monster, game: Game): void {
   if (inBaseContact(m, game)) { monsterAttackPlayer(m, game); return; }
 
-  if (++m.stepCharge < MONSTER_AI.gorgoth.stepTurns) return;
+  if (++m.stepCharge < Balance.MONSTER_AI.gorgoth.stepTurns) return;
   m.stepCharge = 0;
 
   const sx = Math.sign(game.player.x - m.x);
@@ -156,7 +156,7 @@ function processGorgoth(m: Monster, game: Game): void {
   for (const [ddx, ddy] of tries) {
     if (ddx === 0 && ddy === 0) continue;
     const nx = m.x + ddx, ny = m.y + ddy;
-    if (nx < 0 || nx >= CONFIG.COLS || ny < 0 || ny >= CONFIG.ROWS) continue;
+    if (nx < 0 || nx >= GameConfig.COLS || ny < 0 || ny >= GameConfig.ROWS) continue;
     if (nx === game.player.x && ny === game.player.y) continue;  // don't stand on the hero
     if (game.getMonsterAt(nx, ny)) continue;                     // don't stack on adds
     m.x = nx; m.y = ny;

@@ -13,7 +13,7 @@ import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef,
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
-import { numOr } from './balance';
+import { Balance } from './balance';
 
 // ── Declarative effect resolver (JSON-configured boons / brands / modifiers) ───
 // Boons/brands/modifiers describe their effects as data; these apply them.
@@ -314,7 +314,7 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   static_message: (_game, opt) => opt.resultMsg ?? 'Nothing happened.',
 
   shrine_offer_hp: (game, opt) => {
-    const hpCost = numOr(opt.params?.hpCost, 20);
+    const hpCost = Balance.numOr(opt.params?.hpCost, 20);
     game.player.hp = Math.max(1, game.player.hp - hpCost);
     game.damageTaken += hpCost;
     const pool = [...BOONS_BY_TIER[1], ...BOONS_BY_TIER[2]];
@@ -329,16 +329,16 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   },
 
   spring_fill_flask: (game, opt) => {
-    const healAmount = numOr(opt.params?.healAmount, 25);
+    const healAmount = Balance.numOr(opt.params?.healAmount, 25);
     // regenPerTick is a fraction of maxHp (0.02 = 2%/tick), not a flat amount
-    const regenBonus = numOr(opt.params?.regenBonus, 0.02);
+    const regenBonus = Balance.numOr(opt.params?.regenBonus, 0.02);
     const gained = game.player.heal(healAmount);
     game.player.regenPerTick += regenBonus;
     return `Healed ${gained} HP and gained passive regeneration.`;
   },
 
   champion_take_boon: (game, opt) => {
-    const tierBreakFloor = numOr(opt.params?.tierBreakFloor, 5);
+    const tierBreakFloor = Balance.numOr(opt.params?.tierBreakFloor, 5);
     const tier = game.dungeonLevel >= tierBreakFloor ? 2 : 1;
     const pool = BOONS_BY_TIER[tier as 1 | 2];
     const def = pool[Math.floor(Math.random() * pool.length)]!;
@@ -347,14 +347,14 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   },
 
   champion_rations: (game, opt) => {
-    const healAmount = numOr(opt.params?.healAmount, 35);
+    const healAmount = Balance.numOr(opt.params?.healAmount, 35);
     const gained = game.player.heal(healAmount);
     return `You eat the champion's rations. +${gained} HP`;
   },
 
   bargain_accept: (game, opt) => {
-    const atkBonus = numOr(opt.params?.atkBonus, 12);
-    const hpCost = numOr(opt.params?.hpCost, 25);
+    const atkBonus = Balance.numOr(opt.params?.atkBonus, 12);
+    const hpCost = Balance.numOr(opt.params?.hpCost, 25);
     game.player.atk += atkBonus;
     game.player.maxHp = Math.max(10, game.player.maxHp - hpCost);
     game.player.hp = Math.min(game.player.hp, game.player.maxHp);
@@ -362,7 +362,7 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   },
 
   tome_tactics: (game, opt) => {
-    const xpGain = numOr(opt.params?.xpGain, 150);
+    const xpGain = Balance.numOr(opt.params?.xpGain, 150);
     const levelled = game.player.gainXP(xpGain);
     if (levelled) {
       game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
@@ -372,21 +372,21 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   },
 
   tome_lore: (game, opt) => {
-    const visionBonus = numOr(opt.params?.visionBonus, 2);
+    const visionBonus = Balance.numOr(opt.params?.visionBonus, 2);
     game.player.visionRadius += visionBonus;
     return `Your perception expands. +${visionBonus} vision radius.`;
   },
 
   cache_search: (game, opt) => {
-    const gold = numOr(opt.params?.gold, 800);
+    const gold = Balance.numOr(opt.params?.gold, 800);
     game.gold += gold;
     return `You find ${gold} gold worth of loot!`;
   },
 
   cache_gamble: (game, opt) => {
-    const successChance = numOr(opt.params?.successChance, 0.5);
-    const jackpotGold = numOr(opt.params?.jackpotGold, 2000);
-    const trapDamage = numOr(opt.params?.trapDamage, 30);
+    const successChance = Balance.numOr(opt.params?.successChance, 0.5);
+    const jackpotGold = Balance.numOr(opt.params?.jackpotGold, 2000);
+    const trapDamage = Balance.numOr(opt.params?.trapDamage, 30);
     if (Math.random() < successChance) {
       game.gold += jackpotGold;
       return `Jackpot! +${jackpotGold} gold!`;
@@ -403,23 +403,23 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   },
 
   font_empower: (game, opt) => {
-    const atkBonus = numOr(opt.params?.atkBonus, 2);
+    const atkBonus = Balance.numOr(opt.params?.atkBonus, 2);
     game.player.atk += atkBonus;
     return `Rift energy floods your muscles. +${atkBonus} ATK.`;
   },
 
   armory_cursed_blade: (game, opt) => {
-    const atkBonus = numOr(opt.params?.atkBonus, 8);
-    const poisonDuration = numOr(opt.params?.poisonDuration, 3);
-    const poisonPower = numOr(opt.params?.poisonPower, 4);
+    const atkBonus = Balance.numOr(opt.params?.atkBonus, 8);
+    const poisonDuration = Balance.numOr(opt.params?.poisonDuration, 3);
+    const poisonPower = Balance.numOr(opt.params?.poisonPower, 4);
     game.player.atk += atkBonus;
     game.player.statuses.push({ type: 'poison', duration: poisonDuration, power: poisonPower });
     return `Dark power flows through you. +${atkBonus} ATK, but the blade bites back.`;
   },
 
   scholar_combat_theory: (game, opt) => {
-    const xpGain = numOr(opt.params?.xpGain, 50);
-    const combatLevelBonus = numOr(opt.params?.combatLevelBonus, 1);
+    const xpGain = Balance.numOr(opt.params?.xpGain, 50);
+    const combatLevelBonus = Balance.numOr(opt.params?.combatLevelBonus, 1);
     const levelled = game.player.gainXP(xpGain);
     game.player.baseCombatLevel += combatLevelBonus;
     if (levelled) {
@@ -430,9 +430,9 @@ const FLOOR_EVENT_HANDLERS: Record<string, FloorEventHandler> = {
   },
 
   scholar_wisdom: (game, opt) => {
-    const visionBonus = numOr(opt.params?.visionBonus, 3);
+    const visionBonus = Balance.numOr(opt.params?.visionBonus, 3);
     // regenPerTick is a fraction of maxHp (0.02 = 2%/tick), not a flat amount
-    const regenBonus = numOr(opt.params?.regenBonus, 0.02);
+    const regenBonus = Balance.numOr(opt.params?.regenBonus, 0.02);
     game.player.visionRadius += visionBonus;
     game.player.regenPerTick += regenBonus;
     return `Ancient wisdom seeps in. +${visionBonus} vision, +${Math.round(regenBonus * 100)}% Max HP regen/tick.`;

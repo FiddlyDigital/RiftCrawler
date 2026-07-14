@@ -1,5 +1,5 @@
 import { SHAPES } from './config';
-import { spriteIconHTML, escapeHtml, shapePreviewHTML } from './sprites';
+import { SpriteService, HtmlUtils } from './sprites';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -75,7 +75,7 @@ export class UIManager {
   log(text: string, cls: LogClass = 'log-neutral', icon?: string): void {
     const div = document.createElement('div');
     div.className = `log-entry ${cls}`;
-    div.innerHTML = icon ? `${spriteIconHTML(icon, 13, 'sprite-icon log-icon')}${escapeHtml(text)}` : escapeHtml(text);
+    div.innerHTML = icon ? `${SpriteService.iconHTML(icon, 13, 'sprite-icon log-icon')}${HtmlUtils.escapeHtml(text)}` : HtmlUtils.escapeHtml(text);
     this.logPanel.appendChild(div);
     this.logPanel.scrollTop = this.logPanel.scrollHeight;
     if (this.logPanel.children.length > 50) this.logPanel.firstChild?.remove();
@@ -84,10 +84,10 @@ export class UIManager {
 
   // Static HTML can't embed sprite icons (sheets load async), so icon slots
   // are <span class="spr" data-sprite="..."> hydrated here once the sheet is
-  // ready — retried each update until spriteIconHTML returns real markup.
+  // ready — retried each update until SpriteService.iconHTML returns real markup.
   private hydrateSpriteSlots(): void {
     document.querySelectorAll<HTMLElement>('.spr[data-sprite]:not([data-hydrated])').forEach(el => {
-      const html = spriteIconHTML(el.dataset['sprite']!, Number(el.dataset['size'] ?? 12));
+      const html = SpriteService.iconHTML(el.dataset['sprite']!, Number(el.dataset['size'] ?? 12));
       if (html) { el.innerHTML = html; el.dataset['hydrated'] = '1'; }
     });
   }
@@ -134,12 +134,12 @@ export class UIManager {
       this.lastXpEarned = state.totalXpEarned;
     }
 
-    this.els['nextPreview']!.innerHTML = shapePreviewHTML(SHAPES[state.nextType]);
-    this.els['hudNextPreview']!.innerHTML = shapePreviewHTML(SHAPES[state.nextType], 6);
+    this.els['nextPreview']!.innerHTML = SpriteService.shapePreviewHTML(SHAPES[state.nextType]);
+    this.els['hudNextPreview']!.innerHTML = SpriteService.shapePreviewHTML(SHAPES[state.nextType], 6);
 
     // Held piece display
     const heldBox = this.els['heldPreview']!;
-    heldBox.innerHTML = state.heldType ? shapePreviewHTML(SHAPES[state.heldType]) : '—';
+    heldBox.innerHTML = state.heldType ? SpriteService.shapePreviewHTML(SHAPES[state.heldType]) : '—';
     heldBox.style.opacity = state.canHold ? '1' : '0.35';
 
     // Cursed / blessed piece badge
@@ -147,11 +147,11 @@ export class UIManager {
     if (state.pieceState === 'cursed') {
       psBadge.style.display = '';
       psBadge.style.color = '#ef5350';
-      psBadge.innerHTML = `${spriteIconHTML('status_poison', 12)}CURSED PIECE`;
+      psBadge.innerHTML = `${SpriteService.iconHTML('status_poison', 12)}CURSED PIECE`;
     } else if (state.pieceState === 'blessed') {
       psBadge.style.display = '';
       psBadge.style.color = '#ffd54f';
-      psBadge.innerHTML = `${spriteIconHTML('special_sacred', 12)}BLESSED PIECE`;
+      psBadge.innerHTML = `${SpriteService.iconHTML('special_sacred', 12)}BLESSED PIECE`;
     } else {
       psBadge.style.display = 'none';
     }
@@ -166,13 +166,13 @@ export class UIManager {
 
     // Status effect tags
     this.els['statusRow']!.innerHTML = state.statuses
-      .map(s => `<span class="status-tag status-${s.type}">${spriteIconHTML(s.type === 'poison' ? 'status_poison' : 'status_stun', 12)}${s.type} ${s.duration}</span>`)
+      .map(s => `<span class="status-tag status-${s.type}">${SpriteService.iconHTML(s.type === 'poison' ? 'status_poison' : 'status_stun', 12)}${s.type} ${s.duration}</span>`)
       .join('');
 
     // Active modifier badge
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
-      this.els['activeModifier']!.innerHTML = `${spriteIconHTML(state.activeModifier.emoji, 12)}${escapeHtml(state.activeModifier.name)}`;
+      this.els['activeModifier']!.innerHTML = `${SpriteService.iconHTML(state.activeModifier.emoji, 12)}${HtmlUtils.escapeHtml(state.activeModifier.name)}`;
     } else {
       this.els['activeModifier']!.style.display = 'none';
     }
@@ -180,7 +180,7 @@ export class UIManager {
     // Active class badge
     if (state.activeClass) {
       this.els['activeClass']!.style.display = '';
-      this.els['activeClass']!.innerHTML = `${spriteIconHTML(state.activeClass.emoji, 12)}${escapeHtml(state.activeClass.name)}`;
+      this.els['activeClass']!.innerHTML = `${SpriteService.iconHTML(state.activeClass.emoji, 12)}${HtmlUtils.escapeHtml(state.activeClass.name)}`;
     } else {
       this.els['activeClass']!.style.display = 'none';
     }
@@ -203,16 +203,16 @@ export class UIManager {
       const costText  = ra.hpCostPct !== null ? ` · ${Math.round(ra.hpCostPct * 100)}% HP` : '';
       const bookText  = ra.spellCount > 1 ? ` (${ra.spellIndex + 1}/${ra.spellCount})` : '';
       const cdText    = ra.cooldown > 0 ? ` [${ra.cooldown}t]` : ' [Ready]';
-      const label = `${escapeHtml(ra.name)}${bookText}${ammoText}${cdText}${costText}`;
+      const label = `${HtmlUtils.escapeHtml(ra.name)}${bookText}${ammoText}${cdText}${costText}`;
       this.els['rangedAbility']!.style.display = '';
       this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
       this.els['rangedAbility']!.style.fontSize = '9px';
       const cycleHint = ra.spellCount > 1 ? ' · E switches' : '';
-      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)${cycleHint}</span>`;
+      this.els['rangedAbility']!.innerHTML = `${SpriteService.iconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)${cycleHint}</span>`;
       if (rangedBtn) {
         // Short generic label (not the ability name) so the button stays as
         // narrow as the Hold button — full detail lives in the sidebar badge.
-        rangedBtn.innerHTML = `${spriteIconHTML(ra.emoji, 12)}Special`;
+        rangedBtn.innerHTML = `${SpriteService.iconHTML(ra.emoji, 12)}Special`;
         rangedBtn.disabled = !ready;
         rangedBtn.style.opacity = ready ? '1' : '0.4';
       }
@@ -232,7 +232,7 @@ export class UIManager {
   }
 
   showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
-    this.els['deathTitle']!.innerHTML   = `${spriteIconHTML('item_trophy', 16)}BRES VANQUISHED`;
+    this.els['deathTitle']!.innerHTML   = `${SpriteService.iconHTML('item_trophy', 16)}BRES VANQUISHED`;
     this.els['deathReason']!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
     this.modal.querySelector('.modal-card')?.classList.add('victory');
     this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
@@ -254,11 +254,11 @@ export class UIManager {
     if (stats) {
       this.els['runStatsGrid']!.innerHTML = `
         <div class="run-stats-grid">
-          <div class="stat-cell">${spriteIconHTML('status_poison', 14)}<b>${stats.monstersKilled}</b><br><span>Monsters</span></div>
-          <div class="stat-cell">${spriteIconHTML('sprite_boss_boneking', 14)}<b>${stats.bossesKilled}</b><br><span>Bosses</span></div>
+          <div class="stat-cell">${SpriteService.iconHTML('status_poison', 14)}<b>${stats.monstersKilled}</b><br><span>Monsters</span></div>
+          <div class="stat-cell">${SpriteService.iconHTML('sprite_boss_boneking', 14)}<b>${stats.bossesKilled}</b><br><span>Bosses</span></div>
           <div class="stat-cell"><span class="brick-icon"></span><b>${stats.linesCleared}</b><br><span>Lines</span></div>
-          <div class="stat-cell">${spriteIconHTML('fx_impact', 14)}<b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
-          <div class="stat-cell">${spriteIconHTML('item_heart', 14)}<b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
+          <div class="stat-cell">${SpriteService.iconHTML('fx_impact', 14)}<b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
+          <div class="stat-cell">${SpriteService.iconHTML('item_heart', 14)}<b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
         </div>`;
       const shareStr = `Fl.${floor} · ${stats.monstersKilled} kills · ${stats.linesCleared} lines · Best combo ×${stats.biggestCombo + 1} · ${totalXpEarned.toLocaleString()} XP`;
       (this.els['shareText'] as HTMLTextAreaElement).value = shareStr;
@@ -281,7 +281,7 @@ export class UIManager {
 
     // Full run log — scrolling box + copy/download
     this.els['runLogFull']!.innerHTML = this.fullLog.map(e =>
-      `<div class="log-entry ${e.cls}">${e.icon ? `${spriteIconHTML(e.icon, 13, 'sprite-icon log-icon')}${escapeHtml(e.text)}` : escapeHtml(e.text)}</div>`
+      `<div class="log-entry ${e.cls}">${e.icon ? `${SpriteService.iconHTML(e.icon, 13, 'sprite-icon log-icon')}${HtmlUtils.escapeHtml(e.text)}` : HtmlUtils.escapeHtml(e.text)}</div>`
     ).join('') || '<div style="color:#555;font-size:9px">No events recorded.</div>';
     const logText = this.fullLog.map(e => e.text).join('\n');
     const copyLogBtn = document.getElementById('copy-log-btn');
@@ -341,7 +341,7 @@ export class UIManager {
     for (const mod of mods) {
       const btn = document.createElement('button');
       btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${spriteIconHTML(mod.emoji, 24)}</span><div class="modifier-info"><strong>${mod.name}</strong><span>${mod.desc}</span></div>`;
+      btn.innerHTML = `<span class="modifier-emoji">${SpriteService.iconHTML(mod.emoji, 24)}</span><div class="modifier-info"><strong>${mod.name}</strong><span>${mod.desc}</span></div>`;
       btn.addEventListener('click', () => {
         this.modifierModal.style.display = 'none';
         onSelect(mod.id);
@@ -357,8 +357,8 @@ export class UIManager {
     for (const cls of classes) {
       const btn = document.createElement('button');
       btn.className = 'modifier-btn';
-      const chips = cls.statChips.map(c => `<span class="class-chip">${escapeHtml(c)}</span>`).join('');
-      btn.innerHTML = `<span class="modifier-emoji">${spriteIconHTML(cls.emoji, 24)}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span class="class-chip-row">${chips}</span></div>`;
+      const chips = cls.statChips.map(c => `<span class="class-chip">${HtmlUtils.escapeHtml(c)}</span>`).join('');
+      btn.innerHTML = `<span class="modifier-emoji">${SpriteService.iconHTML(cls.emoji, 24)}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span class="class-chip-row">${chips}</span></div>`;
       btn.addEventListener('click', () => {
         this.classModal.style.display = 'none';
         onSelect(cls.id);
@@ -369,7 +369,7 @@ export class UIManager {
   }
 
   showFloorEvent(event: FloorEventDef, onChoice: (index: number) => void): void {
-    (document.getElementById('floor-event-emoji') as HTMLElement).innerHTML  = spriteIconHTML(event.emoji, 28);
+    (document.getElementById('floor-event-emoji') as HTMLElement).innerHTML  = SpriteService.iconHTML(event.emoji, 28);
     (document.getElementById('floor-event-title') as HTMLElement).textContent  = event.title;
     (document.getElementById('floor-event-flavor') as HTMLElement).textContent = event.flavor;
     const container = document.getElementById('floor-event-choices')!;
@@ -388,7 +388,7 @@ export class UIManager {
   }
 
   showBossWarning(boss: BossDef, onDone: () => void): void {
-    (document.getElementById('boss-warning-emoji') as HTMLElement).innerHTML = spriteIconHTML(boss.char, 32);
+    (document.getElementById('boss-warning-emoji') as HTMLElement).innerHTML = SpriteService.iconHTML(boss.char, 32);
     (document.getElementById('boss-warning-name')  as HTMLElement).textContent = boss.name.toUpperCase();
     (document.getElementById('boss-warning-flavor') as HTMLElement).textContent = boss.flavorText;
     this.bossWarningModal.style.display = 'flex';
@@ -427,7 +427,7 @@ export class UIManager {
     for (const b of boons) {
       const chip = document.createElement('span');
       chip.className = 'boon-chip';
-      chip.innerHTML = `${spriteIconHTML(b.char, 14)}×${b.stacks}`;
+      chip.innerHTML = `${SpriteService.iconHTML(b.char, 14)}×${b.stacks}`;
       chip.title = `${b.name} ×${b.stacks}`;
       this.bindChipInspect(chip, () => ({
         icon: b.char,
@@ -459,7 +459,7 @@ export class UIManager {
     for (const b of grouped.values()) {
       const chip = document.createElement('span');
       chip.className = 'brand-chip' + (b.setActive ? ' brand-set-active' : '');
-      chip.innerHTML = `${spriteIconHTML(b.char, 14)}×${b.count}`;
+      chip.innerHTML = `${SpriteService.iconHTML(b.char, 14)}×${b.count}`;
       chip.title = `${b.name}${b.setActive ? ' ✓ SET ACTIVE' : ''}`;
       this.bindChipInspect(chip, () => ({
         icon: b.char,
@@ -478,9 +478,9 @@ export class UIManager {
   showCharacterSheet(): void {
     this.els['charSheetBody']!.innerHTML = this.lastCharacterSheet.map(section => `
       <div class="char-sheet-section">
-        <div class="char-sheet-section-title">${spriteIconHTML(section.icon, 13)}${escapeHtml(section.title)}</div>
+        <div class="char-sheet-section-title">${SpriteService.iconHTML(section.icon, 13)}${HtmlUtils.escapeHtml(section.title)}</div>
         <div class="char-sheet-rows">
-          ${section.stats.map(s => `<div class="char-sheet-row"><span>${escapeHtml(s.label)}</span><span>${escapeHtml(s.value)}</span></div>`).join('')}
+          ${section.stats.map(s => `<div class="char-sheet-row"><span>${HtmlUtils.escapeHtml(s.label)}</span><span>${HtmlUtils.escapeHtml(s.value)}</span></div>`).join('')}
         </div>
       </div>`).join('');
     this.charSheetModal.style.display = 'flex';
@@ -499,7 +499,7 @@ export class UIManager {
   private buildOwnedBoonsHTML(boons: Array<{ id: string; stacks: number; def: BoonDef }>): string {
     if (boons.length === 0) return '';
     return boons.map(b =>
-      `<span class="boon-chip" title="${escapeHtml(b.def.desc)}">${spriteIconHTML(b.def.char, 14)}${escapeHtml(b.def.name)} ×${b.stacks}</span>`,
+      `<span class="boon-chip" title="${HtmlUtils.escapeHtml(b.def.desc)}">${SpriteService.iconHTML(b.def.char, 14)}${HtmlUtils.escapeHtml(b.def.name)} ×${b.stacks}</span>`,
     ).join('');
   }
 
@@ -513,7 +513,7 @@ export class UIManager {
     }
     return Array.from(grouped.values()).map(g => {
       const setActive = g.count >= g.setSize;
-      return `<span class="brand-chip${setActive ? ' brand-set-active' : ''}" title="${escapeHtml(g.name)}${setActive ? ' — set active' : ''}">${spriteIconHTML(g.char, 14)}${escapeHtml(g.name)} ×${g.count}</span>`;
+      return `<span class="brand-chip${setActive ? ' brand-set-active' : ''}" title="${HtmlUtils.escapeHtml(g.name)}${setActive ? ' — set active' : ''}">${SpriteService.iconHTML(g.char, 14)}${HtmlUtils.escapeHtml(g.name)} ×${g.count}</span>`;
     }).join('');
   }
 
@@ -530,7 +530,7 @@ export class UIManager {
     ownedHTML?: string;
   }): void {
     const titleEl = document.getElementById('altar-title')!;
-    titleEl.innerHTML = opts.titleIcon ? `${spriteIconHTML(opts.titleIcon, 16)}${escapeHtml(opts.title)}` : escapeHtml(opts.title);
+    titleEl.innerHTML = opts.titleIcon ? `${SpriteService.iconHTML(opts.titleIcon, 16)}${HtmlUtils.escapeHtml(opts.title)}` : HtmlUtils.escapeHtml(opts.title);
     const subEl = document.getElementById('altar-subtitle');
     if (subEl) subEl.textContent = opts.subtitle;
     const ownedWrap = document.getElementById('altar-owned-summary');
@@ -558,8 +558,8 @@ export class UIManager {
         rb.className = 'reroll-btn';
         rb.disabled = gold < cost;
         rb.innerHTML = gold >= cost
-          ? `${spriteIconHTML('item_dice', 14)}Reroll — ${cost}g (you have ${gold}g)`
-          : `${spriteIconHTML('item_dice', 14)}Reroll — need ${cost - gold} more gold`;
+          ? `${SpriteService.iconHTML('item_dice', 14)}Reroll — ${cost}g (you have ${gold}g)`
+          : `${SpriteService.iconHTML('item_dice', 14)}Reroll — need ${cost - gold} more gold`;
         rb.addEventListener('click', () => {
           const next = opts.reroll!.run();
           if (next) render(next.choices, next.gold, next.cost);
@@ -585,9 +585,9 @@ export class UIManager {
         btn.className = 'shop-item-btn';
         btn.disabled = item.purchased || g < item.cost;
         btn.innerHTML =
-          `<span style="display:flex;align-items:center;gap:8px;">${spriteIconHTML(item.icon, 18)}` +
-          `<span style="text-align:left;"><b>${escapeHtml(item.name)}</b><br>` +
-          `<span style="color:#888;font-size:10px;">${escapeHtml(item.desc)}</span></span></span>` +
+          `<span style="display:flex;align-items:center;gap:8px;">${SpriteService.iconHTML(item.icon, 18)}` +
+          `<span style="text-align:left;"><b>${HtmlUtils.escapeHtml(item.name)}</b><br>` +
+          `<span style="color:#888;font-size:10px;">${HtmlUtils.escapeHtml(item.desc)}</span></span></span>` +
           `<span class="shop-cost">${item.purchased ? 'SOLD' : `${item.cost}g`}</span>`;
         btn.addEventListener('click', () => {
           const result = buy(item.id);
@@ -617,7 +617,7 @@ export class UIManager {
       subtitle: 'Ogham marks are permanent — you may only ever bear 5 in this life. Choose your identity.',
       choices, onChoice, reroll,
       ownedHTML: this.buildOwnedBrandsHTML(ownedBrands),
-      buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
+      buttonInner: (b) => `<span class="modifier-emoji">${SpriteService.iconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
     });
   }
 
@@ -636,7 +636,7 @@ export class UIManager {
       subtitle: 'Geasa are unlimited — stack freely, and pick the same one again to amplify its effect.',
       choices, onChoice, reroll,
       ownedHTML: this.buildOwnedBoonsHTML(ownedBoons),
-      buttonInner: (b) => `<span class="modifier-emoji">${spriteIconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
+      buttonInner: (b) => `<span class="modifier-emoji">${SpriteService.iconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
     });
   }
 
@@ -679,7 +679,7 @@ export class UIManager {
   showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
     const el = this.inspectTooltip;
     el.innerHTML = `
-      <div class="inspect-header"><span class="inspect-icon">${spriteIconHTML(info.icon, 20)}</span><span class="inspect-title">${info.title}</span></div>
+      <div class="inspect-header"><span class="inspect-icon">${SpriteService.iconHTML(info.icon, 20)}</span><span class="inspect-title">${info.title}</span></div>
       <div class="inspect-lines">${info.lines.map(l => `<div>${l}</div>`).join('')}</div>
     `;
     el.hidden = false;

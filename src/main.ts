@@ -3,10 +3,10 @@ import { Game, tickMsForLevel } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
-import { getHighXp, recordRunEnd, loadHistory, saveMute, loadMute, saveReducedMotion, loadReducedMotion, saveVolume, loadVolume, loadGhosts, saveGhostRecord, removeGhostRecord } from './storage';
-import { formatCrashInfo, shouldReport } from './errorReporting';
+import { StorageService } from './storage';
+import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
-import { vibrate, setHapticsEnabled } from './haptics';
+import { HapticsController } from './haptics';
 import type { AudioEvent } from './types';
 
 const ui       = new UIManager();
@@ -22,9 +22,9 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 // a recovery modal rather than leaving a frozen game with no explanation.
 
 function handleFatalError(err: unknown, context: string): void {
-  const info = formatCrashInfo(err, context);
+  const info = CrashReporter.formatCrashInfo(err, context);
   console.error(`[Fatal:${info.context}]`, err);
-  if (!shouldReport()) return;  // already showing the crash modal for an earlier error
+  if (!CrashReporter.shouldReport()) return;  // already showing the crash modal for an earlier error
   stopTick();
   game.active = false;  // the renderer's RAF loop checks this and stops itself
   ui.showCrash(info.message);
@@ -60,27 +60,27 @@ function resetTick(): void { startTick(); }
 
 // ── Settings & pause ───────────────────────────────────────────────────────────
 
-let soundOn = !loadMute();
+let soundOn = !StorageService.loadMute();
 // No stored preference → follow the OS reduced-motion setting.
-let reducedMotion = loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+let reducedMotion = StorageService.loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 renderer.setReducedMotion(reducedMotion);
-setHapticsEnabled(!reducedMotion);
+HapticsController.setEnabled(!reducedMotion);
 let manualPaused = false;
-let masterVolume = loadVolume();
+let masterVolume = StorageService.loadVolume();
 audio.setVolume(masterVolume);
 
 // Cycles 100% → 75% → 50% → 25% → back to 100%.
 function cycleVolume(): void {
   masterVolume = masterVolume > 0.75 ? 0.75 : masterVolume > 0.5 ? 0.5 : masterVolume > 0.25 ? 0.25 : 1;
   audio.setVolume(masterVolume);
-  saveVolume(masterVolume);
+  StorageService.saveVolume(masterVolume);
   audio.playBlockRotate();  // instant audible feedback at the new level
   if (manualPaused) refreshPauseMenu();
 }
 
 function toggleMute(): void {
   soundOn = audio.toggle();
-  saveMute(!soundOn);
+  StorageService.saveMute(!soundOn);
   ui.log(`Sound ${soundOn ? 'on' : 'off'}`, 'log-neutral');
   if (manualPaused) refreshPauseMenu();
 }
@@ -88,8 +88,8 @@ function toggleMute(): void {
 function toggleReducedMotion(): void {
   reducedMotion = !reducedMotion;
   renderer.setReducedMotion(reducedMotion);
-  setHapticsEnabled(!reducedMotion);
-  saveReducedMotion(reducedMotion);
+  HapticsController.setEnabled(!reducedMotion);
+  StorageService.saveReducedMotion(reducedMotion);
   ui.log(`Reduced motion ${reducedMotion ? 'on' : 'off'}`, 'log-neutral');
   if (manualPaused) refreshPauseMenu();
 }
@@ -295,26 +295,26 @@ sidebarPanel?.addEventListener('touchend', (e) => {
 
 function handleAudio(event: AudioEvent, data?: number): void {
   switch (event) {
-    case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); vibrate(5); break;
+    case 'blockLand':    audio.playBlockLand();    renderer.triggerShake(2, 4); HapticsController.vibrate(5); break;
     case 'blockRotate':  audio.playBlockRotate();      break;
     case 'blockMove':    audio.playBlockMove();        break;
     case 'hit':             audio.playHit();              break;
-    case 'playerDamage':    audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); vibrate(25); break;
+    case 'playerDamage':    audio.playPlayerDamage(); renderer.triggerDamageFlash(); renderer.triggerShake(4, 7); HapticsController.vibrate(25); break;
     case 'kill':            audio.playKill();             break;
     case 'lineClear':
       audio.playLineClear(data ?? 1);
       renderer.triggerShake(data && data >= 4 ? 5 : 3, data && data >= 4 ? 8 : 5);
-      vibrate(data && data >= 4 ? 25 : 15);
+      HapticsController.vibrate(data && data >= 4 ? 25 : 15);
       break;
     case 'descend':         audio.playDescend();          break;
     case 'poison':          audio.playPoison();           break;
-    case 'bossWarn':        audio.playBossWarn();         renderer.triggerShake(6, 18); vibrate([40, 60, 40, 60, 50]); break;
+    case 'bossWarn':        audio.playBossWarn();         renderer.triggerShake(6, 18); HapticsController.vibrate([40, 60, 40, 60, 50]); break;
     case 'teleport':        audio.playTeleport();         break;
     case 'comboMilestone':  audio.playComboMilestone(data ?? 2); break;
     case 'npcEncounter':    audio.playNpcGreeting();      break;
-    case 'ghostEncounter':  audio.playGhost();            vibrate([15, 40, 15]); break;
-    case 'bountyFulfilled': audio.playBountyFulfilled();  vibrate([20, 30, 20, 30, 40]); break;
-    case 'pactSworn':       audio.playPactSworn();        vibrate([30, 50, 60]); break;
+    case 'ghostEncounter':  audio.playGhost();            HapticsController.vibrate([15, 40, 15]); break;
+    case 'bountyFulfilled': audio.playBountyFulfilled();  HapticsController.vibrate([20, 30, 20, 30, 40]); break;
+    case 'pactSworn':       audio.playPactSworn();        HapticsController.vibrate([30, 50, 60]); break;
   }
 }
 
@@ -343,10 +343,10 @@ function startGame(startPaused = false): void {
       stopTick();
       audio.stopAmbient();
       audio.playDeath();
-      const { highXp, history } = recordRunEnd(game, reason, stats);
+      const { highXp, history } = StorageService.recordRunEnd(game, reason, stats);
 
       // This fallen character may return as a ghost in a future run.
-      saveGhostRecord({
+      StorageService.saveGhostRecord({
         id: String(Date.now()),
         playerLevel: game.player.playerLevel,
         floor,
@@ -363,13 +363,13 @@ function startGame(startPaused = false): void {
       stopTick();
       audio.stopAmbient();
       audio.playLevelUp();
-      const { highXp, history } = recordRunEnd(game, 'Defeated Bres the Beautiful', stats);
+      const { highXp, history } = StorageService.recordRunEnd(game, 'Defeated Bres the Beautiful', stats);
 
       ui.showVictory(floor, totalXpEarned, highXp, history, stats, story);
       ui.updateBestScore(highXp);
     },
 
-    onGhostLaidToRest: (id) => removeGhostRecord(id),
+    onGhostLaidToRest: (id) => StorageService.removeGhostRecord(id),
 
     onLevelUp: (choices, onChoice) => {
       stopTick();
@@ -429,7 +429,7 @@ function startGame(startPaused = false): void {
   // Fallen characters from previous runs — the first floor never rolls a
   // ghost (this loads just after the constructor's initial floor setup), but
   // every descent after can.
-  game.availableGhosts = loadGhosts();
+  game.availableGhosts = StorageService.loadGhosts();
 
   if (startPaused) game.paused = true;
   renderer.start(game, (err) => handleFatalError(err, 'render'));
@@ -474,11 +474,11 @@ bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
   }
 });
 
-ui.showStart(getHighXp());
+ui.showStart(StorageService.getHighXp());
 
 document.getElementById('start-btn')!.addEventListener('click', () => {
   audio.init(); // unlock AudioContext on first user gesture
-  if (loadMute()) audio.toggle();
+  if (StorageService.loadMute()) audio.toggle();
   ui.hideStart();
   launchWithModifier(() => {
     game.paused = false;
@@ -504,8 +504,8 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Initial high score / history display
-ui.updateBestScore(getHighXp());
-const initialHistory = loadHistory();
+ui.updateBestScore(StorageService.getHighXp());
+const initialHistory = StorageService.loadHistory();
 if (initialHistory.length > 0) {
   (document.getElementById('run-history') as HTMLElement).innerHTML =
     initialHistory.map((r, i) =>

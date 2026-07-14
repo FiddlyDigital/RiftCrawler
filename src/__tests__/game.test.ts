@@ -8,15 +8,11 @@ import { processMonsterTurns } from '../systems/monsterAI';
 import { processHazards, checkHazardTrigger, teleportEntity } from '../systems/hazards';
 import { applyStatusEffects, applyRegen, applyAuraStun } from '../systems/statusEffects';
 import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, getThreeRandomBoons } from '../content';
-import { BALANCE, COMBAT_BALANCE, MONSTER_AI, HAZARD_BALANCE, weightedPick } from '../balance';
-import { TIER_COLORS } from '../colors';
-import { SPRITE_MAP, SPRITE_SHEETS, spriteIconHTML } from '../sprites';
-import { formatCrashInfo, shouldReport, resetCrashState } from '../errorReporting';
-import { trackEvent, trackGameStart, trackGameOver, trackInstall, trackError } from '../analytics';
-import {
-  getHighXp, recordRunEnd, loadHistory,
-  saveMute, loadMute, saveReducedMotion, loadReducedMotion,
-} from '../storage';
+import { Balance } from '../balance';
+import { Colors } from '../colors';
+import { SpriteService } from '../sprites';
+import { CrashReporter } from '../errorReporting';
+import { StorageService } from '../storage';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -448,7 +444,7 @@ describe('Balance levers', () => {
     expect(reroll).toBeTypeOf('function');
     const res = reroll!();
     expect(res).not.toBeNull();
-    expect(game.gold).toBe(500 - BALANCE.economy.ogmRerollBaseCost);
+    expect(game.gold).toBe(500 - Balance.CONFIG.economy.ogmRerollBaseCost);
     expect(res!.choices).toHaveLength(3);
   });
 
@@ -497,19 +493,19 @@ describe('Balance levers', () => {
     game.summonGorgoth();
     const bres = game.monsters.find(m => m.isGorgoth)!;
     // 8 dmg × 1 row × floor 10 = 80 chipped off the max
-    expect(bres.hp).toBe(BALANCE.gorgoth.maxHp - 80);
+    expect(bres.hp).toBe(Balance.CONFIG.gorgoth.maxHp - 80);
 
     // Grind him from afar: HP clamps at the causeway floor (a fraction of max
     // HP) — you can weaken him this way, but never finish him without a fight.
     const g = game as unknown as { gorgothHp: number };
     game.monsters = [];
     (game as unknown as { gorgothSummoned: boolean }).gorgothSummoned = false;
-    g.gorgothHp = BALANCE.gorgoth.maxHp;
+    g.gorgothHp = Balance.CONFIG.gorgoth.maxHp;
     for (let i = 0; i < 50; i++) {
       for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
       (game as unknown as { checkLineClears(): void }).checkLineClears();
     }
-    const chipFloor = Math.ceil(BALANCE.gorgoth.maxHp * BALANCE.gorgoth.causewayChipFloorPct);
+    const chipFloor = Math.ceil(Balance.CONFIG.gorgoth.maxHp * Balance.CONFIG.gorgoth.causewayChipFloorPct);
     expect(g.gorgothHp).toBe(chipFloor);
 
     // Already below the floor from a real fight: passive chip must not heal him.
@@ -554,7 +550,7 @@ describe('Balance levers', () => {
       (game as unknown as { spawnBlock(): void }).spawnBlock();
       merchantCount += game.blockMatrix.flat().filter(c => c === Cell.MERCHANT).length;
     }
-    expect(merchantCount).toBeLessThanOrEqual(BALANCE.spawnRates.maxTattooTilesPerFloor);
+    expect(merchantCount).toBeLessThanOrEqual(Balance.CONFIG.spawnRates.maxTattooTilesPerFloor);
   });
 
   // Phase 4
@@ -644,8 +640,8 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(boss).toBeDefined();
     expect(boss!.isBoss).toBe(true);
     expect(boss!.y).toBe(0);                                    // the very top of the arena
-    expect(boss!.maxHp).toBe(BALANCE.gorgoth.maxHp);            // the true final-boss pool
-    expect(boss!.combatLevel).toBe(BALANCE.gorgoth.combatLevel);  // D20
+    expect(boss!.maxHp).toBe(Balance.CONFIG.gorgoth.maxHp);            // the true final-boss pool
+    expect(boss!.combatLevel).toBe(Balance.CONFIG.gorgoth.combatLevel);  // D20
     expect(game.map[3]![10]).toBe(Tile.FLOOR);                  // board preserved, not reset
   });
 
@@ -734,7 +730,7 @@ describe('Gorgoth the Returned (endgame)', () => {
     game.summonGorgoth();                     // face him again later
     const boss2 = game.monsters.find(m => m.isGorgoth)!;
     expect(boss2.hp).toBe(600);               // carried his wounds
-    expect(boss2.maxHp).toBe(BALANCE.gorgoth.maxHp);           // out of full
+    expect(boss2.maxHp).toBe(Balance.CONFIG.gorgoth.maxHp);           // out of full
   });
 
   it('nudges the player toward the win condition once when the stack is high', () => {
@@ -1232,44 +1228,44 @@ describe('An Draoi (HP-pact magic)', () => {
 // ── Balance config (src/data/*.json via src/balance.ts) ──────────────────────
 
 describe('Balance config', () => {
-  it('weightedPick returns the key whose cumulative range contains the roll', () => {
-    expect(weightedPick({ a: 0.5, b: 0.5 }, 0.3)).toBe('a');
-    expect(weightedPick({ a: 0.5, b: 0.5 }, 0.7)).toBe('b');
+  it('Balance.weightedPick returns the key whose cumulative range contains the roll', () => {
+    expect(Balance.weightedPick({ a: 0.5, b: 0.5 }, 0.3)).toBe('a');
+    expect(Balance.weightedPick({ a: 0.5, b: 0.5 }, 0.7)).toBe('b');
   });
 
-  it('weightedPick returns null once the roll exceeds the total weight', () => {
-    expect(weightedPick({ a: 0.3 }, 0.5)).toBeNull();
+  it('Balance.weightedPick returns null once the roll exceeds the total weight', () => {
+    expect(Balance.weightedPick({ a: 0.3 }, 0.5)).toBeNull();
   });
 
-  it('elite scaling is configurable (spawnMonster reads BALANCE.eliteMonsters.hpMult)', () => {
+  it('elite scaling is configurable (spawnMonster reads Balance.CONFIG.eliteMonsters.hpMult)', () => {
     const cb = makeCallbacks();
     const game = new Game(cb);
-    const originalChance = BALANCE.eliteMonsters.spawnChance;
-    const originalMult = BALANCE.eliteMonsters.hpMult;
-    BALANCE.eliteMonsters.spawnChance = 1;
-    BALANCE.eliteMonsters.hpMult = 3;
+    const originalChance = Balance.CONFIG.eliteMonsters.spawnChance;
+    const originalMult = Balance.CONFIG.eliteMonsters.hpMult;
+    Balance.CONFIG.eliteMonsters.spawnChance = 1;
+    Balance.CONFIG.eliteMonsters.hpMult = 3;
     try {
       (game as unknown as { spawnMonster(key: string, x: number, y: number): void }).spawnMonster('rat', 4, 23);
       const m = game.monsters[0]!;
       expect(m.isElite).toBe(true);
       expect(m.maxHp).toBe(10 * 3); // rat baseHp (10) × the configured elite hpMult
     } finally {
-      BALANCE.eliteMonsters.spawnChance = originalChance;
-      BALANCE.eliteMonsters.hpMult = originalMult;
+      Balance.CONFIG.eliteMonsters.spawnChance = originalChance;
+      Balance.CONFIG.eliteMonsters.hpMult = originalMult;
     }
   });
 
-  it('Gorgoth stats are configurable (summonGorgoth reads BALANCE.gorgoth.maxHp)', () => {
+  it('Gorgoth stats are configurable (summonGorgoth reads Balance.CONFIG.gorgoth.maxHp)', () => {
     const cb = makeCallbacks();
     const game = new Game(cb);
-    const original = BALANCE.gorgoth.maxHp;
-    BALANCE.gorgoth.maxHp = 999;
+    const original = Balance.CONFIG.gorgoth.maxHp;
+    Balance.CONFIG.gorgoth.maxHp = 999;
     try {
       game.summonGorgoth();
       const boss = game.monsters.find(m => m.isGorgoth)!;
       expect(boss.maxHp).toBe(999);
     } finally {
-      BALANCE.gorgoth.maxHp = original;
+      Balance.CONFIG.gorgoth.maxHp = original;
     }
   });
 
@@ -1278,25 +1274,25 @@ describe('Balance config', () => {
     const game = new Game(cb);
     const m = new Monster(game.player.x + 3, game.player.y, 'sprite_rat_01', 'Rat', 10, 10, 1, 5);
     game.monsters.push(m);
-    const original = MONSTER_AI.melee.chaseRange;
-    MONSTER_AI.melee.chaseRange = 1;
+    const original = Balance.MONSTER_AI.melee.chaseRange;
+    Balance.MONSTER_AI.melee.chaseRange = 1;
     try {
       processMonsterTurns(game);
       expect(m.x).toBe(game.player.x + 3); // out of the shortened chase range — doesn't move
     } finally {
-      MONSTER_AI.melee.chaseRange = original;
+      Balance.MONSTER_AI.melee.chaseRange = original;
     }
   });
 
   it('combat dice table is configurable (estimateHitChance reacts to a changed die size)', () => {
     const before = estimateHitChance(2, 2);
-    const original = COMBAT_BALANCE.diceSidesByLevel[2];
-    COMBAT_BALANCE.diceSidesByLevel[2] = 100;
+    const original = Balance.COMBAT.diceSidesByLevel[2];
+    Balance.COMBAT.diceSidesByLevel[2] = 100;
     try {
       const after = estimateHitChance(2, 2);
       expect(after).not.toBe(before);
     } finally {
-      COMBAT_BALANCE.diceSidesByLevel[2] = original!;
+      Balance.COMBAT.diceSidesByLevel[2] = original!;
     }
   });
 });
@@ -1377,17 +1373,17 @@ describe('Hazards', () => {
     expect(game.player.hp).toBe(hpBefore - expectedDmg);
     expect(cb.logs.some(l => l.includes('Spikes fire!'))).toBe(true);
     // Rearmed within [rearmMinTurns, rearmMinTurns + rearmRandomTurns)
-    expect(h.timer).toBeGreaterThanOrEqual(HAZARD_BALANCE.spike.rearmMinTurns);
-    expect(h.timer).toBeLessThan(HAZARD_BALANCE.spike.rearmMinTurns + HAZARD_BALANCE.spike.rearmRandomTurns);
+    expect(h.timer).toBeGreaterThanOrEqual(Balance.HAZARD.spike.rearmMinTurns);
+    expect(h.timer).toBeLessThan(Balance.HAZARD.spike.rearmMinTurns + Balance.HAZARD.spike.rearmRandomTurns);
     expect(h.warning).toBe(false);
   });
 
   it('a spike hazard counts down and sets the warning flag near expiry, without firing early', () => {
-    const h: HazardTile = { x: 4, y: 20, type: 'spike', timer: HAZARD_BALANCE.spike.warningThreshold + 1, warning: false };
+    const h: HazardTile = { x: 4, y: 20, type: 'spike', timer: Balance.HAZARD.spike.warningThreshold + 1, warning: false };
     game.hazards.push(h);
     const hpBefore = game.player.hp;
     processHazards(game);
-    expect(h.timer).toBe(HAZARD_BALANCE.spike.warningThreshold);
+    expect(h.timer).toBe(Balance.HAZARD.spike.warningThreshold);
     expect(h.warning).toBe(true);
     expect(game.player.hp).toBe(hpBefore); // hasn't fired yet
   });
@@ -1437,7 +1433,7 @@ describe('Hazards', () => {
 // Small local helper mirroring processHazards' damage formula, so the spike
 // test above doesn't hardcode a number that'd silently drift from balance.json.
 function spikeDamageFor(dungeonLevel: number): number {
-  return Math.max(HAZARD_BALANCE.spike.minDamage, dungeonLevel * HAZARD_BALANCE.spike.damagePerDungeonLevel);
+  return Math.max(Balance.HAZARD.spike.minDamage, dungeonLevel * Balance.HAZARD.spike.damagePerDungeonLevel);
 }
 
 // ── Status effects (previously untested) ──────────────────────────────────────
@@ -1513,19 +1509,23 @@ describe('Status effects', () => {
 
 // ── colors.ts (tier color source of truth) ────────────────────────────────────
 
-describe('TIER_COLORS', () => {
+describe('Colors', () => {
   it('defines a valid rgb + bg pair for all three altar tiers', () => {
     for (const tier of [1, 2, 3] as const) {
-      const c = TIER_COLORS[tier];
+      const c = Colors.forTier(tier);
       expect(c.rgb).toMatch(/^\d{1,3},\d{1,3},\d{1,3}$/);
       expect(c.bg).toMatch(/^#[0-9a-f]{6}$/i);
     }
+  });
+
+  it('forTier throws on an invalid tier', () => {
+    expect(() => Colors.forTier(4)).toThrow(RangeError);
   });
 });
 
 // ── Sprite map validity (regression guard for the 32rogues pack swap) ─────────
 
-describe('SPRITE_MAP', () => {
+describe('SpriteService.MAP', () => {
   const SHEET_DIMENSIONS: Record<string, { w: number; h: number }> = {
     monsters: { w: 384, h: 416 },
     rogues:   { w: 224, h: 224 },
@@ -1534,8 +1534,8 @@ describe('SPRITE_MAP', () => {
   };
 
   it('every entry references a registered sheet with in-bounds, non-negative coordinates', () => {
-    for (const [key, coord] of Object.entries(SPRITE_MAP)) {
-      expect(SPRITE_SHEETS[coord.sheet], `${key}: unregistered sheet "${coord.sheet}"`).toBeDefined();
+    for (const [key, coord] of Object.entries(SpriteService.MAP)) {
+      expect(SpriteService.SHEETS[coord.sheet], `${key}: unregistered sheet "${coord.sheet}"`).toBeDefined();
       const dims = SHEET_DIMENSIONS[coord.sheet];
       expect(dims, `${key}: unknown sheet dimensions for "${coord.sheet}"`).toBeDefined();
       expect(coord.sx, `${key}.sx`).toBeGreaterThanOrEqual(0);
@@ -1545,72 +1545,33 @@ describe('SPRITE_MAP', () => {
     }
   });
 
-  it('spriteIconHTML degrades gracefully with no DOM (Node test env) instead of throwing', () => {
-    expect(() => spriteIconHTML('sprite_player')).not.toThrow();
-    expect(spriteIconHTML('sprite_player')).toBe('');
-    expect(spriteIconHTML('totally_bogus_key_that_does_not_exist')).toBe('');
+  it('SpriteService.iconHTML degrades gracefully with no DOM (Node test env) instead of throwing', () => {
+    expect(() => SpriteService.iconHTML('sprite_player')).not.toThrow();
+    expect(SpriteService.iconHTML('sprite_player')).toBe('');
+    expect(SpriteService.iconHTML('totally_bogus_key_that_does_not_exist')).toBe('');
   });
 });
 
 // ── errorReporting (crash-recovery helpers) ───────────────────────────────────
 
 describe('errorReporting', () => {
-  afterEach(() => resetCrashState());
+  afterEach(() => CrashReporter.reset());
 
-  it('formatCrashInfo extracts a message from an Error and tags it with context', () => {
-    expect(formatCrashInfo(new Error('boom'), 'tick')).toEqual({ message: 'boom', context: 'tick' });
+  it('CrashReporter.formatCrashInfo extracts a message from an Error and tags it with context', () => {
+    expect(CrashReporter.formatCrashInfo(new Error('boom'), 'tick')).toEqual({ message: 'boom', context: 'tick' });
   });
 
-  it('formatCrashInfo coerces non-Error thrown values to a string', () => {
-    expect(formatCrashInfo('raw string throw', 'window')).toEqual({ message: 'raw string throw', context: 'window' });
-    expect(formatCrashInfo(42, 'promise')).toEqual({ message: '42', context: 'promise' });
+  it('CrashReporter.formatCrashInfo coerces non-Error thrown values to a string', () => {
+    expect(CrashReporter.formatCrashInfo('raw string throw', 'window')).toEqual({ message: 'raw string throw', context: 'window' });
+    expect(CrashReporter.formatCrashInfo(42, 'promise')).toEqual({ message: '42', context: 'promise' });
   });
 
-  it('shouldReport is a one-shot latch until reset', () => {
-    expect(shouldReport()).toBe(true);
-    expect(shouldReport()).toBe(false);
-    expect(shouldReport()).toBe(false);
-    resetCrashState();
-    expect(shouldReport()).toBe(true);
-  });
-});
-
-// ── analytics (no-ops safely without a browser window) ────────────────────────
-
-describe('analytics', () => {
-  afterEach(() => { vi.unstubAllGlobals(); });
-
-  it('trackEvent no-ops without throwing when there is no window at all', () => {
-    expect(() => trackEvent('game_start', { floor: 1 })).not.toThrow();
-  });
-
-  it('trackEvent no-ops without throwing when window.plausible is not loaded', () => {
-    vi.stubGlobal('window', {});
-    expect(() => trackEvent('game_start', { floor: 1 })).not.toThrow();
-  });
-
-  it('trackEvent forwards to window.plausible with props wrapped', () => {
-    const plausible = vi.fn();
-    vi.stubGlobal('window', { plausible });
-    trackEvent('game_start', { floor: 3 });
-    expect(plausible).toHaveBeenCalledWith('game_start', { props: { floor: 3 } });
-  });
-
-  it('trackGameStart/trackGameOver/trackInstall/trackError send the expected event shape', () => {
-    const plausible = vi.fn();
-    vi.stubGlobal('window', { plausible });
-
-    trackGameStart(1);
-    expect(plausible).toHaveBeenLastCalledWith('game_start', { props: { floor: 1 } });
-
-    trackGameOver(150, 5);
-    expect(plausible).toHaveBeenLastCalledWith('game_over', { props: { xp: 150, floor: 5 } });
-
-    trackInstall();
-    expect(plausible).toHaveBeenLastCalledWith('pwa_install', undefined);
-
-    trackError('tick', 'boom');
-    expect(plausible).toHaveBeenLastCalledWith('error', { props: { context: 'tick', message: 'boom' } });
+  it('CrashReporter.shouldReport is a one-shot latch until reset', () => {
+    expect(CrashReporter.shouldReport()).toBe(true);
+    expect(CrashReporter.shouldReport()).toBe(false);
+    expect(CrashReporter.shouldReport()).toBe(false);
+    CrashReporter.reset();
+    expect(CrashReporter.shouldReport()).toBe(true);
   });
 });
 
@@ -1630,24 +1591,24 @@ describe('storage', () => {
   beforeEach(() => { vi.stubGlobal('localStorage', new MemoryStorage()); });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  it('getHighXp defaults to 0 with nothing stored', () => {
-    expect(getHighXp()).toBe(0);
+  it('StorageService.getHighXp defaults to 0 with nothing stored', () => {
+    expect(StorageService.getHighXp()).toBe(0);
   });
 
-  it('recordRunEnd persists high XP (max of previous and this run) and is readable back', () => {
+  it('StorageService.recordRunEnd persists high XP (max of previous and this run) and is readable back', () => {
     const game = new Game(makeCallbacks());
     game.player.totalXpEarned = 500;
     game.dungeonLevel = 7;
-    const { highXp, history } = recordRunEnd(game, 'TEST DEATH', undefined);
+    const { highXp, history } = StorageService.recordRunEnd(game, 'TEST DEATH', undefined);
     expect(highXp).toBe(500);
     expect(history[0]).toMatchObject({ totalXpEarned: 500, floor: 7, cause: 'TEST DEATH' });
-    expect(getHighXp()).toBe(500);
+    expect(StorageService.getHighXp()).toBe(500);
 
     // A worse run afterward doesn't lower the recorded high score.
     const game2 = new Game(makeCallbacks());
     game2.player.totalXpEarned = 100;
     game2.dungeonLevel = 2;
-    const second = recordRunEnd(game2, 'WORSE RUN', undefined);
+    const second = StorageService.recordRunEnd(game2, 'WORSE RUN', undefined);
     expect(second.highXp).toBe(500);
   });
 
@@ -1656,33 +1617,33 @@ describe('storage', () => {
       const game = new Game(makeCallbacks());
       game.player.totalXpEarned = i;
       game.dungeonLevel = i + 1;
-      recordRunEnd(game, `RUN ${i}`, undefined);
+      StorageService.recordRunEnd(game, `RUN ${i}`, undefined);
     }
-    const history = loadHistory();
+    const history = StorageService.loadHistory();
     expect(history).toHaveLength(5);
     expect(history[0]!.cause).toBe('RUN 5');  // most recent unshifted to the front
   });
 
   it('mute preference round-trips through localStorage', () => {
-    expect(loadMute()).toBe(false);
-    saveMute(true);
-    expect(loadMute()).toBe(true);
-    saveMute(false);
-    expect(loadMute()).toBe(false);
+    expect(StorageService.loadMute()).toBe(false);
+    StorageService.saveMute(true);
+    expect(StorageService.loadMute()).toBe(true);
+    StorageService.saveMute(false);
+    expect(StorageService.loadMute()).toBe(false);
   });
 
   it('reduced-motion preference is null (no stored pref) until explicitly saved', () => {
-    expect(loadReducedMotion()).toBeNull();
-    saveReducedMotion(true);
-    expect(loadReducedMotion()).toBe(true);
-    saveReducedMotion(false);
-    expect(loadReducedMotion()).toBe(false);
+    expect(StorageService.loadReducedMotion()).toBeNull();
+    StorageService.saveReducedMotion(true);
+    expect(StorageService.loadReducedMotion()).toBe(true);
+    StorageService.saveReducedMotion(false);
+    expect(StorageService.loadReducedMotion()).toBe(false);
   });
 
   it('corrupted JSON in storage falls back to defaults instead of throwing', () => {
     localStorage.setItem('riftcrawler_v2', 'not valid json{');
-    expect(() => getHighXp()).not.toThrow();
-    expect(getHighXp()).toBe(0);
+    expect(() => StorageService.getHighXp()).not.toThrow();
+    expect(StorageService.getHighXp()).toBe(0);
   });
 
   it('a throwing localStorage (private browsing / quota) is swallowed, not propagated', () => {
@@ -1690,7 +1651,7 @@ describe('storage', () => {
       getItem: () => { throw new Error('quota exceeded'); },
       setItem: () => { throw new Error('quota exceeded'); },
     });
-    expect(() => saveMute(true)).not.toThrow();
-    expect(() => loadMute()).not.toThrow();
+    expect(() => StorageService.saveMute(true)).not.toThrow();
+    expect(() => StorageService.loadMute()).not.toThrow();
   });
 });

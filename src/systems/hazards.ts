@@ -1,8 +1,8 @@
-import { CONFIG } from '../config';
+import { GameConfig } from '../config';
 import { Tile } from '../types';
 import type { Game } from '../game';
 import { triggerDeath } from './combat';
-import { HAZARD_BALANCE } from '../balance';
+import { Balance } from '../balance';
 
 export function processHazards(game: Game): void {
   const spikeFirePositions: typeof game.hazards = [];
@@ -10,16 +10,16 @@ export function processHazards(game: Game): void {
   for (const h of game.hazards) {
     if (h.type !== 'spike') continue;
     h.timer--;
-    h.warning = h.timer <= HAZARD_BALANCE.spike.warningThreshold;
+    h.warning = h.timer <= Balance.HAZARD.spike.warningThreshold;
     if (h.timer <= 0) {
-      h.timer = HAZARD_BALANCE.spike.rearmMinTurns + Math.floor(Math.random() * HAZARD_BALANCE.spike.rearmRandomTurns);
+      h.timer = Balance.HAZARD.spike.rearmMinTurns + Math.floor(Math.random() * Balance.HAZARD.spike.rearmRandomTurns);
       h.warning = false;
       spikeFirePositions.push(h);
     }
   }
 
   for (const h of spikeFirePositions) {
-    const damage = Math.max(HAZARD_BALANCE.spike.minDamage, game.dungeonLevel * HAZARD_BALANCE.spike.damagePerDungeonLevel);
+    const damage = Math.max(Balance.HAZARD.spike.minDamage, game.dungeonLevel * Balance.HAZARD.spike.damagePerDungeonLevel);
     if (game.player.x === h.x && game.player.y === h.y) {
       const actual = game.player.takeDamage(damage);
       game.damageTaken += actual;
@@ -61,8 +61,8 @@ export function checkHazardTrigger(entity: { x: number; y: number }, game: Game,
 
 export function teleportEntity(entity: { x: number; y: number }, game: Game): void {
   const floorTiles: Array<{ x: number; y: number }> = [];
-  for (let x = 0; x < CONFIG.COLS; x++) {
-    for (let y = 0; y < CONFIG.ROWS; y++) {
+  for (let x = 0; x < GameConfig.COLS; x++) {
+    for (let y = 0; y < GameConfig.ROWS; y++) {
       if (game.map[x]![y] !== Tile.FLOOR) continue;
       if (game.getMonsterAt(x, y)) continue;
       if (game.player.x === x && game.player.y === y && entity !== game.player) continue;

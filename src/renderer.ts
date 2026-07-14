@@ -1,10 +1,10 @@
-import { CONFIG } from './config';
-import { TIER_COLORS } from './colors';
+import { GameConfig } from './config';
+import { Colors } from './colors';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
 import { getBiomeForFloor, NPCS } from './content';
 import { MONSTERS } from './dataLoader';
-import { SPRITE_MAP, getSpriteImage } from './sprites';
+import { SpriteService } from './sprites';
 import type { Game } from './game';
 
 const FADE_FRAMES = 10;
@@ -42,14 +42,14 @@ export class Renderer {
   // match the canvas's real on-screen size × devicePixelRatio, so sprites
   // render crisp instead of getting blurrily upscaled by the browser (mobile
   // "canvas maximization" can stretch the canvas 2-4× this logical size).
-  private readonly logicalW = CONFIG.COLS * CONFIG.TILE_SIZE;
-  private readonly logicalH = CONFIG.ROWS * CONFIG.TILE_SIZE;
+  private readonly logicalW = GameConfig.COLS * GameConfig.TILE_SIZE;
+  private readonly logicalH = GameConfig.ROWS * GameConfig.TILE_SIZE;
 
   constructor(canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
     this.particles = new ParticlePool(90);
     this.motes = Array.from({ length: 14 }, () => this.spawnMote(true));
-    this.revealFrames = new Uint8Array(CONFIG.COLS * CONFIG.ROWS);
+    this.revealFrames = new Uint8Array(GameConfig.COLS * GameConfig.ROWS);
     // The canvas's own CSS box (width:auto;height:100%) derives its width
     // from ITS OWN aspect ratio — which is exactly the canvas.width/height
     // attributes fitToDisplaySize() is about to set. Observing (or reading
@@ -111,7 +111,7 @@ export class Renderer {
     this.rowFlash = { ys: [...rows], frames: 8, maxFrames: 8 };
     this.rowSlide = { belowY: Math.max(...rows), count: rows.length, frames: 5, maxFrames: 5 };
     for (const y of rows) {
-      for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let x = 0; x < GameConfig.COLS; x++) {
         if (Math.random() < 0.7) {
           this.particles.spawn(
             x + Math.random() * 0.6, y, Math.random() < 0.5 ? '✦' : '·', '#ffe9b0', 9, '',
@@ -159,7 +159,7 @@ export class Renderer {
   }
 
   private spawnMote(randomY = false): Mote {
-    const w = CONFIG.COLS * CONFIG.TILE_SIZE, h = CONFIG.ROWS * CONFIG.TILE_SIZE;
+    const w = GameConfig.COLS * GameConfig.TILE_SIZE, h = GameConfig.ROWS * GameConfig.TILE_SIZE;
     return {
       x: Math.random() * w,
       y: randomY ? Math.random() * h : h + 4,
@@ -170,9 +170,9 @@ export class Renderer {
   }
 
   private drawSprite(key: string, dx: number, dy: number, dw: number, dh: number): boolean {
-    const coord = SPRITE_MAP[key];
+    const coord = SpriteService.MAP[key];
     if (!coord || !coord.sheet) return false;
-    const img = getSpriteImage(coord.sheet);
+    const img = SpriteService.getImage(coord.sheet);
     if (!img) return false;
     // Contain-fit + center so non-square atlas crops don't get squashed.
     const scale = Math.min(dw / coord.sw, dh / coord.sh);
@@ -190,7 +190,7 @@ export class Renderer {
   // `twitch` adds a brief horizontal shiver every few seconds (monsters only)
   // so a crowd of idlers doesn't read as one synchronized metronome.
   private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0, twitch = false): void {
-    const TS = CONFIG.TILE_SIZE;
+    const TS = GameConfig.TILE_SIZE;
     const idleBob = Math.sin(performance.now() / 500 + phase) * 1.5;
     let jitterX = 0;
     if (twitch && !this.reducedMotion) {
@@ -208,7 +208,7 @@ export class Renderer {
   }
 
   private drawPulseGlow(gx: number, gy: number, rgb: string): void {
-    const TS = CONFIG.TILE_SIZE;
+    const TS = GameConfig.TILE_SIZE;
     const alpha = 0.18 + 0.18 * Math.sin(performance.now() / 400);
     const px = gx * TS + TS / 2, py = gy * TS + TS / 2;
     const glow = this.ctx.createRadialGradient(px, py, 0, px, py, TS * 1.1);
@@ -230,7 +230,7 @@ export class Renderer {
 
   private draw(game: Game): void {
     const { ctx } = this;
-    const TS = CONFIG.TILE_SIZE;
+    const TS = GameConfig.TILE_SIZE;
 
     // Hit-stop: hold the previous frame on screen for a beat.
     if (this.hitStopFrames > 0) { this.hitStopFrames--; return; }
@@ -276,18 +276,18 @@ export class Renderer {
     ctx.globalAlpha = 0.06;
     ctx.strokeStyle = '#aaaacc';
     ctx.lineWidth = 0.5;
-    for (let gx = 0; gx <= CONFIG.COLS; gx++) {
-      ctx.beginPath(); ctx.moveTo(gx * TS, 0); ctx.lineTo(gx * TS, CONFIG.ROWS * TS); ctx.stroke();
+    for (let gx = 0; gx <= GameConfig.COLS; gx++) {
+      ctx.beginPath(); ctx.moveTo(gx * TS, 0); ctx.lineTo(gx * TS, GameConfig.ROWS * TS); ctx.stroke();
     }
-    for (let gy = 0; gy <= CONFIG.ROWS; gy++) {
-      ctx.beginPath(); ctx.moveTo(0, gy * TS); ctx.lineTo(CONFIG.COLS * TS, gy * TS); ctx.stroke();
+    for (let gy = 0; gy <= GameConfig.ROWS; gy++) {
+      ctx.beginPath(); ctx.moveTo(0, gy * TS); ctx.lineTo(GameConfig.COLS * TS, gy * TS); ctx.stroke();
     }
     ctx.globalAlpha = 1.0;
     ctx.lineWidth = 1;
 
     // ── Map tiles with fog of war ─────────────────────────────────────────
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
         const visible = game.visibility[x]![y]!;
         const seen = game.explored[x]![y]!;
         const type = game.map[x]![y]!;
@@ -299,7 +299,7 @@ export class Renderer {
           continue;
         }
 
-        const idx = x * CONFIG.ROWS + y;
+        const idx = x * GameConfig.ROWS + y;
         if (visible && this.revealFrames[idx]! < FADE_FRAMES) this.revealFrames[idx]!++;
         const fadeFactor = visible ? Math.min(1, this.revealFrames[idx]! / FADE_FRAMES) : 1;
         // Explored-but-out-of-sight tiles stay at a clearly legible shadowed
@@ -341,7 +341,7 @@ export class Renderer {
     if (this.rowFlash) {
       const a = 0.5 * (this.rowFlash.frames / this.rowFlash.maxFrames);
       ctx.fillStyle = `rgba(255,244,214,${a})`;
-      for (const y of this.rowFlash.ys) ctx.fillRect(0, y * TS, CONFIG.COLS * TS, TS);
+      for (const y of this.rowFlash.ys) ctx.fillRect(0, y * TS, GameConfig.COLS * TS, TS);
       this.rowFlash.frames--;
       if (this.rowFlash.frames <= 0) this.rowFlash = null;
     }
@@ -376,7 +376,7 @@ export class Renderer {
         const cell = game.blockMatrix[r]![c]!;
         if (cell === Cell.EMPTY) continue;
         const tx = game.blockX + c, ty = game.blockY + r;
-        if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
+        if (tx < 0 || tx >= GameConfig.COLS || ty < 0 || ty >= GameConfig.ROWS) continue;
 
         // Same stone-base + color-wash treatment as locked blocks, so the
         // falling piece and the trail it leaves behind read as one material.
@@ -419,7 +419,7 @@ export class Renderer {
         for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
           if (game.blockMatrix[r]![c] === Cell.EMPTY) continue;
           const tx = game.blockX + c, ty = ghostY + r;
-          if (tx < 0 || tx >= CONFIG.COLS || ty < 0 || ty >= CONFIG.ROWS) continue;
+          if (tx < 0 || tx >= GameConfig.COLS || ty < 0 || ty >= GameConfig.ROWS) continue;
           ctx.fillStyle = game.blockColor;
           ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
           ctx.strokeStyle = '#ffffff';
@@ -507,8 +507,8 @@ export class Renderer {
     // on a tile, and who's standing on it.
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
         const visible = game.visibility[x]![y]!;
         if (!visible && !game.explored[x]![y]!) continue;
         const type = game.map[x]![y]!;
@@ -526,7 +526,7 @@ export class Renderer {
           else this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
         } else if (altar) {
           if (visible) {
-            this.drawPulseGlow(x, y, TIER_COLORS[altar.tier].rgb);
+            this.drawPulseGlow(x, y, Colors.forTier(altar.tier).rgb);
           }
           const inset = TS * 0.1;
           this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
@@ -620,7 +620,7 @@ export class Renderer {
     if (this.impactGlow) {
       const { x, y, rgb, frames, maxFrames } = this.impactGlow;
       const alpha = 0.5 * (frames / maxFrames);
-      const TSg = CONFIG.TILE_SIZE;
+      const TSg = GameConfig.TILE_SIZE;
       const px = x * TSg + TSg / 2, py = y * TSg + TSg / 2;
       const glow = ctx.createRadialGradient(px, py, 0, px, py, TSg * 2.2);
       glow.addColorStop(0, `rgba(${rgb},${alpha})`);
@@ -772,9 +772,9 @@ export class Renderer {
 
   // Draws a sprite silhouetted in white via a scratch canvas (death flash).
   private drawWhiteSprite(key: string, dx: number, dy: number, dw: number, dh: number, alpha: number): void {
-    const coord = SPRITE_MAP[key];
+    const coord = SpriteService.MAP[key];
     if (!coord || !coord.sheet) return;
-    const img = getSpriteImage(coord.sheet);
+    const img = SpriteService.getImage(coord.sheet);
     if (!img) return;
     const fc = this.flashCanvas;
     fc.width = coord.sw; fc.height = coord.sh;  // setting size also clears

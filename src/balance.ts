@@ -8,24 +8,7 @@ import hazardsData from './data/hazards.json';
 import monsterAiData from './data/monster-ai.json';
 import balanceData from './data/balance.json';
 
-export function numOr(value: number | undefined, fallback: number): number {
-  return value === undefined ? fallback : value;
-}
-
-// Converts independent per-key weights into the same cumulative-cutoff
-// behavior a chain of `if (r < cutoff) ...` checks would implement, without
-// anyone having to hand-compute cumulative bounds in the JSON. Returns null
-// if `roll` lands past the last cutoff — a legal "no match" outcome (e.g.
-// trap rolls, where "no trap" is the common case).
-export function weightedPick<T extends string>(weights: Record<T, number>, roll: number): T | null {
-  let acc = 0;
-  for (const key of Object.keys(weights) as T[]) {
-    acc += weights[key];
-    if (roll < acc) return key;
-  }
-  return null;
-}
-
+/** Per-outcome dice/combat tuning, loaded from `data/combat.json`. */
 export interface CombatBalance {
   diceSidesByLevel: number[];
   outcomeMultipliers: Record<'miss' | 'weak' | 'normal' | 'power' | 'critical', number>;
@@ -35,16 +18,16 @@ export interface CombatBalance {
   critStun: { duration: number; power: number };
   rewards: { goldOnKill: number; goldOnBossKill: number; eliteGoldBonusPerFloor: number; healOnKill: number };
 }
-export const COMBAT_BALANCE = combatData as CombatBalance;
 
+/** Trap-hazard tuning, loaded from `data/hazards.json`. */
 export interface HazardBalance {
   spike: {
     rearmMinTurns: number; rearmRandomTurns: number; warningThreshold: number;
     damagePerDungeonLevel: number; minDamage: number; fieldFixedTimer: number;
   };
 }
-export const HAZARD_BALANCE = hazardsData as HazardBalance;
 
+/** Per-behavior-type monster AI tuning, loaded from `data/monster-ai.json`. */
 export interface MonsterAiConfig {
   common:    { contactDistance: number };
   melee:     { chaseRange: number };
@@ -54,8 +37,8 @@ export interface MonsterAiConfig {
   healer:    { healRadius: number; healFraction: number };
   gorgoth:   { stepTurns: number };
 }
-export const MONSTER_AI = monsterAiData as MonsterAiConfig;
 
+/** Top-level gameplay tuning knobs, loaded from `data/balance.json`. */
 export interface BalanceConfig {
   player: {
     startingHp: number; startingAtk: number;
@@ -95,4 +78,63 @@ export interface BalanceConfig {
   eliteMonsters: { spawnChance: number; hpMult: number; atkMult: number; combatLevelBonus: number };
   ghosts: { encounterChance: number; levelTolerance: number; maxStored: number };
 }
-export const BALANCE = balanceData as BalanceConfig;
+
+/**
+ * Static home for every gameplay tuning JSON blob, plus the small pure
+ * helpers ({@link weightedPick}, {@link numOr}) simulation code uses to
+ * consume them. Edit the JSON files in `src/data/` to retune the game —
+ * nothing in this class needs to change for balance tweaks.
+ */
+export class Balance {
+  /** Top-level tuning knobs (`data/balance.json`). */
+  static readonly CONFIG = balanceData as BalanceConfig;
+
+  /** Combat/dice tuning (`data/combat.json`). */
+  static readonly COMBAT = combatData as CombatBalance;
+
+  /** Hazard/trap tuning (`data/hazards.json`). */
+  static readonly HAZARD = hazardsData as HazardBalance;
+
+  /** Monster AI tuning (`data/monster-ai.json`). */
+  static readonly MONSTER_AI = monsterAiData as MonsterAiConfig;
+
+  /**
+   * Returns `value` if defined, otherwise `fallback` — a `??` with an
+   * explicit name for use inside object-literal expressions.
+   * @param value - The optional value to prefer.
+   * @param fallback - The value to use when `value` is undefined.
+   * @throws {TypeError} If `fallback` is not a finite number.
+   */
+  static numOr(value: number | undefined, fallback: number): number {
+    if (typeof fallback !== 'number' || !Number.isFinite(fallback)) {
+      throw new TypeError('Balance.numOr: "fallback" must be a finite number');
+    }
+    return value === undefined ? fallback : value;
+  }
+
+  /**
+   * Converts independent per-key weights into the same cumulative-cutoff
+   * behavior a chain of `if (r < cutoff) ...` checks would implement,
+   * without anyone having to hand-compute cumulative bounds in the JSON.
+   * @param weights - Map of key to its (not-necessarily-normalized) weight.
+   * @param roll - A roll in `[0, 1)` (or whatever scale the weights sum to).
+   * @returns The key whose cumulative range contains `roll`, or `null` if
+   * `roll` lands past the last cutoff — a legal "no match" outcome (e.g.
+   * trap rolls, where "no trap" is the common case).
+   * @throws {TypeError} If `weights` is null/undefined or `roll` is not a finite number.
+   */
+  static weightedPick<T extends string>(weights: Record<T, number>, roll: number): T | null {
+    if (weights === null || weights === undefined) {
+      throw new TypeError('Balance.weightedPick: "weights" must not be null/undefined');
+    }
+    if (typeof roll !== 'number' || !Number.isFinite(roll)) {
+      throw new TypeError('Balance.weightedPick: "roll" must be a finite number');
+    }
+    let acc = 0;
+    for (const key of Object.keys(weights) as T[]) {
+      acc += weights[key];
+      if (roll < acc) return key;
+    }
+    return null;
+  }
+}

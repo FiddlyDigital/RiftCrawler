@@ -1,6 +1,6 @@
-import { CONFIG } from './config';
-import { SPRITE_MAP, getSpriteImage } from './sprites';
-import { BALANCE } from './balance';
+import { GameConfig } from './config';
+import { SpriteService } from './sprites';
+import { Balance } from './balance';
 import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
 
 // Many boon/brand effects are stored as a fraction of a reference stat
@@ -27,7 +27,7 @@ export class Player {
   // Progression
   xp = 0;
   playerLevel = 1;
-  xpToNext = BALANCE.player.xpToNextStart;
+  xpToNext = Balance.CONFIG.player.xpToNextStart;
 
   // Perk-granted bonuses
   visionRadius = 4;
@@ -45,7 +45,7 @@ export class Player {
 
   get combatLevel(): number {
     const lvl = this.playerLevel;
-    for (const band of BALANCE.player.combatLevelBands) {
+    for (const band of Balance.CONFIG.player.combatLevelBands) {
       if (lvl < band.minPlayerLevel) continue;
       if (band.combatLevel !== undefined) return band.combatLevel;
       if (band.combatLevelFloor !== undefined) return Math.max(this.baseCombatLevel, band.combatLevelFloor);
@@ -106,9 +106,9 @@ export class Player {
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
-    this.hp = BALANCE.player.startingHp;
-    this.maxHp = BALANCE.player.startingHp;
-    this.atk = BALANCE.player.startingAtk;
+    this.hp = Balance.CONFIG.player.startingHp;
+    this.maxHp = Balance.CONFIG.player.startingHp;
+    this.atk = Balance.CONFIG.player.startingAtk;
   }
 
   get totalAtk(): number {
@@ -122,11 +122,11 @@ export class Player {
   }
 
   get brandsCapped(): boolean {
-    return this.brandsAcquiredTotal >= BALANCE.brands.maxLifetime;
+    return this.brandsAcquiredTotal >= Balance.CONFIG.brands.maxLifetime;
   }
 
   get brandsRemaining(): number {
-    return Math.max(0, BALANCE.brands.maxLifetime - this.brandsAcquiredTotal);
+    return Math.max(0, Balance.CONFIG.brands.maxLifetime - this.brandsAcquiredTotal);
   }
 
   get isStunned(): boolean {
@@ -151,7 +151,7 @@ export class Player {
     if (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
       this.playerLevel++;
-      this.xpToNext = Math.floor(this.xpToNext * BALANCE.player.xpToNextGrowth);
+      this.xpToNext = Math.floor(this.xpToNext * Balance.CONFIG.player.xpToNextGrowth);
       return true;
     }
     return false;
@@ -243,8 +243,8 @@ export class Particle {
     gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = '',
     vx = 0, vy = -0.7, drag = 1,
   ): void {
-    this.x = gridX * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2 + (Math.random() - 0.5) * CONFIG.TILE_SIZE * 0.4;
-    this.y = gridY * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 4 + Math.random() * CONFIG.TILE_SIZE * 0.3;
+    this.x = gridX * GameConfig.TILE_SIZE + GameConfig.TILE_SIZE / 2 + (Math.random() - 0.5) * GameConfig.TILE_SIZE * 0.4;
+    this.y = gridY * GameConfig.TILE_SIZE + GameConfig.TILE_SIZE / 4 + Math.random() * GameConfig.TILE_SIZE * 0.3;
     this.text = text;
     this.icon = icon;
     this.color = color;
@@ -277,8 +277,8 @@ export class Particle {
     let cursorX = this.x - totalW / 2;
 
     if (this.icon) {
-      const coord = SPRITE_MAP[this.icon];
-      const img = coord && getSpriteImage(coord.sheet);
+      const coord = SpriteService.MAP[this.icon];
+      const img = coord && SpriteService.getImage(coord.sheet);
       if (img) {
         const scale = Math.min(iconSize / coord.sw, iconSize / coord.sh);
         const iw = coord.sw * scale, ih = coord.sh * scale;
