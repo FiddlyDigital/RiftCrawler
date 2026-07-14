@@ -187,16 +187,24 @@ export class Renderer {
   // reads as alive rather than a static tile icon. `phase` staggers the bob
   // so multiple instances on screen don't sway in perfect unison; `inset`
   // matches the smaller centered draw used for altar/NPC-style icons.
-  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0): void {
+  // `twitch` adds a brief horizontal shiver every few seconds (monsters only)
+  // so a crowd of idlers doesn't read as one synchronized metronome.
+  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0, twitch = false): void {
     const TS = CONFIG.TILE_SIZE;
     const idleBob = Math.sin(performance.now() / 500 + phase) * 1.5;
+    let jitterX = 0;
+    if (twitch && !this.reducedMotion) {
+      const t = performance.now() / 1000 + phase;
+      const cycle = t % 3.7;
+      if (cycle < 0.22) jitterX = Math.sin(cycle * 60) * 1.2;
+    }
     const px = gx * TS + TS / 2, py = gy * TS + TS / 2 + idleBob;
     const glow = this.ctx.createRadialGradient(px, py, 0, px, py, TS * 1.4);
     glow.addColorStop(0, `rgba(${rgb},0.38)`);
     glow.addColorStop(1, `rgba(${rgb},0)`);
     this.ctx.fillStyle = glow;
     this.ctx.fillRect(gx * TS - TS, gy * TS - TS, TS * 3, TS * 3);
-    this.drawSprite(char, gx * TS + inset, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
+    this.drawSprite(char, gx * TS + inset + jitterX, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
   }
 
   private drawPulseGlow(gx: number, gy: number, rgb: string): void {
@@ -422,45 +430,10 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
-    // ── Tile-feature glyphs (stairs / tattoo artist / altar) ───────────────
-    // Drawn AFTER the falling block + ghost so a descending piece can never
-    // hide the feature underneath it — the player always sees what's on a tile.
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-    for (let x = 0; x < CONFIG.COLS; x++) {
-      for (let y = 0; y < CONFIG.ROWS; y++) {
-        const visible = game.visibility[x]![y]!;
-        if (!visible && !game.explored[x]![y]!) continue;
-        const type = game.map[x]![y]!;
-        const isMerchant = this.isMerchantTile(game, x, y);
-        const altar = this.getAltarAt(game, x, y);
-        const npcHere = game.npcTiles.find(n => n.x === x && n.y === y);
-        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere) continue;
-
-        ctx.globalAlpha = visible ? 1.0 : 0.5;
-        if (type === Tile.STAIRS) {
-          if (visible) this.drawPulseGlow(x, y, '168,132,184');
-          this.drawSprite('tile_stairs', x * TS, y * TS, TS, TS);
-        } else if (isMerchant) {
-          if (visible) this.drawLivingSprite('tile_merchant', x, y, '217,164,65', x * 7 + y * 13);
-          else this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
-        } else if (altar) {
-          if (visible) {
-            this.drawPulseGlow(x, y, TIER_COLORS[altar.tier].rgb);
-          }
-          const inset = TS * 0.1;
-          this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
-        } else if (npcHere) {
-          const npcDef = NPCS.find(n => n.id === npcHere.npcId);
-          const inset = TS * 0.1;
-          if (visible) this.drawLivingSprite(npcDef?.char ?? 'npc_fili', x, y, '89,159,124', x * 7 + y * 13, inset);
-          else this.drawSprite(npcDef?.char ?? 'npc_fili', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
-        }
-        ctx.globalAlpha = 1.0;
-      }
-    }
-
     // ── Special tile overlays (swamp / sacred / ice) ─────────────────────
+    // Drawn BEFORE the tile-feature glyphs below (stairs/merchant/altar/NPC)
+    // so an entity standing on one of these terrain tiles is never painted
+    // over by the terrain's own overlay.
     for (const t of game.specialTiles) {
       if (!game.visibility[t.x]?.[t.y]) continue;
       const sx = t.x * TS, sy = t.y * TS;
@@ -488,6 +461,8 @@ export class Renderer {
     }
 
     // ── Hazard overlays ───────────────────────────────────────────────────
+    // Also drawn before tile-feature glyphs, for the same reason — a trap
+    // tile must never paint over an NPC/altar/merchant standing on it.
     for (const h of game.hazards) {
       if (!game.visibility[h.x]?.[h.y]) continue;
       const hx = h.x * TS, hy = h.y * TS;
@@ -524,6 +499,49 @@ export class Renderer {
       ctx.globalAlpha = 1.0;
     }
 
+    // ── Tile-feature glyphs (stairs / tattoo artist / altar / NPCs) ────────
+    // Drawn AFTER the falling block + ghost (so a descending piece can never
+    // hide the feature underneath it) and AFTER the special-tile/hazard
+    // overlays above (so an NPC standing on a swamp/ice/trap tile is never
+    // hidden beneath that tile's own overlay) — the player always sees what's
+    // on a tile, and who's standing on it.
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    for (let x = 0; x < CONFIG.COLS; x++) {
+      for (let y = 0; y < CONFIG.ROWS; y++) {
+        const visible = game.visibility[x]![y]!;
+        if (!visible && !game.explored[x]![y]!) continue;
+        const type = game.map[x]![y]!;
+        const isMerchant = this.isMerchantTile(game, x, y);
+        const altar = this.getAltarAt(game, x, y);
+        const npcHere = game.npcTiles.find(n => n.x === x && n.y === y);
+        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere) continue;
+
+        ctx.globalAlpha = visible ? 1.0 : 0.5;
+        if (type === Tile.STAIRS) {
+          if (visible) this.drawPulseGlow(x, y, '168,132,184');
+          this.drawSprite('tile_stairs', x * TS, y * TS, TS, TS);
+        } else if (isMerchant) {
+          if (visible) this.drawLivingSprite('tile_merchant', x, y, '217,164,65', x * 7 + y * 13);
+          else this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
+        } else if (altar) {
+          if (visible) {
+            this.drawPulseGlow(x, y, TIER_COLORS[altar.tier].rgb);
+          }
+          const inset = TS * 0.1;
+          this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
+        } else if (npcHere) {
+          const isGhost = npcHere.npcId === '__ghost__';
+          const char = isGhost ? 'sprite_boss_wraith' : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
+          const inset = TS * 0.1;
+          if (isGhost) ctx.globalAlpha *= 0.75;  // translucent — it isn't quite here
+          if (visible) this.drawLivingSprite(char, x, y, isGhost ? '176,196,222' : '89,159,124', x * 7 + y * 13, inset);
+          else this.drawSprite(char, x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
+        }
+        ctx.globalAlpha = 1.0;
+      }
+    }
+
     // ── Monsters (only if visible) ────────────────────────────────────────
     for (const m of game.monsters) {
       if (!game.visibility[m.x]?.[m.y]) continue;
@@ -536,6 +554,7 @@ export class Renderer {
       // Combat is orthogonal-only, so this is Manhattan range (attackRange 1 =
       // the four orthogonal tiles; ranged monsters use their larger range).
       const threatening = game.player.hp > 0 && !m.isStunned &&
+        (game.player.veiledTurns <= 0 || m.isGorgoth) &&
         (Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y)) <= m.attackRange;
       if (threatening) {
         this.drawPulseGlow(m.x, m.y, '198,58,50');
@@ -545,7 +564,7 @@ export class Renderer {
         ctx.font = `${TS * 0.7}px Arial`;
       }
 
-      this.drawLivingSprite(m.char, m.x, m.y, '198,58,50', m.x * 7 + m.y * 13);
+      this.drawLivingSprite(m.char, m.x, m.y, '198,58,50', m.x * 7 + m.y * 13, 0, true);
 
       if (m.isElite) {
         ctx.strokeStyle = '#ffd700';
@@ -582,7 +601,11 @@ export class Renderer {
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
 
-      this.drawLivingSprite(game.player.char, game.player.x, game.player.y, '102,187,106');
+      // Féth Fíada: translucent, wrapped in sea-mist instead of the hero green
+      const veiled = game.player.veiledTurns > 0;
+      if (veiled) ctx.globalAlpha = 0.55;
+      this.drawLivingSprite(game.player.char, game.player.x, game.player.y, veiled ? '63,158,147' : '102,187,106');
+      ctx.globalAlpha = 1.0;
 
       if (game.player.statuses.length > 0) {
         const iconSize = 8;

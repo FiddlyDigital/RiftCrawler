@@ -16,7 +16,9 @@ export function pctOf(base: number, fraction: number): number {
 export class Player {
   x: number;
   y: number;
-  readonly char = 'sprite_player';
+  // Board sprite — replaced by the class's own portrait in Game.applyClass,
+  // so what you picked on the class card is what you play.
+  char = 'sprite_player';
 
   hp: number;
   maxHp: number;
@@ -65,10 +67,17 @@ export class Player {
   critEvery = 0;
   critCount = 0;
 
-  // Ranged ability (set by class; null = Warrior / no class)
+  // Ranged ability (set by class; null = Warrior / no class). For An Draoi,
+  // this is the ACTIVE spell — the full unlocked spellbook lives below and
+  // cycling swaps which entry rangedAbility points at (shared cooldown).
   rangedAbility: RangedAbility | null = null;
   rangedCooldown = 0;
   rangedAmmo = -1;  // -1 = infinite, ≥0 = finite (Rogue darts)
+  spellbook: RangedAbility[] = [];
+  activeSpellIndex = 0;
+
+  // Féth Fíada (Manannán pact): while > 0, monsters can't see or attack you
+  veiledTurns = 0;
 
   // Status effects
   statuses: StatusEffect[] = [];

@@ -7,7 +7,7 @@ import { killMonster, playerAttackMonster, monsterAttackPlayer, estimateHitChanc
 import { processMonsterTurns } from '../systems/monsterAI';
 import { processHazards, checkHazardTrigger, teleportEntity } from '../systems/hazards';
 import { applyStatusEffects, applyRegen, applyAuraStun } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, getThreeRandomBoons } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, getThreeRandomBoons } from '../content';
 import { BALANCE, COMBAT_BALANCE, MONSTER_AI, HAZARD_BALANCE, weightedPick } from '../balance';
 import { TIER_COLORS } from '../colors';
 import { SPRITE_MAP, SPRITE_SHEETS, spriteIconHTML } from '../sprites';
@@ -488,7 +488,7 @@ describe('Balance levers', () => {
     expect(game.player.totalXpEarned).toBe(xpBefore + 15 + 20);
   });
 
-  it('after Bres first appears, line clears chip his stored HP — but never below 1', () => {
+  it('after Bres first appears, line clears chip his stored HP — but never below the causeway floor', () => {
     game.gorgothEverSummoned = true;
     game.dungeonLevel = 10;
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
@@ -496,17 +496,27 @@ describe('Balance levers', () => {
     expect(cb.logs.some(l => l.includes('causeway shudders'))).toBe(true);
     game.summonGorgoth();
     const bres = game.monsters.find(m => m.isGorgoth)!;
-    // 6 dmg × 1 row × floor 10 = 60 chipped off the 800 max
-    expect(bres.hp).toBe(BALANCE.gorgoth.maxHp - 60);
+    // 8 dmg × 1 row × floor 10 = 80 chipped off the max
+    expect(bres.hp).toBe(BALANCE.gorgoth.maxHp - 80);
 
-    // Grind him to the floor from afar: HP clamps at 1, never 0
+    // Grind him from afar: HP clamps at the causeway floor (a fraction of max
+    // HP) — you can weaken him this way, but never finish him without a fight.
     const g = game as unknown as { gorgothHp: number };
     game.monsters = [];
     (game as unknown as { gorgothSummoned: boolean }).gorgothSummoned = false;
+    g.gorgothHp = BALANCE.gorgoth.maxHp;
+    for (let i = 0; i < 50; i++) {
+      for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+      (game as unknown as { checkLineClears(): void }).checkLineClears();
+    }
+    const chipFloor = Math.ceil(BALANCE.gorgoth.maxHp * BALANCE.gorgoth.causewayChipFloorPct);
+    expect(g.gorgothHp).toBe(chipFloor);
+
+    // Already below the floor from a real fight: passive chip must not heal him.
     g.gorgothHp = 5;
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
     (game as unknown as { checkLineClears(): void }).checkLineClears();
-    expect(g.gorgothHp).toBe(1);
+    expect(g.gorgothHp).toBe(5);
   });
 
   it('the peddler sells each item once, deducts gold, and applies the effect', () => {
@@ -916,8 +926,8 @@ describe('Player classes (JSON-configured)', () => {
     game = new Game(cb);
   });
 
-  it('CLASSES loads both classes from JSON in the original order', () => {
-    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'architect']);
+  it('CLASSES loads all classes from JSON in the original order', () => {
+    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'architect', 'draoi']);
   });
 
   it('tPieceCdReduction defaults to 2, architect overrides to 4', () => {
@@ -1032,6 +1042,190 @@ describe('Player classes (JSON-configured)', () => {
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
     (game as unknown as { checkLineClears(): void }).checkLineClears();
     expect(m.hp).toBe(100);
+  });
+});
+
+// ── An Draoi: HP-pact spellcasting & deity patrons ────────────────────────────
+
+describe('An Draoi (HP-pact magic)', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+    game.applyClass('draoi');
+  });
+
+  it('PATRONS loads all three deities, each with a 3-spell book, all HP-costed, signature at level 1', () => {
+    expect(PATRONS.map(p => p.id)).toEqual(['morrigan', 'manannan', 'tethra']);
+    for (const p of PATRONS) {
+      expect(p.spells.length).toBe(3);
+      expect(p.spells[0]!.unlockLevel).toBe(1);
+      for (const s of p.spells) {
+        expect(typeof s.params?.['hpCostPct']).toBe('number');
+        expect(s.params!['hpCostPct'] as number).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('applyPatron grants only level-appropriate spells; level-ups unlock the rest', () => {
+    game.applyPatron('morrigan');
+    expect(game.player.spellbook.map(s => s.name)).toEqual(["Badb's Shriek"]);
+
+    game.player.playerLevel = 4;
+    game.openLevelUpBoons();  // choke point that runs syncSpellUnlocks
+    expect(game.player.spellbook.map(s => s.name)).toEqual(["Badb's Shriek", 'Fog of Blood']);
+
+    game.player.playerLevel = 8;
+    game.openLevelUpBoons();
+    expect(game.player.spellbook.map(s => s.name)).toEqual(["Badb's Shriek", 'Fog of Blood', 'Rain of Fire']);
+  });
+
+  it('swearing the pact at a high level grants everything already earned', () => {
+    game.player.playerLevel = 8;
+    game.applyPatron('tethra');
+    expect(game.player.spellbook.length).toBe(3);
+  });
+
+  it('handleCycleSpell rotates the active spell without resetting the shared cooldown', () => {
+    game.player.playerLevel = 8;
+    game.applyPatron('morrigan');
+    game.paused = false;
+    game.player.rangedCooldown = 2;
+    expect(game.player.rangedAbility?.name).toBe("Badb's Shriek");
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe('Fog of Blood');
+    expect(game.player.rangedCooldown).toBe(2);
+    game.handleCycleSpell();
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe("Badb's Shriek");
+  });
+
+  it('cycling is a no-op with fewer than two spells', () => {
+    game.applyPatron('manannan');
+    game.paused = false;
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe('Féth Fíada');
+    expect(game.player.activeSpellIndex).toBe(0);
+  });
+
+  it("Tethra's Maw devours a target below the execute threshold", () => {
+    game.player.playerLevel = 8;
+    game.applyPatron('tethra');
+    game.paused = false;
+    // cycle to Tethra's Maw (index 2)
+    game.handleCycleSpell();
+    game.handleCycleSpell();
+    expect(game.player.rangedAbility?.name).toBe("Tethra's Maw");
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Tank', 30, 100, 1, 5); // 30% hp < 35%
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    game.map[game.player.x]![game.player.y - 1] = Tile.FLOOR;
+    game.map[m.x]![m.y] = Tile.FLOOR;
+    game.handleRangedAttack();
+    expect(game.monsters).not.toContain(m); // devoured outright despite 100 maxHp
+  });
+
+  it('Blight of the Deep poisons every visible monster with HP-scaled power', () => {
+    game.player.playerLevel = 4;
+    game.applyPatron('tethra');
+    game.paused = false;
+    game.handleCycleSpell(); // → Blight of the Deep
+    expect(game.player.rangedAbility?.name).toBe('Blight of the Deep');
+    const a = new Monster(game.player.x, game.player.y - 3, 'sprite_berserker_orc', 'A', 50, 50, 1, 5);
+    const b = new Monster(game.player.x + 2, game.player.y - 3, 'sprite_berserker_orc', 'B', 50, 50, 1, 5);
+    game.monsters = [a, b];
+    game.visibility[a.x]![a.y] = true;
+    game.visibility[b.x]![b.y] = true;
+    game.handleRangedAttack();
+    expect(a.statuses.some(s => s.type === 'poison')).toBe(true);
+    expect(b.statuses.some(s => s.type === 'poison')).toBe(true);
+  });
+
+  it('casting Wild Surge deducts the HP cost and deals dmgMult × the HP paid', () => {
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    // Clear line of sight — the fresh map is VOID between hero and target
+    game.map[game.player.x]![game.player.y - 1] = Tile.FLOOR;
+    game.map[m.x]![m.y] = Tile.FLOOR;
+    const maxHp = game.player.maxHp;
+    const hpBefore = game.player.hp;
+    const expectedCost = Math.max(1, Math.round(maxHp * 0.10));
+    game.handleRangedAttack();
+    // regen/heal effects don't apply to a fresh draoi, so the delta is exactly the cost
+    expect(hpBefore - game.player.hp).toBe(expectedCost);
+    expect(m.hp).toBe(100 - expectedCost * 2);
+  });
+
+  it('the pact never takes your last breath — cast refused when hp <= cost', () => {
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    const cost = Math.max(1, Math.round(game.player.maxHp * 0.10));
+    game.player.hp = cost; // exactly the cost — must refuse
+    game.handleRangedAttack();
+    expect(game.player.hp).toBe(cost);
+    expect(m.hp).toBe(100);
+  });
+
+  it('a whiffed drain (no target) costs no HP', () => {
+    game.monsters = [];
+    const hpBefore = game.player.hp;
+    game.handleRangedAttack();
+    expect(game.player.hp).toBe(hpBefore);
+    expect(game.player.rangedCooldown).toBe(0);
+  });
+
+  it("applyPatron(tethra) swaps the ability, applies the passive, and Tethra's Tithe refunds on kill", () => {
+    game.applyPatron('tethra');
+    expect(game.activePatronId).toBe('tethra');
+    expect(game.player.rangedAbility?.name).toBe("Tethra's Tithe");
+    expect(game.player.killHeal).toBeCloseTo(0.04);
+
+    // A weak target the 3× drain will certainly kill → full cost refunded
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Runt', 1, 1, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    game.map[game.player.x]![game.player.y - 1] = Tile.FLOOR;
+    game.map[m.x]![m.y] = Tile.FLOOR;
+    const hpBefore = game.player.hp;
+    game.handleRangedAttack();
+    expect(game.monsters).not.toContain(m);
+    // cost paid then refunded (plus kill heals) — never below where we started
+    expect(game.player.hp).toBeGreaterThanOrEqual(hpBefore);
+  });
+
+  it("Badb's Shriek hits every visible monster and puts the spell on cooldown", () => {
+    game.applyPatron('morrigan');
+    const a = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'A', 100, 100, 1, 5);
+    const b = new Monster(game.player.x + 2, game.player.y - 3, 'sprite_berserker_orc', 'B', 100, 100, 1, 5);
+    game.monsters = [a, b];
+    game.visibility[a.x]![a.y] = true;
+    game.visibility[b.x]![b.y] = true;
+    const cost = Math.max(1, Math.round(game.player.maxHp * 0.15));
+    game.handleRangedAttack();
+    expect(a.hp).toBe(100 - cost * 2);
+    expect(b.hp).toBe(100 - cost * 2);
+    // cooldownMax 4, minus the same-action tickRangedCooldown decrement
+    expect(game.player.rangedCooldown).toBe(3);
+  });
+
+  it('Féth Fíada veils the player; veiled monsters neither move nor attack; veil ticks down', () => {
+    game.applyPatron('manannan');
+    const m = new Monster(game.player.x + 1, game.player.y, 'sprite_berserker_orc', 'Orc', 20, 20, 5, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    const hpAfterCast = (): number => game.player.hp;
+    game.handleRangedAttack();
+    const veiledAt = game.player.veiledTurns;
+    expect(veiledAt).toBeGreaterThan(0);
+    const hp = hpAfterCast();
+    const mx = m.x, my = m.y;
+    processMonsterTurns(game);
+    expect(game.player.hp).toBe(hp);   // adjacent orc couldn't strike
+    expect([m.x, m.y]).toEqual([mx, my]); // and didn't move
   });
 });
 

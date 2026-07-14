@@ -195,16 +195,20 @@ export class UIManager {
 
     // Ranged ability badge + button state
     const rangedBtn = document.getElementById('ranged-btn') as HTMLButtonElement | null;
+    const cycleBtn  = document.getElementById('spell-cycle-btn') as HTMLButtonElement | null;
     if (state.rangedAbility) {
       const ra = state.rangedAbility;
       const ready = ra.cooldown === 0 && ra.ammo !== 0;
       const ammoText  = ra.ammo !== null ? ` ×${ra.ammo}` : '';
+      const costText  = ra.hpCostPct !== null ? ` · ${Math.round(ra.hpCostPct * 100)}% HP` : '';
+      const bookText  = ra.spellCount > 1 ? ` (${ra.spellIndex + 1}/${ra.spellCount})` : '';
       const cdText    = ra.cooldown > 0 ? ` [${ra.cooldown}t]` : ' [Ready]';
-      const label = `${escapeHtml(ra.name)}${ammoText}${cdText}`;
+      const label = `${escapeHtml(ra.name)}${bookText}${ammoText}${cdText}${costText}`;
       this.els['rangedAbility']!.style.display = '';
       this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
       this.els['rangedAbility']!.style.fontSize = '9px';
-      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)</span>`;
+      const cycleHint = ra.spellCount > 1 ? ' · E switches' : '';
+      this.els['rangedAbility']!.innerHTML = `${spriteIconHTML(ra.emoji, 12)}${label}<span class="kbd-hint">  (Q)${cycleHint}</span>`;
       if (rangedBtn) {
         // Short generic label (not the ability name) so the button stays as
         // narrow as the Hold button — full detail lives in the sidebar badge.
@@ -212,30 +216,39 @@ export class UIManager {
         rangedBtn.disabled = !ready;
         rangedBtn.style.opacity = ready ? '1' : '0.4';
       }
+      if (cycleBtn) cycleBtn.style.display = ra.spellCount > 1 ? '' : 'none';
     } else {
       this.els['rangedAbility']!.style.display = 'none';
       if (rangedBtn) { rangedBtn.disabled = true; rangedBtn.style.opacity = '0.3'; rangedBtn.textContent = 'Special'; }
+      if (cycleBtn) cycleBtn.style.display = 'none';
     }
   }
 
-  showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
+  showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
     this.els['deathTitle']!.textContent  = title;
     this.els['deathReason']!.textContent = reason;
     this.modal.querySelector('.modal-card')?.classList.remove('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, stats);
+    this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
   }
 
-  showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
+  showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
     this.els['deathTitle']!.innerHTML   = `${spriteIconHTML('item_trophy', 16)}BRES VANQUISHED`;
     this.els['deathReason']!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
     this.modal.querySelector('.modal-card')?.classList.add('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, stats);
+    this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
   }
 
-  private populateEndModal(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats): void {
+  private populateEndModal(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
     this.els['finalFloor']!.textContent  = String(floor);
     this.els['finalScore']!.textContent  = String(totalXpEarned);
     this.els['highScore']!.textContent   = String(highXp);
+
+    // Short narrative recap of the run's notable moments
+    const storyEl = document.getElementById('run-story');
+    if (storyEl) {
+      storyEl.textContent = story ?? '';
+      storyEl.style.display = story ? '' : 'none';
+    }
 
     // Run stats grid
     if (stats) {
@@ -638,19 +651,22 @@ export class UIManager {
   }
 
   showPauseMenu(
-    state: { soundOn: boolean; reducedMotion: boolean },
-    handlers: { onResume: () => void; onToggleMute: () => void; onToggleMotion: () => void; onRestart: () => void },
+    state: { soundOn: boolean; reducedMotion: boolean; volumePct: number },
+    handlers: { onResume: () => void; onToggleMute: () => void; onToggleMotion: () => void; onCycleVolume: () => void; onRestart: () => void },
   ): void {
     const modal = document.getElementById('pause-modal');
     if (!modal) return;
     const muteState = document.getElementById('pause-mute-state');
     const motionState = document.getElementById('pause-motion-state');
+    const volumeState = document.getElementById('pause-volume-state');
     if (muteState) muteState.textContent = state.soundOn ? 'On' : 'Off';
     if (motionState) motionState.textContent = state.reducedMotion ? 'On' : 'Off';
+    if (volumeState) volumeState.textContent = `${state.volumePct}%`;
     const bind = (id: string, fn: () => void): void => { const el = document.getElementById(id); if (el) el.onclick = fn; };
     bind('pause-resume', handlers.onResume);
     bind('pause-mute', handlers.onToggleMute);
     bind('pause-motion', handlers.onToggleMotion);
+    bind('pause-volume', handlers.onCycleVolume);
     bind('pause-restart', handlers.onRestart);
     modal.style.display = 'flex';
   }

@@ -1,9 +1,9 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, pctOf } from './entities';
-import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, type ClassDef } from './content';
+import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, PATRONS, applyToPlayer, type ClassDef, type PatronDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
-import { processHazards, checkHazardTrigger } from './systems/hazards';
+import { processHazards, checkHazardTrigger, teleportEntity } from './systems/hazards';
 import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
 import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
 import { spriteIconHTML } from './sprites';
@@ -13,6 +13,39 @@ import { TIER_COLORS } from './colors';
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
 };
+
+// Human-readable summary of a patron's signature spell for the pact ceremony.
+function describePatronSpell(p: PatronDef): string {
+  const spell = p.spells[0]!;
+  const params = spell.params ?? {};
+  const num = (k: string, d: number): number => typeof params[k] === 'number' ? params[k] as number : d;
+  const costPct = Math.round(num('hpCostPct', 0) * 100);
+  switch (spell.abilityType) {
+    case 'shriek':
+      return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to EVERY visible foe (${Math.round(num('stunChance', 0) * 100)}% terror-stun).`;
+    case 'veil':
+      return `pay ${costPct}% Max HP, vanish from mortal sight for ${num('veilTurns', 6)} turns.`;
+    case 'drain':
+      return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to the nearest foe, heal ${Math.round(num('healPct', 0) * 100)}% of it — a kill refunds the price.`;
+    default:
+      return `pay ${costPct}% Max HP.`;
+  }
+}
+
+// Human-readable summary of a spell's one-time toll, applied the moment the
+// patron grants it (at the pact, or at each later level-gated unlock).
+const TOLL_LABELS: Record<string, string> = { atk: 'ATK', maxHp: 'Max HP', tickSlowPercent: 'gravity speed' };
+function describeToll(effects: EffectSpec[] | undefined): string {
+  return (effects ?? []).map(e => {
+    const label = TOLL_LABELS[e.stat] ?? e.stat;
+    if (e.op === 'mul') {
+      const pct = Math.round((1 - (e.value as number)) * 100);
+      return `−${pct}% ${label}`;
+    }
+    const v = e.value as number;
+    return `${v > 0 ? '+' : ''}${v} ${label}`;
+  }).join(', ');
+}
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
 
@@ -87,6 +120,7 @@ export class Game {
 
   // Class state
   public activeClassId: string | null = null;
+  public activePatronId: string | null = null;  // An Draoi's sworn deity (null until the pact ceremony)
   public timeDilationTurns = 0;    // Chronomancer: turns remaining at the slow below
   public timeDilationSlowPct = 0;  // magnitude of the slow while timeDilationTurns > 0 (class-configurable)
   public killsThisFloor    = 0;  // kill counter for the Overload ability type
@@ -117,6 +151,18 @@ export class Game {
   // A vengeance bounty accepted from an NPC — persists across floors (no
   // per-floor reset) until the named boss falls, whenever/wherever that is.
   public activeBountyQuest: { bossName: string; floor: number } | null = null;
+
+  // Ghost files — fallen characters from previous runs (loaded by main.ts
+  // after construction; the first floor therefore never rolls a ghost).
+  // activeGhost is this floor's haunting, chosen at floor start when a stored
+  // ghost's level is within tolerance of the current hero's.
+  public availableGhosts: GhostRecord[] = [];
+  private activeGhost: GhostRecord | null = null;
+  private ghostPlaced = false;
+
+  // Notable moments this run — feeds the death/victory screen's short "tale
+  // of the run" recap.
+  public storyBeats: string[] = [];
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
@@ -275,6 +321,12 @@ export class Game {
           this.npcTilesSpawnedThisFloor++;
           return Cell.NPC;
         }
+        // This floor's ghost haunting (rolled at floor start) — a modest
+        // per-cell chance so it drifts in within the first few blocks.
+        if (this.activeGhost && !this.ghostPlaced && Math.random() < 0.08) {
+          this.ghostPlaced = true;
+          return Cell.GHOST;
+        }
         // Hazard traps — one type per block
         if (!trapInjected) {
           const trapKey = weightedPick(BALANCE.spawnRates.trapWeights, Math.random());
@@ -416,6 +468,11 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1c2418';
           this.npcTiles.push({ x: tx, y: ty, npcId: npc.id });
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.GHOST) {
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#101820';
+          this.npcTiles.push({ x: tx, y: ty, npcId: '__ghost__' });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -678,6 +735,7 @@ export class Game {
             desc: `Slay ${targetBoss.name} at Floor ${targetFloor} or beyond for a rare Geis.`,
             apply: (game): string => {
               game.activeBountyQuest = { bossName: targetBoss.name, floor: targetFloor };
+              game.storyBeats.push(`swore vengeance on ${targetBoss.name}`);
               return `You swear vengeance upon ${targetBoss.name}, in ${npc.name}'s name.`;
             },
           },
@@ -697,6 +755,7 @@ export class Game {
           const pool = BOONS_BY_TIER[3].filter(x => x.id !== b.def.id);
           const reward = (pool.length > 0 ? pool : BOONS_BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : BOONS_BY_TIER[3].length))]!;
           game.player.addBoon(reward);
+          game.storyBeats.push(`traded ${b.def.name} to a Fomorian tinker for ${reward.name}`);
           return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
         },
       }));
@@ -711,6 +770,8 @@ export class Game {
       };
     }
 
+    this.storyBeats.push(`crossed paths with ${npc.name}`);
+    this.cb.onAudio?.('npcEncounter');
     this.paused = true;
     this.cb.onFloorEvent?.(event, (index) => {
       const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
@@ -718,6 +779,148 @@ export class Game {
       this.paused = false;
       this.cb.onAction();
     });
+  }
+
+  // A fallen character from a previous run, met again. Laying them to rest
+  // grants a fragment of their old power and removes them from the ghost
+  // file permanently; turning away leaves them haunting future runs.
+  private triggerGhostEncounter(): void {
+    const ghost = this.activeGhost;
+    if (!ghost) return;
+    const className = CLASSES.find(c => c.id === ghost.classId)?.name ?? 'wanderer';
+    const event: FloorEventDef = {
+      id: '__ghost__', emoji: 'sprite_boss_wraith', title: 'A Ghost of Yourself',
+      flavor: `The mist gathers into a familiar shape — a ${className} of level ${ghost.playerLevel}, who fell on Floor ${ghost.floor} (${ghost.date}). ${ghost.cause}. It watches you with your own eyes.`,
+      options: [
+        {
+          label: 'Lay them to rest',
+          desc: 'Receive a fragment of their power. They will not return.',
+          apply: (game: Game): string => {
+            const pool = BOONS_BY_TIER[2];
+            const reward = pool[Math.floor(Math.random() * pool.length)]!;
+            game.player.addBoon(reward);
+            game.availableGhosts = game.availableGhosts.filter(g => g.id !== ghost.id);
+            game.cb.onGhostLaidToRest?.(ghost.id);
+            game.storyBeats.push('laid a ghost of yourself to rest');
+            return `The ghost smiles — your smile — and dissolves into light. Gained ${reward.name}.`;
+          },
+        },
+        {
+          label: 'Turn away',
+          desc: 'Leave them wandering. You may meet again.',
+          apply: (): string => 'The ghost lingers at the edge of sight, keening softly, waiting for another meeting.',
+        },
+      ],
+    };
+    this.activeGhost = null;
+    this.cb.onAudio?.('ghostEncounter');
+    this.paused = true;
+    this.cb.onFloorEvent?.(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', 'sprite_boss_wraith');
+      this.paused = false;
+      this.cb.onAction();
+    });
+  }
+
+  // ── An Draoi's pact ceremony ───────────────────────────────────────────────
+  // Fires once, on the first descent as An Draoi: the three deities call, and
+  // one must be answered — the pact IS the class, so there is no decline.
+  // Returns true if the ceremony modal was opened (caller skips other floor
+  // modals for this descent).
+
+  private maybeOfferPact(): boolean {
+    if (this.activeClassId !== 'draoi' || this.activePatronId !== null) return false;
+    if (this.dungeonLevel < 2 || !this.cb.onFloorEvent) return false;
+
+    // Only 2 of the 3 deities call on any given run — which two is the rift's whim.
+    const offered = [...PATRONS].sort(() => Math.random() - 0.5).slice(0, 2);
+    const event: FloorEventDef = {
+      id: '__pact__', emoji: 'fx_arcane', title: 'The Deities Call',
+      flavor: 'Two voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',
+      options: offered.map(p => ({
+        label: p.deity,
+        desc: `${p.tagline} — ${p.spells[0]!.name}: ${describePatronSpell(p)} ${p.tollDesc} More spells unlock as you level.`,
+        apply: (game: Game): string => {
+          game.applyPatron(p.id);
+          return `The pact is sworn. ${p.deity} marks you as their own.`;
+        },
+      })),
+    };
+
+    this.paused = true;
+    this.cb.onFloorEvent(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', 'fx_arcane');
+      this.paused = false;
+      this.cb.onAction();
+    });
+    return true;
+  }
+
+  applyPatron(id: string): void {
+    const patron = PATRONS.find(p => p.id === id);
+    if (!patron) return;
+    this.activePatronId = id;
+    applyToPlayer(this.player, patron.effects);
+    this.player.spellbook = patron.spells
+      .filter(s => (s.unlockLevel ?? 1) <= this.player.playerLevel)
+      .map(s => ({ ...s }));
+    for (const spell of this.player.spellbook) applyToPlayer(this.player, spell.toll);
+    this.player.hp = Math.min(this.player.hp, this.player.maxHp);
+    this.player.activeSpellIndex = 0;
+    this.player.rangedAbility = this.player.spellbook[0] ?? null;
+    this.player.rangedCooldown = 0;
+    this.storyBeats.push(`swore a pact with ${patron.deity}`);
+    this.cb.log(`${patron.name} — ${patron.spells[0]!.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
+    this.cb.log(patron.tollDesc, 'log-neutral', patron.char);
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#8d6fd4', patron.char);
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '141,111,212');
+    this.cb.onAudio?.('pactSworn');
+    this.pushUI();
+  }
+
+  // Adds any patron spells whose unlockLevel the player has now reached.
+  // Called from openLevelUpBoons — the single choke point every level-up
+  // passes through (kills, tomes, scholars, line-clear XP).
+  private syncSpellUnlocks(): void {
+    const patron = PATRONS.find(p => p.id === this.activePatronId);
+    if (!patron) return;
+    for (const spell of patron.spells) {
+      if ((spell.unlockLevel ?? 1) > this.player.playerLevel) continue;
+      if (this.player.spellbook.some(s => s.name === spell.name)) continue;
+      this.player.spellbook.push({ ...spell });
+      applyToPlayer(this.player, spell.toll);
+      this.player.hp = Math.min(this.player.hp, this.player.maxHp);
+      const toll = describeToll(spell.toll);
+      this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (${toll} — E cycles spells)`, 'log-perk', spell.emoji);
+      this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4', spell.emoji);
+    }
+  }
+
+  // Cycle the active spell (An Draoi with 2+ unlocked spells). Shared
+  // cooldown — switching is free but doesn't dodge the wait.
+  handleCycleSpell(): void {
+    if (this.player.hp <= 0 || this.paused) return;
+    const book = this.player.spellbook;
+    if (book.length < 2) return;
+    this.player.activeSpellIndex = (this.player.activeSpellIndex + 1) % book.length;
+    this.player.rangedAbility = book[this.player.activeSpellIndex]!;
+    this.cb.log(`Spell ready: ${this.player.rangedAbility.name}`, 'log-neutral', this.player.rangedAbility.emoji);
+    this.pushUI();
+  }
+
+  // Short narrative recap for the death/victory screen, built from the
+  // notable moments recorded in storyBeats over the run.
+  buildRunStory(): string {
+    const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'wanderer';
+    const beats = this.storyBeats.slice(0, 4);
+    if (beats.length === 0) return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}.`;
+    const joined = beats.length === 1
+      ? beats[0]!
+      : `${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
+    const more = this.storyBeats.length > 4 ? ' …and more besides.' : '';
+    return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}. Along the way you ${joined}.${more}`;
   }
 
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
@@ -866,12 +1069,13 @@ export class Game {
 
       // The Causeway Crumbles: once Bres has shown himself, every row you
       // demolish is a span of his half-built bridge — his stored HP takes the
-      // hit, but he can never be finished off in absentia (min 1): you must
-      // face him to end it.
+      // hit, but it only chips him down to a floor (a fraction of max HP):
+      // you must still face him in person to finish it.
       if (this.gorgothEverSummoned && !this.gorgothSummoned) {
         const chip = BALANCE.gorgoth.causewayDamagePerRowPerFloor * rowsCleared * this.dungeonLevel;
         const before = this.gorgothHp;
-        this.gorgothHp = Math.max(1, this.gorgothHp - chip);
+        const chipFloor = Math.ceil(BALANCE.gorgoth.maxHp * BALANCE.gorgoth.causewayChipFloorPct);
+        if (this.gorgothHp > chipFloor) this.gorgothHp = Math.max(chipFloor, this.gorgothHp - chip);
         if (this.gorgothHp < before) {
           this.cb.log(`The causeway shudders — Bres feels it! (−${before - this.gorgothHp})`, 'log-boss', 'sprite_boss_gorgoth');
           // Stone shards rain from the unfinished bridge at the top of the board
@@ -912,6 +1116,7 @@ export class Game {
     this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
+    this.maybeOfferPact();
   }
 
   private updateBiome(): void {
@@ -932,6 +1137,16 @@ export class Game {
     this.altarTiles = [];
     this.npcTiles = [];
     this.npcTilesSpawnedThisFloor = 0;
+    // Ghost haunting roll — a fallen character close to your current level
+    // may drift up from a previous run's save.
+    this.activeGhost = null;
+    this.ghostPlaced = false;
+    const eligibleGhosts = this.availableGhosts.filter(
+      g => Math.abs(g.playerLevel - this.player.playerLevel) <= BALANCE.ghosts.levelTolerance,
+    );
+    if (eligibleGhosts.length > 0 && Math.random() < BALANCE.ghosts.encounterChance) {
+      this.activeGhost = eligibleGhosts[Math.floor(Math.random() * eligibleGhosts.length)]!;
+    }
     this.hazards = [];
     this.specialTiles = [];
     this.killsThisFloor = 0;
@@ -999,6 +1214,7 @@ export class Game {
         this.cb.onAction();  // reset tick interval to normal speed
       }
     }
+    this.tickVeil();
   }
 
   // ── Player turn (action-driven) ──────────────────────────────────────────
@@ -1022,11 +1238,20 @@ export class Game {
         this.cb.log('Time Dilation fades.', 'log-neutral');
       }
     }
+    this.tickVeil();
     this.cb.onAction();
   }
 
   private tickRangedCooldown(): void {
     if (this.player.rangedCooldown > 0) this.player.rangedCooldown--;
+  }
+
+  private tickVeil(): void {
+    if (this.player.veiledTurns <= 0) return;
+    this.player.veiledTurns--;
+    if (this.player.veiledTurns === 0) {
+      this.cb.log('The mist thins — mortal eyes find you again.', 'log-neutral', 'trap_smoke');
+    }
   }
 
   getRunStats(): RunStats {
@@ -1043,6 +1268,7 @@ export class Game {
 
   openLevelUpBoons(): void {
     this.paused = true;
+    this.syncSpellUnlocks();  // patron spells gated on the level just reached
     this.cb.onBeam?.(this.player.x);
     const tier = getBoonTierForFloor(this.dungeonLevel);
     const pool = BOONS_BY_TIER[tier];
@@ -1066,6 +1292,7 @@ export class Game {
     const cls = CLASSES.find(c => c.id === id);
     if (!cls) return;
     cls.apply(this.player);
+    this.player.char = cls.emoji;  // the hero looks like the card you picked
     this.activeClassId = id;
     this.cb.log(`Playing as ${cls.name}: ${cls.tagline}`, 'log-perk', cls.emoji);
     this.pushUI();
@@ -1251,11 +1478,15 @@ export class Game {
       return;
     }
 
-    // Wandering NPC — bump to talk, consumed on interaction
+    // Wandering NPC / ghost — bump to talk, consumed on interaction
     const npcTile = this.npcTiles.find(n => n.x === nx && n.y === ny);
     if (npcTile) {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
+      if (npcTile.npcId === '__ghost__') {
+        this.triggerGhostEncounter();
+        return;
+      }
       const npc = NPCS.find(n => n.id === npcTile.npcId);
       if (npc) this.triggerNpcEncounter(npc);
       return;
@@ -1292,6 +1523,11 @@ export class Game {
       this.updateBiome();
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
       this.resetDungeonState();
+      // An Draoi's pact ceremony fires on the first descent, before any other
+      // floor modal (floor 2 collides with neither shop, floor events, nor
+      // bosses — but the guard is on state, not floor number, so it also
+      // covers collapse-descents skipping floors).
+      if (this.maybeOfferPact()) return;
       // Floor event fires every N voluntary descents (skip boss floors); the
       // wandering peddler takes the descents in between (offset so the two
       // can never stack modals on the same floor).
@@ -1365,13 +1601,182 @@ export class Game {
       return;
     }
 
+    // HP-pact gate (An Draoi): spells are paid for in life, as a fraction of
+    // Max HP. The cost bypasses damage reduction — a pact ignores armor — and
+    // is deducted up front; the activation receives the amount paid so spell
+    // power can scale off it (Max HP is both mana pool and spellpower).
+    let hpPaid = 0;
+    const hpCostPctRaw = ability.params?.['hpCostPct'];
+    if (typeof hpCostPctRaw === 'number' && hpCostPctRaw > 0) {
+      const cost = pctOf(this.player.maxHp, hpCostPctRaw);
+      if (this.player.hp <= cost) {
+        this.cb.log(`The pact will not take your last breath. (${ability.name} costs ${cost} HP — you have ${Math.round(this.player.hp)})`, 'log-neutral', ability.emoji);
+        return;
+      }
+      // Targeted spells need a target BEFORE the price is paid — a whiffed
+      // cast shouldn't cost blood.
+      if (ability.abilityType === 'drain' && !this.findRangedTarget(ability.range)) {
+        this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
+        return;
+      }
+      if (ability.abilityType === 'gravity_well') {
+        const anyInRange = this.monsters.some(m =>
+          Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) <= ability.range
+          && (this.visibility[m.x]?.[m.y] ?? false));
+        if (!anyInRange) {
+          this.cb.log(`Nothing within reach of the tide (${ability.range} tiles).`, 'log-neutral', ability.emoji);
+          return;
+        }
+      }
+      this.player.hp -= cost;
+      hpPaid = cost;
+      this.damageTaken += cost;
+      this.cb.onParticle(this.player.x, this.player.y, `-${cost}`, '#c1443c', 14);
+      this.cb.onAudio?.('playerDamage');
+    }
+
     switch (ability.abilityType) {
       case 'time_dilation': this.activateTimeDilation(ability); break;
       case 'gravity_well':  this.activateGravityWell(ability);  break;
       case 'consecrate':    this.activateConsecrate(ability);    break;
       case 'overload':      this.activateOverload(ability);      break;
+      case 'shriek':        this.activateShriek(ability, hpPaid); break;
+      case 'veil':          this.activateVeil(ability);           break;
+      case 'drain':         this.activateDrain(ability, hpPaid);  break;
+      case 'blight':        this.activateBlight(ability, hpPaid); break;
+      case 'blink':         this.activateBlink(ability);          break;
       default:              this.activateBolt(ability);          break;
     }
+  }
+
+  // Badb's Shriek (the Morrígan): raining fire and mass terror — damage every
+  // visible monster for a multiple of the HP paid; survivors may be stunned.
+  private activateShriek(ability: import('./types').RangedAbility, hpPaid: number): void {
+    const dmgMult = this.abilityNum(ability, 'dmgMult', 2);
+    // dmgMult 0 = a pure-terror variant (Fog of Blood): stun-only, no damage
+    const dmg = dmgMult > 0 ? Math.max(1, Math.round(hpPaid * dmgMult)) : 0;
+    const stunChance = this.abilityNum(ability, 'stunChance', 0.35);
+    const stunDuration = this.abilityNum(ability, 'stunDuration', 1);
+    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
+    for (const m of targets) {
+      if (dmg > 0) {
+        m.hp -= dmg;
+        this.cb.onParticle(m.x, m.y, `-${dmg}`, '#c3272a', 16, 'fx_fire');
+      }
+      if (m.hp > 0 && !m.isStunned && Math.random() < stunChance) {
+        m.statuses.push({ type: 'stun', duration: stunDuration, power: 0 });
+        this.cb.onParticle(m.x, m.y, 'TERROR', '#b98fc4', 11);
+      }
+    }
+    const killed = targets.filter(m => m.hp <= 0);
+    this.monsters = this.monsters.filter(m => m.hp > 0);
+    for (const m of killed) killMonster(m, this);
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log(
+      dmg > 0
+        ? `${ability.name.toUpperCase()}! ${targets.length} foe(s) seared for ${dmg} — the Morrígan takes her due.`
+        : `${ability.name.toUpperCase()}! Terror grips ${targets.length} foe(s) — the Morrígan takes her due.`,
+      'log-combo', ability.emoji,
+    );
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '195,39,42');
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#c3272a', 'fx_fire');
+    this.cb.onAudio?.('bossWarn');
+    this.advanceTurn();
+  }
+
+  // Blight of the Deep (Tethra): poison every visible monster; the venom's
+  // power scales with the HP paid.
+  private activateBlight(ability: import('./types').RangedAbility, hpPaid: number): void {
+    const duration = this.abilityNum(ability, 'poisonDuration', 4);
+    const power = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'poisonPowerPct', 0.5)));
+    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
+    for (const m of targets) {
+      m.statuses = m.statuses.filter(s => s.type !== 'poison');
+      m.statuses.push({ type: 'poison', duration, power });
+      this.cb.onParticle(m.x, m.y, 'BLIGHT', '#7cb342', 11, 'status_poison');
+    }
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log(`${ability.name}! ${targets.length} foe(s) wither — ${power} poison/turn for ${duration} turns.`, 'log-combo', ability.emoji);
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '124,179,66');
+    this.cb.onAudio?.('poison');
+    this.advanceTurn();
+  }
+
+  // Sea-Road (Manannán): step through the Otherworld to a random floor tile,
+  // trailing a brief wisp of the Féth Fíada.
+  private activateBlink(ability: import('./types').RangedAbility): void {
+    const fromX = this.player.x, fromY = this.player.y;
+    teleportEntity(this.player, this);
+    this.player.veiledTurns = Math.max(this.player.veiledTurns, this.abilityNum(ability, 'veilTurns', 2));
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.onParticle(fromX, fromY, '', '#9fe3c0', undefined, 'trap_smoke');
+    this.cb.onParticle(this.player.x, this.player.y, '', '#9fe3c0', undefined, 'trap_teleport');
+    this.cb.log(`${ability.name} — you step through the Otherworld and out again.`, 'log-perk', ability.emoji);
+    this.cb.onAudio?.('teleport');
+    this.updateVisibility();
+    this.advanceTurn();
+  }
+
+  // Féth Fíada (Manannán mac Lir): the god-mist — monsters cannot see, chase,
+  // or strike you while veiled. Bres alone sees through it.
+  private activateVeil(ability: import('./types').RangedAbility): void {
+    this.player.veiledTurns = this.abilityNum(ability, 'veilTurns', 6);
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.cb.log(`The Féth Fíada rises — you fade from mortal sight for ${this.player.veiledTurns} turns.`, 'log-perk', ability.emoji);
+    if (this.gorgothSummoned) this.cb.log('Bres laughs — a god-king sees through god-mist.', 'log-boss', 'sprite_boss_gorgoth');
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '63,158,147');
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#9fe3c0', 'trap_smoke');
+    this.cb.onAudio?.('teleport');
+    this.advanceTurn();
+  }
+
+  // Tethra's Tithe: parasitic drain — a multiple of the HP paid as damage to
+  // the nearest target, healing back a share; a kill refunds the entire cost.
+  private activateDrain(ability: import('./types').RangedAbility, hpPaid: number): void {
+    const target = this.findRangedTarget(ability.range);
+    if (!target) {
+      // Only reachable for a cost-free drain variant; paid casts pre-check the target.
+      this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
+      return;
+    }
+    let dmg = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'dmgMult', 2)));
+    const healPct = this.abilityNum(ability, 'healPct', 0);
+    const refundOnKill = this.abilityNum(ability, 'refundOnKill', 0) > 0;
+    // Tethra's Maw: a target already near death is devoured outright
+    const executeBelowPct = this.abilityNum(ability, 'executeBelowPct', 0);
+    const executed = executeBelowPct > 0 && target.hp <= target.maxHp * executeBelowPct;
+    if (executed) dmg = target.hp;
+
+    this.emitProjectileTrail(target.x, target.y, ability.emoji);
+    target.hp -= dmg;
+    this.cb.onParticle(target.x, target.y, executed ? 'DEVOURED' : `-${dmg}`, '#8d6fd4', 16, ability.emoji);
+    this.cb.log(
+      executed
+        ? `${ability.name} DEVOURS ${target.name} whole!`
+        : `${ability.name} rends ${target.name} for ${dmg}!`,
+      'log-combo', ability.emoji,
+    );
+
+    if (healPct > 0) {
+      const healed = this.player.heal(Math.round(dmg * healPct));
+      if (healed > 0) this.cb.onParticle(this.player.x, this.player.y, `+${healed} HP`, '#69f0ae');
+    }
+
+    if (target.hp <= 0) {
+      if (refundOnKill && hpPaid > 0) {
+        const refunded = this.player.heal(hpPaid);
+        if (refunded > 0) this.cb.log(`Tethra returns the tithe — +${refunded} HP.`, 'log-perk', ability.emoji);
+      }
+      const bx = target.x, by = target.y;
+      killMonster(target, this);
+      if (target.isBoss && this.activeBossOnDeath) {
+        this.activeBossOnDeath(this, bx, by);
+        this.activeBossOnDeath = null;
+      }
+    }
+
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.advanceTurn();
   }
 
   private activateBolt(ability: import('./types').RangedAbility): void {
@@ -1566,6 +1971,7 @@ export class Game {
   summonGorgoth(): void {
     if (this.gorgothSummoned) return;
     this.gorgothSummoned = true;
+    if (!this.gorgothEverSummoned) this.storyBeats.push('called Bres the Beautiful forth to battle');
     this.gorgothEverSummoned = true;
 
     // The board the player built stays exactly as it is — no arena reset; only
@@ -1622,7 +2028,7 @@ export class Game {
     this.won = true;
     this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
     this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
-    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats());
+    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory());
   }
 
   handleBlockLeft(): void {
@@ -1740,7 +2146,9 @@ export class Game {
 
     const npcInfo = this.npcTiles.find(n => n.x === x && n.y === y);
     if (npcInfo) {
-      return { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
+      return npcInfo.npcId === '__ghost__'
+        ? { icon: 'sprite_boss_wraith', title: 'A Restless Ghost', lines: ['A fallen wanderer... something about them is familiar'] }
+        : { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
     }
 
     const special = this.specialTiles.find(t => t.x === x && t.y === y);
@@ -1806,6 +2214,17 @@ export class Game {
           { label: 'Aura Stun Radius', value: p.auraStunRadius > 0 ? `${p.auraStunRadius} tile(s)` : '—' },
           { label: 'Bonus Hero Moves', value: p.bonusHeroMoves > 0 ? `+${p.bonusHeroMoves}/turn` : '—' },
           { label: 'Line-Clear XP', value: p.lineClearXpMult !== 1 ? `×${p.lineClearXpMult}` : '—' },
+          { label: 'Sworn Patron', value: PATRONS.find(pt => pt.id === this.activePatronId)?.deity ?? '—' },
+          {
+            label: 'Spells Known',
+            value: p.spellbook.length > 0 ? p.spellbook.map(s => s.name).join(', ') : '—',
+          },
+          {
+            label: 'Active Spell Cost',
+            value: typeof p.rangedAbility?.params?.['hpCostPct'] === 'number'
+              ? `${Math.round((p.rangedAbility.params['hpCostPct'] as number) * 100)}% Max HP (${pctOf(p.maxHp, p.rangedAbility.params['hpCostPct'] as number)} HP)`
+              : '—',
+          },
         ],
       },
     ];
@@ -1816,6 +2235,7 @@ export class Game {
   private pushUI(): void {
     const activeMod = MODIFIERS.find(m => m.id === this.activeModifierId);
     const activeCls = CLASSES.find(c => c.id === this.activeClassId);
+    const activePatron = PATRONS.find(p => p.id === this.activePatronId);
     const biome = getBiomeForFloor(this.dungeonLevel);
     this.cb.updateUI({
       // atk/maxHp/hp can carry fractional precision internally (percentage
@@ -1846,7 +2266,12 @@ export class Game {
       brandsMaxLifetime: BALANCE.brands.maxLifetime,
       statuses: this.player.statuses,
       activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
-      activeClass: activeCls ? { emoji: activeCls.emoji, name: activeCls.name } : null,
+      activeClass: activeCls
+        ? {
+            emoji: activePatron?.char ?? activeCls.emoji,
+            name: activePatron ? `${activeCls.name} — ${activePatron.name}` : activeCls.name,
+          }
+        : null,
       biomeName: biome.name,
       rangedAbility: this.player.rangedAbility
         ? {
@@ -1855,6 +2280,11 @@ export class Game {
             cooldown:    this.player.rangedCooldown,
             cooldownMax: this.player.rangedAbility.cooldownMax,
             ammo:        this.player.rangedAmmo >= 0 ? this.player.rangedAmmo : null,
+            hpCostPct:   typeof this.player.rangedAbility.params?.['hpCostPct'] === 'number'
+              ? this.player.rangedAbility.params['hpCostPct'] as number
+              : null,
+            spellIndex:  this.player.activeSpellIndex,
+            spellCount:  this.player.spellbook.length,
           }
         : null,
       characterSheet: this.buildCharacterSheet(),

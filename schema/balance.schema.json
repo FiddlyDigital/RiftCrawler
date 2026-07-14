@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "player", "progression", "economy", "brands", "ammo", "altars",
-    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters"
+    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts"
   ],
   "properties": {
     "player": {
@@ -128,13 +128,14 @@
     "gorgoth": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["maxHp", "atk", "xpReward", "combatLevel", "causewayDamagePerRowPerFloor"],
+      "required": ["maxHp", "atk", "xpReward", "combatLevel", "causewayDamagePerRowPerFloor", "causewayChipFloorPct"],
       "properties": {
         "maxHp": { "type": "number" },
         "atk": { "type": "number" },
         "xpReward": { "type": "number" },
         "combatLevel": { "type": "number" },
-        "causewayDamagePerRowPerFloor": { "type": "number" }
+        "causewayDamagePerRowPerFloor": { "type": "number" },
+        "causewayChipFloorPct": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "crystalShards": {
@@ -198,6 +199,16 @@
         "hpMult": { "type": "number" },
         "atkMult": { "type": "number" },
         "combatLevelBonus": { "type": "number" }
+      }
+    },
+    "ghosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encounterChance", "levelTolerance", "maxStored"],
+      "properties": {
+        "encounterChance": { "type": "number" },
+        "levelTolerance": { "type": "number" },
+        "maxStored": { "type": "number" }
       }
     }
   },

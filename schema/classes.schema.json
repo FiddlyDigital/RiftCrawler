@@ -29,7 +29,7 @@
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "emoji": { "type": "string", "minLength": 1 },
-          "abilityType": { "type": "string", "enum": ["bolt", "time_dilation", "gravity_well", "consecrate", "overload"] },
+          "abilityType": { "type": "string", "enum": ["bolt", "time_dilation", "gravity_well", "consecrate", "overload", "shriek", "veil", "drain"] },
           "range": { "type": "number" },
           "damageMult": { "type": "number" },
           "cooldownMax": { "type": "number" },

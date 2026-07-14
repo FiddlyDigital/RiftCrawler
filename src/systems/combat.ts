@@ -23,7 +23,7 @@ export function triggerDeath(game: Game, title: string, reason: string): void {
     game.cb.onParticle?.(game.player.x, game.player.y, 'REVIVED', '#e53935', 16, 'item_heart');
     return;
   }
-  game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats());
+  game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats(), game.buildRunStory());
 }
 
 // ── Dice engine ───────────────────────────────────────────────────────────────
@@ -270,6 +270,7 @@ export function killMonster(m: Monster, game: Game): void {
     game.cb.onParticle(m.x, m.y, 'BOSS!', '#ffd54f', undefined, 'item_trophy');
     game.cb.onParticleBurst?.(m.x, m.y, 14, '#c1443c');
     game.cb.onImpactGlow?.(m.x, m.y, '139,26,26', 20);
+    game.storyBeats.push(`felled ${m.name}`);
 
     // Vengeance bounty fulfilled — covers every death path (melee, ranged,
     // poison, thorns, line-clear AoE) since they all route through here.
@@ -281,6 +282,8 @@ export function killMonster(m: Monster, game: Game): void {
       game.player.addBoon(reward);
       game.cb.log(`An oath fulfilled — Otherworld power settles over you. Gained ${reward.name}!`, 'log-perk', reward.char);
       game.cb.onParticleBurst?.(m.x, m.y, 10, '#8d6fd4');
+      game.cb.onAudio?.('bountyFulfilled');
+      game.storyBeats.push('fulfilled a sworn vengeance');
     }
   } else {
     if (m.isElite) {
