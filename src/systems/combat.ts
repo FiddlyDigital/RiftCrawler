@@ -1,6 +1,6 @@
 import type { Game } from '../game';
 import type { Monster } from '../entities';
-import { pctOf } from '../entities';
+import { StatMath } from '../entities';
 import { Balance } from '../balance';
 import { Boon } from '../content';
 
@@ -192,7 +192,7 @@ export class CombatSystem {
       game.cb.onParticle(game.player.x, game.player.y, 'DODGE!', '#29b6f6');
       // Mist Cloak: dodgeHeal is a fraction of maxHp, like the other sustain stats
       if (game.player.dodgeHeal > 0) {
-        const healed = game.player.heal(pctOf(game.player.maxHp, game.player.dodgeHeal));
+        const healed = game.player.heal(StatMath.pctOf(game.player.maxHp, game.player.dodgeHeal));
         if (healed > 0) game.cb.onParticle(game.player.x, game.player.y, `+${healed} HP`, '#69f0ae');
       }
       return;
@@ -226,7 +226,7 @@ export class CombatSystem {
     game.cb.onAudio?.('playerDamage');
 
     // Thornweave Core: reflect a % of ATK back to attacker
-    const thornDmg = pctOf(game.player.atk, game.player.thornDamage);
+    const thornDmg = StatMath.pctOf(game.player.atk, game.player.thornDamage);
     if (thornDmg > 0 && actual > 0) {
       m.hp -= thornDmg;
       game.cb.onParticle(m.x, m.y, `-${thornDmg}`, '#66bb6a', undefined, 'special_swamp');
@@ -278,10 +278,10 @@ export class CombatSystem {
       game.openLevelUpBoons();
     }
     // Leech/Bloodtap: heal a % of maxHp on kill
-    const killHeal = game.player.heal(pctOf(game.player.maxHp, game.player.killHeal));
+    const killHeal = game.player.heal(StatMath.pctOf(game.player.maxHp, game.player.killHeal));
     if (killHeal > 0) game.cb.onParticle(game.player.x, game.player.y, `+${killHeal} HP`, '#69f0ae');
     // Cruelty Core: gain a % of ATK per kill (tracked for reset on floor change)
-    const atkGain = pctOf(game.player.atk, game.player.killAtkBonus);
+    const atkGain = StatMath.pctOf(game.player.atk, game.player.killAtkBonus);
     if (atkGain > 0) {
       game.player.atk += atkGain;
       game.player.killAtkFloorBonus += atkGain;

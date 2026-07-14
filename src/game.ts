@@ -1,6 +1,6 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
-import { Player, Monster, pctOf } from './entities';
+import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, EffectResolver, type ClassDef, type PatronDef } from './content';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
@@ -1032,7 +1032,7 @@ export class Game {
       }
 
       // Perk: line clears deal a % of ATK as damage to all visible monsters
-      const lineClearDmg = pctOf(this.player.atk, this.player.lineClearDamage);
+      const lineClearDmg = StatMath.pctOf(this.player.atk, this.player.lineClearDamage);
       if (lineClearDmg > 0) {
         for (const m of this.monsters) {
           if (this.visibility[m.x]?.[m.y]) {
@@ -1608,7 +1608,7 @@ export class Game {
     let hpPaid = 0;
     const hpCostPctRaw = ability.params?.['hpCostPct'];
     if (typeof hpCostPctRaw === 'number' && hpCostPctRaw > 0) {
-      const cost = pctOf(this.player.maxHp, hpCostPctRaw);
+      const cost = StatMath.pctOf(this.player.maxHp, hpCostPctRaw);
       if (this.player.hp <= cost) {
         this.cb.log(`The pact will not take your last breath. (${ability.name} costs ${cost} HP — you have ${Math.round(this.player.hp)})`, 'log-neutral', ability.emoji);
         return;
@@ -2222,7 +2222,7 @@ export class Game {
           {
             label: 'Active Spell Cost',
             value: typeof p.rangedAbility?.params?.['hpCostPct'] === 'number'
-              ? `${Math.round((p.rangedAbility.params['hpCostPct'] as number) * 100)}% Max HP (${pctOf(p.maxHp, p.rangedAbility.params['hpCostPct'] as number)} HP)`
+              ? `${Math.round((p.rangedAbility.params['hpCostPct'] as number) * 100)}% Max HP (${StatMath.pctOf(p.maxHp, p.rangedAbility.params['hpCostPct'] as number)} HP)`
               : '—',
           },
         ],

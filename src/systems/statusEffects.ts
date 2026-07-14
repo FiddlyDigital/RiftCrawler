@@ -1,6 +1,6 @@
 import type { Game } from '../game';
 import { CombatSystem } from './combat';
-import { pctOf } from '../entities';
+import { StatMath } from '../entities';
 
 /**
  * Per-tick status-effect resolution: poison ticks (player and monsters),
@@ -52,7 +52,7 @@ export class StatusEffectSystem {
   /** Applies passive HP regeneration (a fraction of max HP per tick). */
   static applyRegen(game: Game): void {
     // regenPerTick is a fraction of maxHp (e.g. 0.02 = 2%/tick), not a flat number.
-    const amt = pctOf(game.player.maxHp, game.player.regenPerTick);
+    const amt = StatMath.pctOf(game.player.maxHp, game.player.regenPerTick);
     if (amt > 0) {
       const gained = game.player.heal(amt);
       if (gained > 0) game.cb.onParticle(game.player.x, game.player.y, `+${gained}`, '#2e7d32');
