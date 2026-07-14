@@ -2,10 +2,10 @@ import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, EffectResolver, type ClassDef, type PatronDef } from './content';
-import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
-import { processHazards, checkHazardTrigger, teleportEntity } from './systems/hazards';
-import { killMonster, playerAttackMonster, estimateHitChance, dieSides } from './systems/combat';
-import { processMonsterTurns, hasLineOfSight } from './systems/monsterAI';
+import { StatusEffectSystem } from './systems/statusEffects';
+import { HazardSystem } from './systems/hazards';
+import { CombatSystem } from './systems/combat';
+import { MonsterAiSystem } from './systems/monsterAI';
 import { SpriteService } from './sprites';
 import { Balance } from './balance';
 import { Colors } from './colors';
@@ -586,7 +586,7 @@ export class Game {
     }
 
     for (const m of deadFromTerrain) {
-      killMonster(m, this);
+      CombatSystem.killMonster(m, this);
     }
   }
 
@@ -1065,7 +1065,7 @@ export class Game {
       // Route line-clear deaths through killMonster so they award XP/gold and,
       // crucially, so dropping Bres to 0 triggers victory instead of silently
       // deleting him (which would soft-lock the run: no boss, no blocks).
-      for (const m of this.monsters.filter(x => x.hp <= 0)) killMonster(m, this);
+      for (const m of this.monsters.filter(x => x.hp <= 0)) CombatSystem.killMonster(m, this);
 
       // The Causeway Crumbles: once Bres has shown himself, every row you
       // demolish is a span of his half-built bridge — his stored HP takes the
@@ -1196,13 +1196,13 @@ export class Game {
 
   autoTick(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    applyStatusEffects(this);
-    applyRegen(this);
-    applyAuraStun(this);
-    processHazards(this);
+    StatusEffectSystem.applyStatusEffects(this);
+    StatusEffectSystem.applyRegen(this);
+    StatusEffectSystem.applyAuraStun(this);
+    HazardSystem.processHazards(this);
     this.processSpecialTiles();
     if (!this.gorgothSummoned) this.moveGravity();  // no falling blocks during the Gorgoth duel
-    processMonsterTurns(this);
+    MonsterAiSystem.processMonsterTurns(this);
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
@@ -1221,13 +1221,13 @@ export class Game {
 
   private advanceTurn(): void {
     if (this.player.hp <= 0) return;
-    applyStatusEffects(this);
-    applyRegen(this);
-    applyAuraStun(this);
-    processHazards(this);
+    StatusEffectSystem.applyStatusEffects(this);
+    StatusEffectSystem.applyRegen(this);
+    StatusEffectSystem.applyAuraStun(this);
+    HazardSystem.processHazards(this);
     this.processSpecialTiles();
     this.moveGravity();
-    processMonsterTurns(this);
+    MonsterAiSystem.processMonsterTurns(this);
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
@@ -1431,7 +1431,7 @@ export class Game {
           this.player.critCount = 0;
         }
       }
-      playerAttackMonster(monster, this, forceCrit);
+      CombatSystem.playerAttackMonster(monster, this, forceCrit);
 
       // Biome boss half-HP mechanic
       if (monster.isBoss && !this.bossHalfHpTriggered && monster.hp <= monster.maxHp * 0.5 && this.activeBossOnHalfHp) {
@@ -1443,7 +1443,7 @@ export class Game {
 
       if (monster.hp <= 0) {
         const bx = monster.x, by = monster.y;
-        killMonster(monster, this);
+        CombatSystem.killMonster(monster, this);
         if (monster.isBoss && this.activeBossOnDeath) {
           this.activeBossOnDeath(this, bx, by);
           this.activeBossOnDeath = null;
@@ -1495,14 +1495,14 @@ export class Game {
     this.player.x = nx; this.player.y = ny;
 
     // Check hazard triggers on new tile
-    checkHazardTrigger(this.player, this, true);
+    HazardSystem.checkHazardTrigger(this.player, this, true);
 
     // Ice sliding — continue in same direction until hitting wall, monster, or non-ice
     while (this.isIceTile(this.player.x, this.player.y)) {
       const sx = this.player.x + dx, sy = this.player.y + dy;
       if (!this.isValidMove(sx, sy) || this.getMonsterAt(sx, sy) || this.isTattooTile(sx, sy)) break;
       this.player.x = sx; this.player.y = sy;
-      checkHazardTrigger(this.player, this, true);
+      HazardSystem.checkHazardTrigger(this.player, this, true);
       if (this.map[sx]?.[sy] === Tile.STAIRS) break;
     }
 
@@ -1670,7 +1670,7 @@ export class Game {
     }
     const killed = targets.filter(m => m.hp <= 0);
     this.monsters = this.monsters.filter(m => m.hp > 0);
-    for (const m of killed) killMonster(m, this);
+    for (const m of killed) CombatSystem.killMonster(m, this);
     this.player.rangedCooldown = ability.cooldownMax;
     this.cb.log(
       dmg > 0
@@ -1706,7 +1706,7 @@ export class Game {
   // trailing a brief wisp of the Féth Fíada.
   private activateBlink(ability: import('./types').RangedAbility): void {
     const fromX = this.player.x, fromY = this.player.y;
-    teleportEntity(this.player, this);
+    HazardSystem.teleportEntity(this.player, this);
     this.player.veiledTurns = Math.max(this.player.veiledTurns, this.abilityNum(ability, 'veilTurns', 2));
     this.player.rangedCooldown = ability.cooldownMax;
     this.cb.onParticle(fromX, fromY, '', '#9fe3c0', undefined, 'trap_smoke');
@@ -1768,7 +1768,7 @@ export class Game {
         if (refunded > 0) this.cb.log(`Tethra returns the tithe — +${refunded} HP.`, 'log-perk', ability.emoji);
       }
       const bx = target.x, by = target.y;
-      killMonster(target, this);
+      CombatSystem.killMonster(target, this);
       if (target.isBoss && this.activeBossOnDeath) {
         this.activeBossOnDeath(this, bx, by);
         this.activeBossOnDeath = null;
@@ -1792,7 +1792,7 @@ export class Game {
     }
 
     this.emitProjectileTrail(target.x, target.y, ability.emoji);
-    playerAttackMonster(target, this, false, ability.damageMult);
+    CombatSystem.playerAttackMonster(target, this, false, ability.damageMult);
 
     if (ability.statusEffect === 'stun' && target.hp > 0 && !target.isStunned) {
       target.statuses.push({ type: 'stun', duration: this.abilityNum(ability, 'stunDuration', 1), power: 0 });
@@ -1804,7 +1804,7 @@ export class Game {
 
     if (target.hp <= 0) {
       const bx = target.x, by = target.y;
-      killMonster(target, this);
+      CombatSystem.killMonster(target, this);
       if (target.isBoss && this.activeBossOnDeath) {
         this.activeBossOnDeath(this, bx, by);
         this.activeBossOnDeath = null;
@@ -1890,7 +1890,7 @@ export class Game {
     }
     const killed = targets.filter(m => m.hp <= 0);
     this.monsters = this.monsters.filter(m => m.hp > 0);
-    for (const m of killed) killMonster(m, this);
+    for (const m of killed) CombatSystem.killMonster(m, this);
     this.cb.log(`Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills × ${perKillDmg}, min floor×${perFloorMinDmg}).`, 'log-combo', 'fx_impact');
     this.cb.onParticle(this.player.x, this.player.y, 'BOOM!', '#ff6d00', 18, 'fx_impact');
     this.killsThisFloor = 0;
@@ -1903,7 +1903,7 @@ export class Game {
       const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
       return dist <= range
         && (this.visibility[m.x]?.[m.y] ?? false)
-        && hasLineOfSight(this.player.x, this.player.y, m.x, m.y, this);
+        && MonsterAiSystem.hasLineOfSight(this.player.x, this.player.y, m.x, m.y, this);
     });
     inRange.sort((a, b) => {
       const da = Math.abs(a.x - this.player.x) + Math.abs(a.y - this.player.y);
@@ -2103,7 +2103,7 @@ export class Game {
 
     const monster = this.getMonsterAt(x, y);
     if (monster) {
-      const hitPct = Math.round(estimateHitChance(this.player.combatLevel, monster.combatLevel) * 100);
+      const hitPct = Math.round(CombatSystem.estimateHitChance(this.player.combatLevel, monster.combatLevel) * 100);
       const lines = [
         `HP ${Math.max(0, monster.hp)}/${monster.maxHp}`,
         `ATK ${monster.atk}`,
@@ -2175,7 +2175,7 @@ export class Game {
         title: 'Offense', icon: 'sprite_equip_iron_sword',
         stats: [
           { label: 'Attack', value: String(Math.round(p.atk)) },
-          { label: 'Combat Dice', value: `D${dieSides(p.combatLevel)}` },
+          { label: 'Combat Dice', value: `D${CombatSystem.dieSides(p.combatLevel)}` },
           { label: 'Line-Clear Damage', value: p.lineClearDamage > 0 ? `+${pct(p.lineClearDamage)} ATK` : '—' },
           { label: 'Line-Clear AoE', value: p.lineClearAoeDmgMult > 0 ? `${p.lineClearAoeDmgMult}× floor dmg, all enemies` : '—' },
           { label: 'Kill ATK Bonus', value: p.killAtkBonus > 0 ? `+${pct(p.killAtkBonus)} ATK/kill (this floor)` : '—' },

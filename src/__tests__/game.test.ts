@@ -3,10 +3,10 @@ import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
 import { Cell, Tile } from '../types';
 import type { GameCallbacks, HazardTile } from '../types';
 import { Monster } from '../entities';
-import { killMonster, playerAttackMonster, monsterAttackPlayer, estimateHitChance, triggerDeath } from '../systems/combat';
-import { processMonsterTurns } from '../systems/monsterAI';
-import { processHazards, checkHazardTrigger, teleportEntity } from '../systems/hazards';
-import { applyStatusEffects, applyRegen, applyAuraStun } from '../systems/statusEffects';
+import { CombatSystem } from '../systems/combat';
+import { MonsterAiSystem } from '../systems/monsterAI';
+import { HazardSystem } from '../systems/hazards';
+import { StatusEffectSystem } from '../systems/statusEffects';
 import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, Boon } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
@@ -266,7 +266,7 @@ describe('Monster clearing & Sacred Brands', () => {
     const a = new Monster(4, 21, 'sprite_berserker_orc', 'A', 1, 1, 1, 5);
     const b = new Monster(5, 21, 'sprite_berserker_orc', 'B', 5, 5, 1, 5);
     game.monsters.push(a, b);
-    killMonster(a, game);
+    CombatSystem.killMonster(a, game);
     expect(game.monsters).not.toContain(a);
     expect(game.monsters).toContain(b);
   });
@@ -340,7 +340,7 @@ describe('Monster clearing & Sacred Brands', () => {
     game.player.addBrand('right_arm', life); // completes the set → lifeBrandRevive = true
     expect(game.player.brandsAcquiredTotal).toBe(3);
     game.player.hp = 1;
-    triggerDeath(game, 'HERO DEFEATED', 'test');
+    CombatSystem.triggerDeath(game, 'HERO DEFEATED', 'test');
     expect(game.player.brands).toHaveLength(0);       // wiped, as before
     expect(game.player.brandsAcquiredTotal).toBe(3);  // NOT reset — still counts toward the cap
     expect(game.player.brandsRemaining).toBe(2);
@@ -374,9 +374,9 @@ describe('Balance levers', () => {
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0); // aRoll=dRoll=1 → forced miss
     const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
-    const d1 = playerAttackMonster(m, game);
-    const d2 = playerAttackMonster(m, game);
-    const d3 = playerAttackMonster(m, game);
+    const d1 = CombatSystem.playerAttackMonster(m, game);
+    const d2 = CombatSystem.playerAttackMonster(m, game);
+    const d3 = CombatSystem.playerAttackMonster(m, game);
     spy.mockRestore();
     expect(d1).toBeGreaterThan(0);   // graze floor — no wasted swing
     expect(d2).toBe(d1);             // consistent graze chip
@@ -388,7 +388,7 @@ describe('Balance levers', () => {
     const m = new Monster(5, 21, 'sprite_berserker_orc', 'Dummy', 100, 100, 1, 5);
     game.monsters.push(m);
     const spyHit = vi.spyOn(Math, 'random').mockReturnValue(0.99); // high aRoll → land
-    playerAttackMonster(m, game);
+    CombatSystem.playerAttackMonster(m, game);
     spyHit.mockRestore();
     expect(game.player.missStreak).toBe(0);
   });
@@ -401,7 +401,7 @@ describe('Balance levers', () => {
       .mockReturnValueOnce(0.5)  // aRoll = 4 (D6, not the natural-max crit roll)
       .mockReturnValueOnce(0.2)  // dRoll = 2 → margin 2, a landed "weak" hit
       .mockReturnValue(0);       // freeze-chance roll always succeeds
-    playerAttackMonster(m, game);
+    CombatSystem.playerAttackMonster(m, game);
     spy.mockRestore();
     expect(m.statuses.some(s => s.type === 'stun')).toBe(true);
   });
@@ -411,7 +411,7 @@ describe('Balance levers', () => {
     game.player.hp = 100; game.player.maxHp = 100;
     game.player.ghostDodgeCharges = 1;
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99); // would otherwise land a hit
-    monsterAttackPlayer(m, game);
+    CombatSystem.monsterAttackPlayer(m, game);
     spy.mockRestore();
     expect(game.player.hp).toBe(100);
     expect(game.player.ghostDodgeCharges).toBe(0);
@@ -555,8 +555,8 @@ describe('Balance levers', () => {
 
   // Phase 4
   it('estimateHitChance is a valid probability and rises vs weaker defenders', () => {
-    const even = estimateHitChance(2, 2);
-    const favoured = estimateHitChance(6, 1);
+    const even = CombatSystem.estimateHitChance(2, 2);
+    const favoured = CombatSystem.estimateHitChance(6, 1);
     expect(even).toBeGreaterThan(0);
     expect(even).toBeLessThanOrEqual(1);
     expect(favoured).toBeGreaterThan(even);
@@ -690,7 +690,7 @@ describe('Gorgoth the Returned (endgame)', () => {
   it('defeating Gorgoth wins the run (via any kill path)', () => {
     game.summonGorgoth();
     const boss = game.monsters.find(m => m.isGorgoth)!;
-    killMonster(boss, game);
+    CombatSystem.killMonster(boss, game);
     expect(game.won).toBe(true);
     expect(cb.onVictory).toHaveBeenCalledTimes(1);
     expect(game.monsters).not.toContain(boss);
@@ -759,7 +759,7 @@ describe('Adjacent enemies attack', () => {
     const m = new Monster(4, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5); // directly above, dist 1
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99); // force a landed hit
-    processMonsterTurns(game);
+    MonsterAiSystem.processMonsterTurns(game);
     spy.mockRestore();
     expect(game.player.hp).toBeLessThan(500);
   });
@@ -769,7 +769,7 @@ describe('Adjacent enemies attack', () => {
     const m = new Monster(5, 22, 'sprite_berserker_orc', 'G', 80, 80, 10, 5); // diagonal, dist 2
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
-    for (let i = 0; i < 4; i++) processMonsterTurns(game);
+    for (let i = 0; i < 4; i++) MonsterAiSystem.processMonsterTurns(game);
     spy.mockRestore();
     expect(game.player.hp).toBeLessThan(500);
   });
@@ -781,7 +781,7 @@ describe('Adjacent enemies attack', () => {
     const m = new Monster(5, 11, 'sprite_berserker_orc', 'G', 80, 80, 10, 5);
     game.monsters.push(m);
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
-    for (let i = 0; i < 3; i++) processMonsterTurns(game);
+    for (let i = 0; i < 3; i++) MonsterAiSystem.processMonsterTurns(game);
     spy.mockRestore();
     expect(game.player.hp).toBe(500);          // no diagonal reach — the void corner blocks it
     expect(m.x === 5 && m.y === 11).toBe(true); // and no diagonal step to close in
@@ -794,7 +794,7 @@ describe('Adjacent enemies attack', () => {
     boss.x = game.player.x; boss.y = game.player.y - 1; // orthogonal, dist 1
     boss.stepCharge = 0;
     const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
-    processMonsterTurns(game);
+    MonsterAiSystem.processMonsterTurns(game);
     spy.mockRestore();
     expect(game.player.hp).toBeLessThan(500);
   });
@@ -836,8 +836,8 @@ describe('JSON-configured effects', () => {
     BOONS.find(b => b.id === 'purifying_spring')!.onAdd(game.player, 1);
     expect(game.player.statusDurationBonus).toBe(1);
     game.player.statuses = [{ type: 'stun', duration: 3, power: 0 }];
-    applyStatusEffects(game);
-    applyStatusEffects(game);
+    StatusEffectSystem.applyStatusEffects(game);
+    StatusEffectSystem.applyStatusEffects(game);
     // A 3-turn stun normally survives two ticks (duration 1 left); with the
     // boon it's already gone.
     expect(game.player.statuses).toHaveLength(0);
@@ -849,7 +849,7 @@ describe('JSON-configured effects', () => {
     game.player.dodgeChance = 1; // always dodge
     game.player.hp = 20;
     const m = new Monster(game.player.x + 1, game.player.y, 'sprite_berserker_orc', 'Orc', 10, 10, 5, 5);
-    monsterAttackPlayer(m, game);
+    CombatSystem.monsterAttackPlayer(m, game);
     expect(game.player.hp).toBe(20 + Math.round(game.player.maxHp * 0.04)); // healed, not hurt
   });
 
@@ -859,7 +859,7 @@ describe('JSON-configured effects', () => {
     expect(game.player.auraStunRadius).toBe(3); // capped
     const near = new Monster(game.player.x + 1, game.player.y, 'sprite_berserker_orc', 'Near', 10, 10, 1, 5);
     game.monsters.push(near);
-    applyAuraStun(game);
+    StatusEffectSystem.applyAuraStun(game);
     expect(near.isStunned).toBe(true);
   });
 
@@ -1219,7 +1219,7 @@ describe('An Draoi (HP-pact magic)', () => {
     expect(veiledAt).toBeGreaterThan(0);
     const hp = hpAfterCast();
     const mx = m.x, my = m.y;
-    processMonsterTurns(game);
+    MonsterAiSystem.processMonsterTurns(game);
     expect(game.player.hp).toBe(hp);   // adjacent orc couldn't strike
     expect([m.x, m.y]).toEqual([mx, my]); // and didn't move
   });
@@ -1277,7 +1277,7 @@ describe('Balance config', () => {
     const original = Balance.MONSTER_AI.melee.chaseRange;
     Balance.MONSTER_AI.melee.chaseRange = 1;
     try {
-      processMonsterTurns(game);
+      MonsterAiSystem.processMonsterTurns(game);
       expect(m.x).toBe(game.player.x + 3); // out of the shortened chase range — doesn't move
     } finally {
       Balance.MONSTER_AI.melee.chaseRange = original;
@@ -1285,11 +1285,11 @@ describe('Balance config', () => {
   });
 
   it('combat dice table is configurable (estimateHitChance reacts to a changed die size)', () => {
-    const before = estimateHitChance(2, 2);
+    const before = CombatSystem.estimateHitChance(2, 2);
     const original = Balance.COMBAT.diceSidesByLevel[2];
     Balance.COMBAT.diceSidesByLevel[2] = 100;
     try {
-      const after = estimateHitChance(2, 2);
+      const after = CombatSystem.estimateHitChance(2, 2);
       expect(after).not.toBe(before);
     } finally {
       Balance.COMBAT.diceSidesByLevel[2] = original!;
@@ -1368,7 +1368,7 @@ describe('Hazards', () => {
     game.hazards.push(h);
     game.player.x = 4; game.player.y = 20;
     const hpBefore = game.player.hp;
-    processHazards(game);
+    HazardSystem.processHazards(game);
     const expectedDmg = spikeDamageFor(game.dungeonLevel);
     expect(game.player.hp).toBe(hpBefore - expectedDmg);
     expect(cb.logs.some(l => l.includes('Spikes fire!'))).toBe(true);
@@ -1382,7 +1382,7 @@ describe('Hazards', () => {
     const h: HazardTile = { x: 4, y: 20, type: 'spike', timer: Balance.HAZARD.spike.warningThreshold + 1, warning: false };
     game.hazards.push(h);
     const hpBefore = game.player.hp;
-    processHazards(game);
+    HazardSystem.processHazards(game);
     expect(h.timer).toBe(Balance.HAZARD.spike.warningThreshold);
     expect(h.warning).toBe(true);
     expect(game.player.hp).toBe(hpBefore); // hasn't fired yet
@@ -1393,7 +1393,7 @@ describe('Hazards', () => {
     game.hazards.push(h);
     const m = new Monster(5, 21, 'sprite_berserker_orc', 'Target', 1, 1, 1, 5);
     game.monsters.push(m);
-    processHazards(game);
+    HazardSystem.processHazards(game);
     expect(game.monsters).not.toContain(m);
   });
 
@@ -1403,7 +1403,7 @@ describe('Hazards', () => {
     game.player.x = 0; game.player.y = 10;
     const hazard: HazardTile = { x: 0, y: 10, type: 'teleport', timer: 0, warning: false };
     game.hazards.push(hazard);
-    checkHazardTrigger(game.player, game, true);
+    HazardSystem.checkHazardTrigger(game.player, game, true);
     expect(game.hazards).not.toContain(hazard);
     expect(cb.logs.some(l => l.includes('Teleport trap!'))).toBe(true);
   });
@@ -1414,7 +1414,7 @@ describe('Hazards', () => {
     game.player.teleportImmune = true;
     const hazard: HazardTile = { x: 0, y: 10, type: 'teleport', timer: 0, warning: false };
     game.hazards.push(hazard);
-    checkHazardTrigger(game.player, game, true);
+    HazardSystem.checkHazardTrigger(game.player, game, true);
     expect(game.hazards).toContain(hazard);
     expect(game.player.x).toBe(0);
     expect(game.player.y).toBe(10);
@@ -1425,7 +1425,7 @@ describe('Hazards', () => {
     game.map[1]![15] = Tile.FLOOR;
     game.map[2]![15] = Tile.FLOOR;
     const entity = { x: 9, y: 24 };
-    teleportEntity(entity, game);
+    HazardSystem.teleportEntity(entity, game);
     expect(game.map[entity.x]![entity.y]).toBe(Tile.FLOOR);
   });
 });
@@ -1450,7 +1450,7 @@ describe('Status effects', () => {
   it('poison damages the player each tick and counts down duration', () => {
     game.player.statuses = [{ type: 'poison', duration: 3, power: 5 }];
     const hpBefore = game.player.hp;
-    applyStatusEffects(game);
+    StatusEffectSystem.applyStatusEffects(game);
     expect(game.player.hp).toBe(hpBefore - 5);
     expect(game.player.statuses).toHaveLength(1);
     expect(game.player.statuses[0]!.duration).toBe(2);
@@ -1458,7 +1458,7 @@ describe('Status effects', () => {
 
   it('a status wears off and is removed once duration reaches zero', () => {
     game.player.statuses = [{ type: 'poison', duration: 1, power: 5 }];
-    applyStatusEffects(game);
+    StatusEffectSystem.applyStatusEffects(game);
     expect(game.player.statuses).toHaveLength(0);
     expect(cb.logs.some(l => l.includes('wore off'))).toBe(true);
   });
@@ -1467,7 +1467,7 @@ describe('Status effects', () => {
     game.player.poisonImmune = true;
     game.player.statuses = [{ type: 'poison', duration: 3, power: 5 }];
     const hpBefore = game.player.hp;
-    applyStatusEffects(game);
+    StatusEffectSystem.applyStatusEffects(game);
     expect(game.player.hp).toBe(hpBefore);
   });
 
@@ -1476,7 +1476,7 @@ describe('Status effects', () => {
     m.statuses = [{ type: 'poison', duration: 2, power: 5 }];
     game.monsters.push(m);
     const xpBefore = game.player.totalXpEarned;
-    applyStatusEffects(game);
+    StatusEffectSystem.applyStatusEffects(game);
     expect(game.monsters).not.toContain(m);
     expect(game.player.totalXpEarned).toBe(xpBefore + 20);
   });
@@ -1484,14 +1484,14 @@ describe('Status effects', () => {
   it('applyRegen heals the player by a % of maxHp, clamped to maxHp', () => {
     game.player.regenPerTick = 0.5; // 50% of maxHp (45) = 22, clamps well past -2
     game.player.hp = game.player.maxHp - 2;
-    applyRegen(game);
+    StatusEffectSystem.applyRegen(game);
     expect(game.player.hp).toBe(game.player.maxHp);
   });
 
   it('applyRegen grants exactly the rounded % of maxHp when unclamped', () => {
     game.player.regenPerTick = 0.1; // 10% of maxHp (45) = 4.5 -> rounds to 5 (odd) or 4 (even)
     game.player.hp = 1;
-    applyRegen(game);
+    StatusEffectSystem.applyRegen(game);
     expect(game.player.hp).toBe(1 + Math.round(game.player.maxHp * 0.1));
   });
 
@@ -1501,7 +1501,7 @@ describe('Status effects', () => {
     const near = new Monster(5, 20, 'sprite_berserker_orc', 'Near', 10, 10, 1, 5);   // dist 1
     const far  = new Monster(9, 20, 'sprite_berserker_orc', 'Far',  10, 10, 1, 5);   // dist 5
     game.monsters.push(near, far);
-    applyAuraStun(game);
+    StatusEffectSystem.applyAuraStun(game);
     expect(near.isStunned).toBe(true);
     expect(far.isStunned).toBe(false);
   });
