@@ -198,8 +198,20 @@ export interface RangedAbility {
   damageMult: number;
   cooldownMax: number;
   statusEffect?: 'stun';
-  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
+  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain';
   params?: Record<string, number | string>;
+}
+
+// A deity pact for An Draoi — swears mid-run, granting a signature HP-cost
+// spell (replaces the starting cantrip) plus a small passive.
+export interface PatronDef {
+  id: string;
+  char: string;
+  name: string;
+  deity: string;
+  tagline: string;
+  effects: EffectSpec[];
+  ability: RangedAbility;
 }
 
 export interface CharacterSheetStat { label: string; value: string; }
@@ -227,7 +239,7 @@ export interface UIState {
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
-  rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null } | null;
+  rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null } | null;
   characterSheet: CharacterSheetSection[];
 }
 
@@ -236,7 +248,7 @@ export type AudioEvent =
   | 'hit' | 'playerDamage' | 'kill'
   | 'lineClear' | 'descend' | 'poison' | 'bossWarn'
   | 'teleport' | 'comboMilestone'
-  | 'npcEncounter' | 'ghostEncounter' | 'bountyFulfilled';
+  | 'npcEncounter' | 'ghostEncounter' | 'bountyFulfilled' | 'pactSworn';
 
 // A fallen character from a previous run — may reappear as a wandering ghost
 // in later runs when the current hero's level is close to theirs.

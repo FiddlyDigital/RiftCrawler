@@ -8,6 +8,7 @@ import { MONSTER_AI } from '../balance';
 
 export function processMonsterTurns(game: Game): void {
   if (game.player.hp <= 0) return;
+  const veiled = game.player.veiledTurns > 0;
   for (const m of game.monsters) {
     if (game.player.hp <= 0) return;
     if (m.isStunned) {
@@ -16,6 +17,9 @@ export function processMonsterTurns(game: Game): void {
         .filter(s => s.duration > 0);
       continue;
     }
+    // Féth Fíada: the god-mist blinds every mortal creature — no chasing, no
+    // attacks — but Bres is divine and sees straight through it.
+    if (veiled && !m.isGorgoth) continue;
     switch (m.behaviorType) {
       case 'ranged':    processRangedMonster(m, game);    break;
       case 'healer':    processHealerMonster(m, game);    break;

@@ -70,6 +70,9 @@ export class Player {
   rangedCooldown = 0;
   rangedAmmo = -1;  // -1 = infinite, ≥0 = finite (Rogue darts)
 
+  // Féth Fíada (Manannán pact): while > 0, monsters can't see or attack you
+  veiledTurns = 0;
+
   // Status effects
   statuses: StatusEffect[] = [];
 

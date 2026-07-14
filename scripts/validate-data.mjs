@@ -30,6 +30,7 @@ const FILES = [
   'monster-ai.json',
   'monsters.json',
   'npcs.json',
+  'patrons.json',
   'shapes.json',
   'sprite-map.json',
 ];

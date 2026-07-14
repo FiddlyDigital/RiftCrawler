@@ -7,7 +7,7 @@ import { killMonster, playerAttackMonster, monsterAttackPlayer, estimateHitChanc
 import { processMonsterTurns } from '../systems/monsterAI';
 import { processHazards, checkHazardTrigger, teleportEntity } from '../systems/hazards';
 import { applyStatusEffects, applyRegen, applyAuraStun } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, getThreeRandomBoons } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, getThreeRandomBoons } from '../content';
 import { BALANCE, COMBAT_BALANCE, MONSTER_AI, HAZARD_BALANCE, weightedPick } from '../balance';
 import { TIER_COLORS } from '../colors';
 import { SPRITE_MAP, SPRITE_SHEETS, spriteIconHTML } from '../sprites';
@@ -916,8 +916,8 @@ describe('Player classes (JSON-configured)', () => {
     game = new Game(cb);
   });
 
-  it('CLASSES loads both classes from JSON in the original order', () => {
-    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'architect']);
+  it('CLASSES loads all classes from JSON in the original order', () => {
+    expect(CLASSES.map(c => c.id)).toEqual(['chronomancer', 'architect', 'draoi']);
   });
 
   it('tPieceCdReduction defaults to 2, architect overrides to 4', () => {
@@ -1032,6 +1032,112 @@ describe('Player classes (JSON-configured)', () => {
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
     (game as unknown as { checkLineClears(): void }).checkLineClears();
     expect(m.hp).toBe(100);
+  });
+});
+
+// ── An Draoi: HP-pact spellcasting & deity patrons ────────────────────────────
+
+describe('An Draoi (HP-pact magic)', () => {
+  let cb: ReturnType<typeof makeCallbacks>;
+  let game: Game;
+
+  beforeEach(() => {
+    cb = makeCallbacks();
+    game = new Game(cb);
+    game.applyClass('draoi');
+  });
+
+  it('PATRONS loads all three deities, each with an hpCostPct spell', () => {
+    expect(PATRONS.map(p => p.id)).toEqual(['morrigan', 'manannan', 'tethra']);
+    for (const p of PATRONS) {
+      expect(typeof p.ability.params?.['hpCostPct']).toBe('number');
+      expect(p.ability.params!['hpCostPct'] as number).toBeGreaterThan(0);
+    }
+  });
+
+  it('casting Wild Surge deducts the HP cost and deals dmgMult × the HP paid', () => {
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    // Clear line of sight — the fresh map is VOID between hero and target
+    game.map[game.player.x]![game.player.y - 1] = Tile.FLOOR;
+    game.map[m.x]![m.y] = Tile.FLOOR;
+    const maxHp = game.player.maxHp;
+    const hpBefore = game.player.hp;
+    const expectedCost = Math.max(1, Math.round(maxHp * 0.10));
+    game.handleRangedAttack();
+    // regen/heal effects don't apply to a fresh draoi, so the delta is exactly the cost
+    expect(hpBefore - game.player.hp).toBe(expectedCost);
+    expect(m.hp).toBe(100 - expectedCost * 2);
+  });
+
+  it('the pact never takes your last breath — cast refused when hp <= cost', () => {
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Orc', 100, 100, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    const cost = Math.max(1, Math.round(game.player.maxHp * 0.10));
+    game.player.hp = cost; // exactly the cost — must refuse
+    game.handleRangedAttack();
+    expect(game.player.hp).toBe(cost);
+    expect(m.hp).toBe(100);
+  });
+
+  it('a whiffed drain (no target) costs no HP', () => {
+    game.monsters = [];
+    const hpBefore = game.player.hp;
+    game.handleRangedAttack();
+    expect(game.player.hp).toBe(hpBefore);
+    expect(game.player.rangedCooldown).toBe(0);
+  });
+
+  it("applyPatron(tethra) swaps the ability, applies the passive, and Tethra's Tithe refunds on kill", () => {
+    game.applyPatron('tethra');
+    expect(game.activePatronId).toBe('tethra');
+    expect(game.player.rangedAbility?.name).toBe("Tethra's Tithe");
+    expect(game.player.killHeal).toBeCloseTo(0.04);
+
+    // A weak target the 3× drain will certainly kill → full cost refunded
+    const m = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'Runt', 1, 1, 1, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    game.map[game.player.x]![game.player.y - 1] = Tile.FLOOR;
+    game.map[m.x]![m.y] = Tile.FLOOR;
+    const hpBefore = game.player.hp;
+    game.handleRangedAttack();
+    expect(game.monsters).not.toContain(m);
+    // cost paid then refunded (plus kill heals) — never below where we started
+    expect(game.player.hp).toBeGreaterThanOrEqual(hpBefore);
+  });
+
+  it("Badb's Shriek hits every visible monster and puts the spell on cooldown", () => {
+    game.applyPatron('morrigan');
+    const a = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'A', 100, 100, 1, 5);
+    const b = new Monster(game.player.x + 2, game.player.y - 3, 'sprite_berserker_orc', 'B', 100, 100, 1, 5);
+    game.monsters = [a, b];
+    game.visibility[a.x]![a.y] = true;
+    game.visibility[b.x]![b.y] = true;
+    const cost = Math.max(1, Math.round(game.player.maxHp * 0.15));
+    game.handleRangedAttack();
+    expect(a.hp).toBe(100 - cost * 2);
+    expect(b.hp).toBe(100 - cost * 2);
+    // cooldownMax 4, minus the same-action tickRangedCooldown decrement
+    expect(game.player.rangedCooldown).toBe(3);
+  });
+
+  it('Féth Fíada veils the player; veiled monsters neither move nor attack; veil ticks down', () => {
+    game.applyPatron('manannan');
+    const m = new Monster(game.player.x + 1, game.player.y, 'sprite_berserker_orc', 'Orc', 20, 20, 5, 5);
+    game.monsters = [m];
+    game.visibility[m.x]![m.y] = true;
+    const hpAfterCast = (): number => game.player.hp;
+    game.handleRangedAttack();
+    const veiledAt = game.player.veiledTurns;
+    expect(veiledAt).toBeGreaterThan(0);
+    const hp = hpAfterCast();
+    const mx = m.x, my = m.y;
+    processMonsterTurns(game);
+    expect(game.player.hp).toBe(hp);   // adjacent orc couldn't strike
+    expect([m.x, m.y]).toEqual([mx, my]); // and didn't move
   });
 });
 

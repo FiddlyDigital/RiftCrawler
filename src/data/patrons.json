@@ -1,0 +1,72 @@
+[
+  {
+    "id": "morrigan",
+    "char": "patron_morrigan",
+    "name": "Pact of the Morrígan",
+    "deity": "The Morrígan",
+    "tagline": "Battle-sorcery. Fill the air with blood-fog and raining fire — break their sanity before the blades meet.",
+    "effects": [
+      { "stat": "atk", "value": 2 }
+    ],
+    "ability": {
+      "name": "Badb's Shriek",
+      "emoji": "patron_morrigan",
+      "abilityType": "shriek",
+      "range": 0,
+      "damageMult": 0,
+      "cooldownMax": 4,
+      "params": {
+        "hpCostPct": 0.15,
+        "dmgMult": 2,
+        "stunChance": 0.35,
+        "stunDuration": 1
+      }
+    }
+  },
+  {
+    "id": "manannan",
+    "char": "trap_smoke",
+    "name": "Pact of Manannán mac Lir",
+    "deity": "Manannán mac Lir",
+    "tagline": "Glamour and sea-mist. The Féth Fíada hides the sworn from every mortal eye.",
+    "effects": [
+      { "stat": "dodgeChance", "value": 0.1, "max": 0.75 }
+    ],
+    "ability": {
+      "name": "Féth Fíada",
+      "emoji": "trap_smoke",
+      "abilityType": "veil",
+      "range": 0,
+      "damageMult": 0,
+      "cooldownMax": 5,
+      "params": {
+        "hpCostPct": 0.12,
+        "veilTurns": 6
+      }
+    }
+  },
+  {
+    "id": "tethra",
+    "char": "patron_tethra",
+    "name": "Pact of Tethra",
+    "deity": "Tethra",
+    "tagline": "Parasitic netherworld sorcery. Pay in blood, and take back more than you gave.",
+    "effects": [
+      { "stat": "killHeal", "value": 0.04, "max": 0.6 }
+    ],
+    "ability": {
+      "name": "Tethra's Tithe",
+      "emoji": "patron_tethra",
+      "abilityType": "drain",
+      "range": 6,
+      "damageMult": 0,
+      "cooldownMax": 3,
+      "params": {
+        "hpCostPct": 0.18,
+        "dmgMult": 3,
+        "healPct": 0.5,
+        "refundOnKill": 1
+      }
+    }
+  }
+]

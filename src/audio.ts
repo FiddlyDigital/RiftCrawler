@@ -151,6 +151,15 @@ export class AudioEngine {
     this.noise(0.08, 0.08, 0.36);
   }
 
+  // Low solemn chord swelling into a bright overtone — an oath made binding.
+  playPactSworn(): void {
+    this.osc(110, 0.8, 'triangle', 0.20);
+    this.osc(165, 0.8, 'triangle', 0.16, 0.05);
+    this.osc(220, 0.6, 'sine', 0.14, 0.3);
+    this.osc(440, 0.5, 'sine', 0.10, 0.55);
+    this.osc(880, 0.35, 'sine', 0.07, 0.8);
+  }
+
   playComboMilestone(mult: number): void {
     const freqs = mult >= 5 ? [300, 420, 560, 750, 1000] : [300, 420, 560, 750];
     freqs.forEach((f, i) => this.osc(f, 0.09, 'square', 0.16, i * 0.07));

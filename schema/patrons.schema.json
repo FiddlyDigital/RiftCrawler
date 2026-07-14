@@ -1,23 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://causeway-to-eriu.local/schema/classes.schema.json",
-  "title": "Classes",
-  "description": "Starting character classes. Mirrors RawClass in src/dataLoader.ts.",
+  "$id": "https://causeway-to-eriu.local/schema/patrons.schema.json",
+  "title": "Patrons",
+  "description": "Deity pacts for An Draoi — each grants an HP-cost spell and a passive. Mirrors PatronDef in src/types.ts.",
   "type": "array",
   "items": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["id", "emoji", "name", "tagline", "statChips"],
+    "required": ["id", "char", "name", "deity", "tagline", "effects", "ability"],
     "properties": {
       "id": { "type": "string", "minLength": 1 },
-      "emoji": { "type": "string", "minLength": 1 },
+      "char": { "type": "string", "minLength": 1 },
       "name": { "type": "string", "minLength": 1 },
+      "deity": { "type": "string", "minLength": 1 },
       "tagline": { "type": "string", "minLength": 1 },
-      "statChips": {
-        "type": "array",
-        "items": { "type": "string", "minLength": 1 }
-      },
-      "tPieceCdReduction": { "type": "number" },
       "effects": {
         "type": "array",
         "items": { "$ref": "_effect-spec.schema.json" }
@@ -25,17 +21,21 @@
       "ability": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "emoji", "abilityType", "range", "damageMult", "cooldownMax"],
+        "required": ["name", "emoji", "abilityType", "range", "damageMult", "cooldownMax", "params"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "emoji": { "type": "string", "minLength": 1 },
-          "abilityType": { "type": "string", "enum": ["bolt", "time_dilation", "gravity_well", "consecrate", "overload", "shriek", "veil", "drain"] },
+          "abilityType": { "type": "string", "enum": ["shriek", "veil", "drain"] },
           "range": { "type": "number" },
           "damageMult": { "type": "number" },
           "cooldownMax": { "type": "number" },
           "statusEffect": { "type": "string", "enum": ["stun"] },
           "params": {
             "type": "object",
+            "required": ["hpCostPct"],
+            "properties": {
+              "hpCostPct": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.9 }
+            },
             "additionalProperties": { "type": ["number", "string"] }
           }
         }

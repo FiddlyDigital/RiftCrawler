@@ -546,6 +546,7 @@ export class Renderer {
       // Combat is orthogonal-only, so this is Manhattan range (attackRange 1 =
       // the four orthogonal tiles; ranged monsters use their larger range).
       const threatening = game.player.hp > 0 && !m.isStunned &&
+        (game.player.veiledTurns <= 0 || m.isGorgoth) &&
         (Math.abs(m.x - game.player.x) + Math.abs(m.y - game.player.y)) <= m.attackRange;
       if (threatening) {
         this.drawPulseGlow(m.x, m.y, '198,58,50');
@@ -592,7 +593,11 @@ export class Renderer {
     if (game.player.hp > 0) {
       ctx.font = `${TS * 0.7}px Arial`;
 
-      this.drawLivingSprite(game.player.char, game.player.x, game.player.y, '102,187,106');
+      // Féth Fíada: translucent, wrapped in sea-mist instead of the hero green
+      const veiled = game.player.veiledTurns > 0;
+      if (veiled) ctx.globalAlpha = 0.55;
+      this.drawLivingSprite(game.player.char, game.player.x, game.player.y, veiled ? '63,158,147' : '102,187,106');
+      ctx.globalAlpha = 1.0;
 
       if (game.player.statuses.length > 0) {
         const iconSize = 8;

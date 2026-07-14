@@ -78,5 +78,47 @@
         "tileType": "sacred"
       }
     }
+  },
+  {
+    "id": "draoi",
+    "emoji": "npc_fili",
+    "name": "An Draoi",
+    "tagline": "Sorcery is a bargain paid in blood. A deity will call once you descend.",
+    "statChips": ["+10 Max HP", "−2 ATK", "D6 combat dice", "Spells cost % of Max HP", "Q: Wild Surge — until a pact is sworn"],
+    "tPieceCdReduction": 2,
+    "effects": [
+      {
+        "stat": "maxHp",
+        "value": 10
+      },
+      {
+        "stat": "hp",
+        "value": 10
+      },
+      {
+        "stat": "atk",
+        "value": -2,
+        "min": 1
+      },
+      {
+        "stat": "baseCombatLevel",
+        "op": "set",
+        "value": 2
+      }
+    ],
+    "ability": {
+      "name": "Wild Surge",
+      "emoji": "fx_arcane",
+      "abilityType": "drain",
+      "range": 5,
+      "damageMult": 0,
+      "cooldownMax": 3,
+      "params": {
+        "hpCostPct": 0.10,
+        "dmgMult": 2,
+        "healPct": 0,
+        "refundOnKill": 0
+      }
+    }
   }
 ]

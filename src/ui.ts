@@ -199,8 +199,9 @@ export class UIManager {
       const ra = state.rangedAbility;
       const ready = ra.cooldown === 0 && ra.ammo !== 0;
       const ammoText  = ra.ammo !== null ? ` ×${ra.ammo}` : '';
+      const costText  = ra.hpCostPct !== null ? ` · ${Math.round(ra.hpCostPct * 100)}% HP` : '';
       const cdText    = ra.cooldown > 0 ? ` [${ra.cooldown}t]` : ' [Ready]';
-      const label = `${escapeHtml(ra.name)}${ammoText}${cdText}`;
+      const label = `${escapeHtml(ra.name)}${ammoText}${cdText}${costText}`;
       this.els['rangedAbility']!.style.display = '';
       this.els['rangedAbility']!.style.color = ready ? '#ffd700' : '#888';
       this.els['rangedAbility']!.style.fontSize = '9px';

@@ -8,7 +8,8 @@ import classesData        from './data/classes.json';
 import biomesData         from './data/biomes.json';
 import floorEventsData    from './data/floor-events.json';
 import npcsData           from './data/npcs.json';
-import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef } from './types';
+import patronsData        from './data/patrons.json';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
@@ -22,7 +23,7 @@ interface RawBrand    { id: string; char: string; name: string; setSize: number;
 interface RawModifier { id: string; emoji: string; name: string; desc: string; effects?: EffectSpec[]; special?: string }
 interface RawClassAbility {
   name: string; emoji: string;
-  abilityType: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload';
+  abilityType: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain';
   range: number; damageMult: number; cooldownMax: number;
   statusEffect?: 'stun';
   params?: Record<string, number | string>;
@@ -52,7 +53,9 @@ function applyEffect(obj: Record<string, number | boolean>, e: EffectSpec): void
   obj[e.stat] = n;
 }
 
-function applyToPlayer(p: Player, effects: EffectSpec[] | undefined): void {
+// Exported for the patron-pact system (game.ts applyPatron) — same declarative
+// EffectSpec application the boons/brands/classes use.
+export function applyToPlayer(p: Player, effects: EffectSpec[] | undefined): void {
   for (const e of effects ?? []) applyEffect(p as unknown as Record<string, number | boolean>, e);
 }
 
@@ -459,3 +462,7 @@ export const NPCS: NpcDef[] = npcsData as NpcDef[];
 export function getRandomNpc(): NpcDef {
   return NPCS[Math.floor(Math.random() * NPCS.length)]!;
 }
+
+// ── Deity patrons (An Draoi's mid-run pact) ───────────────────────────────────
+
+export const PATRONS: PatronDef[] = patronsData as unknown as PatronDef[];

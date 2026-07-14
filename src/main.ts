@@ -316,6 +316,7 @@ function handleAudio(event: AudioEvent, data?: number): void {
     case 'npcEncounter':    audio.playNpcGreeting();      break;
     case 'ghostEncounter':  audio.playGhost();            vibrate([15, 40, 15]); break;
     case 'bountyFulfilled': audio.playBountyFulfilled();  vibrate([20, 30, 20, 30, 40]); break;
+    case 'pactSworn':       audio.playPactSworn();        vibrate([30, 50, 60]); break;
   }
 }
 
@@ -440,7 +441,7 @@ function startGame(startPaused = false): void {
 // ── Class + Modifier picker then launch ──────────────────────────────────────
 
 function launchWithModifier(onReady: () => void): void {
-  const classes = game.getRandomClasses(2);
+  const classes = game.getRandomClasses(3);
   ui.showClassSelection(classes, (classId) => {
     game.applyClass(classId);
     const mods = game.getRandomModifiers(3);
