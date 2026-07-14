@@ -79,7 +79,7 @@ export interface BalanceConfig {
   brands: { maxLifetime: number };
   floors: { bossFloorInterval: number; floorEventInterval: number; dungeonRoomChance: number };
   boss: { baseHpFloor1: number; baseHpPerDungeonLevel: number; baseAtkFloor1: number; baseAtkPerDungeonLevel: number; combatLevel: number };
-  gorgoth: { maxHp: number; atk: number; xpReward: number; combatLevel: number; causewayDamagePerRowPerFloor: number };
+  gorgoth: { maxHp: number; atk: number; xpReward: number; combatLevel: number; causewayDamagePerRowPerFloor: number; causewayChipFloorPct: number };
   crystalShards: { baseHp: number; hpPerDungeonLevel: number; baseAtk: number; atkPerDungeonLevel: number };
   spawnRates: {
     cursedPieceChance: number; blessedPieceChance: number;

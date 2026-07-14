@@ -488,7 +488,7 @@ describe('Balance levers', () => {
     expect(game.player.totalXpEarned).toBe(xpBefore + 15 + 20);
   });
 
-  it('after Bres first appears, line clears chip his stored HP — but never below 1', () => {
+  it('after Bres first appears, line clears chip his stored HP — but never below the causeway floor', () => {
     game.gorgothEverSummoned = true;
     game.dungeonLevel = 10;
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
@@ -496,17 +496,27 @@ describe('Balance levers', () => {
     expect(cb.logs.some(l => l.includes('causeway shudders'))).toBe(true);
     game.summonGorgoth();
     const bres = game.monsters.find(m => m.isGorgoth)!;
-    // 6 dmg × 1 row × floor 10 = 60 chipped off the 800 max
-    expect(bres.hp).toBe(BALANCE.gorgoth.maxHp - 60);
+    // 8 dmg × 1 row × floor 10 = 80 chipped off the max
+    expect(bres.hp).toBe(BALANCE.gorgoth.maxHp - 80);
 
-    // Grind him to the floor from afar: HP clamps at 1, never 0
+    // Grind him from afar: HP clamps at the causeway floor (a fraction of max
+    // HP) — you can weaken him this way, but never finish him without a fight.
     const g = game as unknown as { gorgothHp: number };
     game.monsters = [];
     (game as unknown as { gorgothSummoned: boolean }).gorgothSummoned = false;
+    g.gorgothHp = BALANCE.gorgoth.maxHp;
+    for (let i = 0; i < 50; i++) {
+      for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+      (game as unknown as { checkLineClears(): void }).checkLineClears();
+    }
+    const chipFloor = Math.ceil(BALANCE.gorgoth.maxHp * BALANCE.gorgoth.causewayChipFloorPct);
+    expect(g.gorgothHp).toBe(chipFloor);
+
+    // Already below the floor from a real fight: passive chip must not heal him.
     g.gorgothHp = 5;
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
     (game as unknown as { checkLineClears(): void }).checkLineClears();
-    expect(g.gorgothHp).toBe(1);
+    expect(g.gorgothHp).toBe(5);
   });
 
   it('the peddler sells each item once, deducts gold, and applies the effect', () => {

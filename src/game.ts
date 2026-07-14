@@ -1,5 +1,5 @@
 import { CONFIG, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, pctOf } from './entities';
 import { MONSTERS, BOSSES, BOONS_BY_TIER, getBoonTierForFloor, getThreeRandomBoons, MODIFIERS, CLASSES, getBiomeForFloor, getRandomFloorEvent, getThreeRandomBrands, getRandomNpc, NPCS, PATRONS, applyToPlayer, type ClassDef, type PatronDef } from './content';
 import { applyStatusEffects, applyRegen, applyAuraStun } from './systems/statusEffects';
@@ -30,6 +30,21 @@ function describePatronSpell(p: PatronDef): string {
     default:
       return `pay ${costPct}% Max HP.`;
   }
+}
+
+// Human-readable summary of a spell's one-time toll, applied the moment the
+// patron grants it (at the pact, or at each later level-gated unlock).
+const TOLL_LABELS: Record<string, string> = { atk: 'ATK', maxHp: 'Max HP', tickSlowPercent: 'gravity speed' };
+function describeToll(effects: EffectSpec[] | undefined): string {
+  return (effects ?? []).map(e => {
+    const label = TOLL_LABELS[e.stat] ?? e.stat;
+    if (e.op === 'mul') {
+      const pct = Math.round((1 - (e.value as number)) * 100);
+      return `−${pct}% ${label}`;
+    }
+    const v = e.value as number;
+    return `${v > 0 ? '+' : ''}${v} ${label}`;
+  }).join(', ');
 }
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
@@ -825,7 +840,7 @@ export class Game {
       flavor: 'Two voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',
       options: offered.map(p => ({
         label: p.deity,
-        desc: `${p.tagline} — ${p.spells[0]!.name}: ${describePatronSpell(p)} More spells unlock as you level.`,
+        desc: `${p.tagline} — ${p.spells[0]!.name}: ${describePatronSpell(p)} ${p.tollDesc} More spells unlock as you level.`,
         apply: (game: Game): string => {
           game.applyPatron(p.id);
           return `The pact is sworn. ${p.deity} marks you as their own.`;
@@ -848,15 +863,17 @@ export class Game {
     if (!patron) return;
     this.activePatronId = id;
     applyToPlayer(this.player, patron.effects);
-    this.player.hp = Math.min(this.player.hp, this.player.maxHp);
     this.player.spellbook = patron.spells
       .filter(s => (s.unlockLevel ?? 1) <= this.player.playerLevel)
       .map(s => ({ ...s }));
+    for (const spell of this.player.spellbook) applyToPlayer(this.player, spell.toll);
+    this.player.hp = Math.min(this.player.hp, this.player.maxHp);
     this.player.activeSpellIndex = 0;
     this.player.rangedAbility = this.player.spellbook[0] ?? null;
     this.player.rangedCooldown = 0;
     this.storyBeats.push(`swore a pact with ${patron.deity}`);
     this.cb.log(`${patron.name} — ${patron.spells[0]!.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
+    this.cb.log(patron.tollDesc, 'log-neutral', patron.char);
     this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#8d6fd4', patron.char);
     this.cb.onRingPulse?.(this.player.x, this.player.y, '141,111,212');
     this.cb.onAudio?.('pactSworn');
@@ -873,7 +890,10 @@ export class Game {
       if ((spell.unlockLevel ?? 1) > this.player.playerLevel) continue;
       if (this.player.spellbook.some(s => s.name === spell.name)) continue;
       this.player.spellbook.push({ ...spell });
-      this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (E cycles spells)`, 'log-perk', spell.emoji);
+      applyToPlayer(this.player, spell.toll);
+      this.player.hp = Math.min(this.player.hp, this.player.maxHp);
+      const toll = describeToll(spell.toll);
+      this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (${toll} — E cycles spells)`, 'log-perk', spell.emoji);
       this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4', spell.emoji);
     }
   }
@@ -1049,12 +1069,13 @@ export class Game {
 
       // The Causeway Crumbles: once Bres has shown himself, every row you
       // demolish is a span of his half-built bridge — his stored HP takes the
-      // hit, but he can never be finished off in absentia (min 1): you must
-      // face him to end it.
+      // hit, but it only chips him down to a floor (a fraction of max HP):
+      // you must still face him in person to finish it.
       if (this.gorgothEverSummoned && !this.gorgothSummoned) {
         const chip = BALANCE.gorgoth.causewayDamagePerRowPerFloor * rowsCleared * this.dungeonLevel;
         const before = this.gorgothHp;
-        this.gorgothHp = Math.max(1, this.gorgothHp - chip);
+        const chipFloor = Math.ceil(BALANCE.gorgoth.maxHp * BALANCE.gorgoth.causewayChipFloorPct);
+        if (this.gorgothHp > chipFloor) this.gorgothHp = Math.max(chipFloor, this.gorgothHp - chip);
         if (this.gorgothHp < before) {
           this.cb.log(`The causeway shudders — Bres feels it! (−${before - this.gorgothHp})`, 'log-boss', 'sprite_boss_gorgoth');
           // Stone shards rain from the unfinished bridge at the top of the board

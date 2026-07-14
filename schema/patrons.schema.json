@@ -7,13 +7,14 @@
   "items": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["id", "char", "name", "deity", "tagline", "effects", "spells"],
+    "required": ["id", "char", "name", "deity", "tagline", "tollDesc", "effects", "spells"],
     "properties": {
       "id": { "type": "string", "minLength": 1 },
       "char": { "type": "string", "minLength": 1 },
       "name": { "type": "string", "minLength": 1 },
       "deity": { "type": "string", "minLength": 1 },
       "tagline": { "type": "string", "minLength": 1 },
+      "tollDesc": { "type": "string", "minLength": 1 },
       "effects": {
         "type": "array",
         "items": { "$ref": "_effect-spec.schema.json" }
@@ -34,6 +35,10 @@
             "cooldownMax": { "type": "number" },
             "unlockLevel": { "type": "integer", "minimum": 1 },
             "statusEffect": { "type": "string", "enum": ["stun"] },
+            "toll": {
+              "type": "array",
+              "items": { "$ref": "_effect-spec.schema.json" }
+            },
             "params": {
               "type": "object",
               "required": ["hpCostPct"],

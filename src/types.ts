@@ -201,6 +201,7 @@ export interface RangedAbility {
   abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain' | 'blight' | 'blink';
   params?: Record<string, number | string>;
   unlockLevel?: number;  // patron spells: player level required (1 = signature)
+  toll?: EffectSpec[];   // patron spells: stat price paid once, the moment this spell is granted
 }
 
 // A deity pact for An Draoi — sworn mid-run, granting a spellbook of HP-cost
@@ -212,6 +213,7 @@ export interface PatronDef {
   name: string;
   deity: string;
   tagline: string;
+  tollDesc: string;
   effects: EffectSpec[];
   spells: RangedAbility[];
 }

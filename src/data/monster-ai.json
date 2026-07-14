@@ -22,6 +22,6 @@
     "healFraction": 0.25
   },
   "gorgoth": {
-    "stepTurns": 2
+    "stepTurns": 1
   }
 }

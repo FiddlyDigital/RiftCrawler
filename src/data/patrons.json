@@ -5,6 +5,7 @@
     "name": "Pact of the Morrígan",
     "deity": "The Morrígan",
     "tagline": "Battle-sorcery. Fill the air with blood-fog and raining fire — break their sanity before the blades meet.",
+    "tollDesc": "Her battle-fury is a loan against your own — every spell she grants dulls the blade arm (−ATK).",
     "effects": [
       { "stat": "atk", "value": 2 }
     ],
@@ -17,6 +18,7 @@
         "damageMult": 0,
         "cooldownMax": 4,
         "unlockLevel": 1,
+        "toll": [{ "stat": "atk", "op": "mul", "value": 0.85, "floor": true, "min": 1 }],
         "params": {
           "hpCostPct": 0.15,
           "dmgMult": 2,
@@ -32,6 +34,7 @@
         "damageMult": 0,
         "cooldownMax": 5,
         "unlockLevel": 4,
+        "toll": [{ "stat": "atk", "op": "mul", "value": 0.85, "floor": true, "min": 1 }],
         "params": {
           "hpCostPct": 0.10,
           "dmgMult": 0,
@@ -47,6 +50,7 @@
         "damageMult": 0,
         "cooldownMax": 6,
         "unlockLevel": 8,
+        "toll": [{ "stat": "atk", "op": "mul", "value": 0.75, "floor": true, "min": 1 }],
         "params": {
           "hpCostPct": 0.25,
           "dmgMult": 3,
@@ -62,6 +66,7 @@
     "name": "Pact of Manannán mac Lir",
     "deity": "Manannán mac Lir",
     "tagline": "Glamour and sea-mist. The Féth Fíada hides the sworn from every mortal eye.",
+    "tollDesc": "The tides quicken to answer him — every spell he grants speeds the falling stone (faster gravity).",
     "effects": [
       { "stat": "dodgeChance", "value": 0.1, "max": 0.75 }
     ],
@@ -74,6 +79,7 @@
         "damageMult": 0,
         "cooldownMax": 5,
         "unlockLevel": 1,
+        "toll": [{ "stat": "tickSlowPercent", "value": -5 }],
         "params": {
           "hpCostPct": 0.12,
           "veilTurns": 6
@@ -87,6 +93,7 @@
         "damageMult": 0,
         "cooldownMax": 4,
         "unlockLevel": 4,
+        "toll": [{ "stat": "tickSlowPercent", "value": -5 }],
         "params": {
           "hpCostPct": 0.10,
           "pullSteps": 2,
@@ -101,6 +108,7 @@
         "damageMult": 0,
         "cooldownMax": 6,
         "unlockLevel": 8,
+        "toll": [{ "stat": "tickSlowPercent", "value": -10 }],
         "params": {
           "hpCostPct": 0.10,
           "veilTurns": 2
@@ -114,6 +122,7 @@
     "name": "Pact of Tethra",
     "deity": "Tethra",
     "tagline": "Parasitic netherworld sorcery. Pay in blood, and take back more than you gave.",
+    "tollDesc": "He feeds as he gives — every spell he grants tithes your vitality (−Max HP).",
     "effects": [
       { "stat": "killHeal", "value": 0.04, "max": 0.6 }
     ],
@@ -126,6 +135,7 @@
         "damageMult": 0,
         "cooldownMax": 3,
         "unlockLevel": 1,
+        "toll": [{ "stat": "maxHp", "op": "mul", "value": 0.93, "floor": true, "min": 10 }],
         "params": {
           "hpCostPct": 0.18,
           "dmgMult": 3,
@@ -141,6 +151,7 @@
         "damageMult": 0,
         "cooldownMax": 5,
         "unlockLevel": 4,
+        "toll": [{ "stat": "maxHp", "op": "mul", "value": 0.93, "floor": true, "min": 10 }],
         "params": {
           "hpCostPct": 0.14,
           "poisonDuration": 4,
@@ -155,6 +166,7 @@
         "damageMult": 0,
         "cooldownMax": 5,
         "unlockLevel": 8,
+        "toll": [{ "stat": "maxHp", "op": "mul", "value": 0.88, "floor": true, "min": 10 }],
         "params": {
           "hpCostPct": 0.20,
           "dmgMult": 2,
