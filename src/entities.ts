@@ -16,7 +16,9 @@ export function pctOf(base: number, fraction: number): number {
 export class Player {
   x: number;
   y: number;
-  readonly char = 'sprite_player';
+  // Board sprite — replaced by the class's own portrait in Game.applyClass,
+  // so what you picked on the class card is what you play.
+  char = 'sprite_player';
 
   hp: number;
   maxHp: number;

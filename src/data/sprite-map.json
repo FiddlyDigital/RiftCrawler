@@ -87,6 +87,7 @@
 
   "class_architect":     { "sheet": "rogues", "sx": 160, "sy": 160, "sw": 32, "sh": 32 },
   "class_chronomancer":  { "sheet": "rogues", "sx": 0,   "sy": 128, "sw": 32, "sh": 32 },
+  "class_draoi":         { "sheet": "rogues", "sx": 128, "sy": 128, "sw": 32, "sh": 32 },
 
   "patron_morrigan":     { "sheet": "monsters", "sx": 256, "sy": 224, "sw": 32, "sh": 32 },
   "patron_tethra":       { "sheet": "monsters", "sx": 32,  "sy": 336, "sw": 32, "sh": 32 },

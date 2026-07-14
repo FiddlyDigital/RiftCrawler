@@ -81,7 +81,7 @@
   },
   {
     "id": "draoi",
-    "emoji": "npc_fili",
+    "emoji": "class_draoi",
     "name": "An Draoi",
     "tagline": "Sorcery is a bargain paid in blood. A deity will call once you descend.",
     "statChips": ["+10 Max HP", "−2 ATK", "D6 combat dice", "Spells cost % of Max HP", "Q: Wild Surge — until a pact is sworn"],

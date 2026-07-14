@@ -1236,6 +1236,7 @@ export class Game {
     const cls = CLASSES.find(c => c.id === id);
     if (!cls) return;
     cls.apply(this.player);
+    this.player.char = cls.emoji;  // the hero looks like the card you picked
     this.activeClassId = id;
     this.cb.log(`Playing as ${cls.name}: ${cls.tagline}`, 'log-perk', cls.emoji);
     this.pushUI();
