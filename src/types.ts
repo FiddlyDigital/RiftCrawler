@@ -37,6 +37,8 @@ export interface BiomeDef {
   gravityPctBonus: number;
   /** Flavor description shown on the floor-transition banner. */
   desc: string;
+  /** Terrain-effect tile type this biome's floor-piece locks lay down (see {@link SpecialTile}). */
+  terrainType: 'swamp' | 'sacred' | 'ice';
 }
 
 /** One selectable choice within a {@link FloorEventDef}. */

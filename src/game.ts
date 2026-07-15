@@ -340,12 +340,17 @@ export class Game {
     let trapInjected = false;
     let monsterInjected = false;
 
+    // A pending normal boss holds off until the built stack has climbed past
+    // half the field — reaching a boss floor's stairs early no longer skips
+    // it, the fight just waits for the player to build up first.
+    const bossReady = this.pendingBossFloor && this.stackTopRow() <= Math.floor(GameConfig.ROWS / 2);
+
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
         if (cell === 0) return Cell.EMPTY;
 
         // Boss cell — once per boss floor, one guaranteed slot
-        if (this.pendingBossFloor && !bossInjected) {
+        if (bossReady && !bossInjected) {
           bossInjected = true;
           this.pendingBossFloor = false;
           return Cell.BOSS;
@@ -570,18 +575,18 @@ export class Game {
     // Shape-based tile effects on lock
     if (lockedFloorCells.length > 0) {
       if (this.currentType === 'S' || this.currentType === 'L' || this.currentType === 'J') {
-        const tileType =
-          this.currentType === 'S' ? 'swamp' :
-          this.currentType === 'J' ? 'ice' : 'sacred';
+        // The terrain type is a biome trait, not a piece-shape trait — every
+        // biome lays down its own single kind of ground (see biomes.json).
+        const tileType = Biome.forFloor(this.dungeonLevel).terrainType;
         const msgs = { swamp: 'Swamp — monsters take 1 dmg/turn!', sacred: 'Sacred ground — Wait here for bonus heal!', ice: 'Ice — entities slide across!' };
         const icons = { swamp: 'special_swamp', sacred: 'special_sacred', ice: 'special_ice' };
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
               !this.tattooTiles.some(t => t.x === fc.x && t.y === fc.y)) {
-            this.specialTiles.push({ x: fc.x, y: fc.y, type: tileType as SpecialTile['type'] });
+            this.specialTiles.push({ x: fc.x, y: fc.y, type: tileType });
           }
         }
-        this.cb.log(msgs[tileType as keyof typeof msgs]!, 'log-tetris', icons[tileType as keyof typeof icons]);
+        this.cb.log(msgs[tileType], 'log-tetris', icons[tileType]);
       } else if (this.currentType === 'Z') {
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
@@ -620,17 +625,22 @@ export class Game {
     this.spawnBlock();
   }
 
-  // One-time teaching nudge: when the stack climbs near the ceiling, tell the
-  // player that topping out summons Gorgoth — the win condition.
-  private maybeHintGorgoth(): void {
-    if (this.gorgothHintShown || this.gorgothSummoned) return;
+  /** Row index of the highest built floor tile across every column (`GameConfig.ROWS` if the field is empty — row 0 is the field's top). */
+  private stackTopRow(): number {
     let stackTop: number = GameConfig.ROWS;
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) {
         if (this.map[x]![y] === Tile.FLOOR) { if (y < stackTop) stackTop = y; break; }
       }
     }
-    if (stackTop <= 5) {
+    return stackTop;
+  }
+
+  // One-time teaching nudge: when the stack climbs near the ceiling, tell the
+  // player that topping out summons Gorgoth — the win condition.
+  private maybeHintGorgoth(): void {
+    if (this.gorgothHintShown || this.gorgothSummoned) return;
+    if (this.stackTopRow() <= 5) {
       this.gorgothHintShown = true;
       this.cb.log('The stack climbs high — let it top out to summon BRES THE BEAUTIFUL and win the Rift!', 'log-boss', 'ui_warning');
     }

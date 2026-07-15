@@ -7,7 +7,7 @@
   "items": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["id", "name", "minFloor", "tileRgb", "monsterHpMult", "gravityPctBonus", "desc", "moteColor"],
+    "required": ["id", "name", "minFloor", "tileRgb", "monsterHpMult", "gravityPctBonus", "desc", "moteColor", "terrainType"],
     "properties": {
       "id": { "type": "string", "minLength": 1 },
       "name": { "type": "string", "minLength": 1 },
@@ -16,7 +16,8 @@
       "monsterHpMult": { "type": "number" },
       "gravityPctBonus": { "type": "number" },
       "desc": { "type": "string", "minLength": 1 },
-      "moteColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+      "moteColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+      "terrainType": { "type": "string", "enum": ["swamp", "sacred", "ice"] }
     }
   }
 }

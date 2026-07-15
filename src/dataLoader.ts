@@ -373,6 +373,7 @@ export class Biome implements BiomeDef {
   readonly monsterHpMult: number;
   readonly gravityPctBonus: number;
   readonly desc: string;
+  readonly terrainType: 'swamp' | 'sacred' | 'ice';
 
   /** @throws {TypeError} If `raw` is missing a non-empty `id`. */
   constructor(raw: BiomeDef) {
@@ -387,6 +388,7 @@ export class Biome implements BiomeDef {
     this.monsterHpMult = raw.monsterHpMult;
     this.gravityPctBonus = raw.gravityPctBonus;
     this.desc = raw.desc;
+    this.terrainType = raw.terrainType;
   }
 
   // Ordered highest minFloor first (as authored in biomes.json) so `forFloor` can use `.find()`.
