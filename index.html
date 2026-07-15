@@ -64,6 +64,7 @@
         <div id="biome-badge"           style="display:none;margin-top:2px;font-size:9px;color:#26a69a;"></div>
         <div id="ranged-ability-badge"  style="display:none;margin-top:4px;"></div>
         <button id="char-sheet-btn" class="char-sheet-open-btn">📜 Character Sheet</button>
+        <button id="codex-btn" class="char-sheet-open-btn">📖 Codex</button>
       </div>
 
       <!-- Experience + XP Earned -->
@@ -321,6 +322,16 @@
     <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Every effective stat currently on your hero — base, Geasa, Ogham Marks, and stall purchases combined.</p>
     <div id="char-sheet-body" class="char-sheet-body"></div>
     <button class="restart-btn" id="char-sheet-close">Close</button>
+  </div>
+</div>
+
+<!-- Lore codex: every boss/NPC/biome/patron discovered across all runs, persisted across sessions -->
+<div id="codex-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="codex-title">
+  <div class="modal-card char-sheet-card">
+    <div class="modal-title" id="codex-title" style="color:var(--accent-color);font-size:18px;">📖 CODEX</div>
+    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">What you've discovered across every run. Undiscovered entries show as "???" until you meet them.</p>
+    <div id="codex-body" class="char-sheet-body"></div>
+    <button class="restart-btn" id="codex-close">Close</button>
   </div>
 </div>
 

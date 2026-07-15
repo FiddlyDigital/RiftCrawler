@@ -243,6 +243,9 @@ export class Game {
     this.spawnBlock();
     this.updateVisibility();
     this.pushUI();
+    // The starting biome is never "entered" via updateBiome() (that only fires
+    // on a floor transition), so it needs its own codex discovery here.
+    this.cb.onCodexDiscover?.('biome', this.biomeId);
   }
 
   // ── Grid helpers ─────────────────────────────────────────────────────────
@@ -788,6 +791,7 @@ export class Game {
   // UI or callback wiring is needed.
 
   private triggerNpcEncounter(npc: NpcDef, onClosed?: () => void): void {
+    this.cb.onCodexDiscover?.('npc', npc.id);
     let event: FloorEventDef;
 
     if (npc.kind === 'bounty') {
@@ -953,6 +957,7 @@ export class Game {
     this.player.rangedAbility = this.player.spellbook[0] ?? null;
     this.player.rangedCooldown = 0;
     this.storyBeats.push(`swore a pact with ${patron.deity}`);
+    this.cb.onCodexDiscover?.('patron', id);
     this.cb.log(`${patron.name} — ${patron.spells[0]!.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
     this.cb.log(patron.tollDesc, 'log-neutral', patron.char);
     this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#8d6fd4', patron.char);
@@ -1056,6 +1061,7 @@ export class Game {
       this.bossHalfHpTriggered = false;
       this.cb.log(`${bossDef.flavorText} ${bossDef.name} descends!`, 'log-boss', 'ui_warning');
       this.cb.onParticle(tx, ty, 'BOSS', '#ff0000', undefined, 'ui_warning');
+      this.cb.onCodexDiscover?.('boss', bossDef.name);
       // Boss cinematic pause
       this.paused = true;
       this.cb.onBossWarning?.(bossDef, () => { this.paused = false; });
@@ -1244,6 +1250,7 @@ export class Game {
     if (biome.id !== this.biomeId) {
       this.cb.log(`${biome.name} — ${biome.desc}`, 'log-tetris', Game.BIOME_ICON[biome.id] ?? 'tile_stone_a');
       this.storyBeats.push(`delved into ${biome.name}`);
+      this.cb.onCodexDiscover?.('biome', biome.id);
     }
     this.biomeId = biome.id;
     this.biomeMonsterHpMult = biome.monsterHpMult;
@@ -2213,6 +2220,7 @@ export class Game {
 
     this.cb.log('The stack tops out — BRES THE BEAUTIFUL rises to finish his bridge...', 'log-boss', 'ui_warning');
     this.cb.onParticle(gx, 0, 'BRES', '#ff1744', 18, 'sprite_boss_gorgoth');
+    this.cb.onCodexDiscover?.('boss', 'gorgoth');
 
     this.paused = true;
     this.cb.onBossWarning?.(

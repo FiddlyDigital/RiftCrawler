@@ -45,6 +45,7 @@ class GameApp {
   /** True only when the drawer itself paused the game, so closing it doesn't steal control from some other pause source (pause menu, altar, etc.). */
   private drawerPausedGame = false;
   private charSheetPausedGame = false;
+  private codexPausedGame = false;
   private edgeSwipeStartX: number | null = null;
   private drawerSwipeStartX: number | null = null;
 
@@ -104,6 +105,11 @@ class GameApp {
     // Read-only stat totals overlay — pauses like the drawer so reading it is free.
     document.getElementById('char-sheet-btn')?.addEventListener('click', () => this.openCharacterSheet());
     document.getElementById('char-sheet-close')?.addEventListener('click', () => this.closeCharacterSheet());
+
+    // ── Lore codex ──────────────────────────────────────────────────────────
+    // Read-only, cross-run discovery log — pauses like the character sheet.
+    document.getElementById('codex-btn')?.addEventListener('click', () => this.openCodex());
+    document.getElementById('codex-close')?.addEventListener('click', () => this.closeCodex());
 
     // ── Drawer swipe gestures (mobile) ─────────────────────────────────────
     // Edge-swipe in from the right screen edge opens the drawer; swiping right
@@ -179,6 +185,7 @@ class GameApp {
     window.addEventListener('keydown', (e) => {
       if (e.key === 'm' || e.key === 'M') this.toggleMute();
       else if (e.key === 'Escape' && this.ui.isCharacterSheetOpen()) this.closeCharacterSheet();
+      else if (e.key === 'Escape' && this.ui.isCodexOpen()) this.closeCodex();
       else if (e.key === 'Escape' && this.isDrawerOpen()) this.closeDrawer();
       else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') this.togglePauseMenu();
     });
@@ -383,6 +390,25 @@ class GameApp {
     }
   }
 
+  // ── Lore codex ────────────────────────────────────────────────────────────
+
+  private openCodex(): void {
+    this.ui.showCodex();
+    if (!this.manualPaused && !this.game.paused && this.game.player.hp > 0) {
+      this.codexPausedGame = true;
+      this.game.paused = true;
+      this.stopTick();
+    }
+  }
+
+  private closeCodex(): void {
+    this.ui.hideCodex();
+    if (this.codexPausedGame) {
+      this.codexPausedGame = false;
+      if (!this.manualPaused && this.game.player.hp > 0) { this.game.paused = false; this.startTick(); }
+    }
+  }
+
   // ── Audio event router ───────────────────────────────────────────────────
 
   private handleAudio(event: AudioEvent, data?: number): void {
@@ -427,6 +453,7 @@ class GameApp {
       onHitStop: (frames)                           => this.renderer.triggerHitStop(frames),
       onRingPulse: (x, y, rgb)                      => this.renderer.triggerRing(x, y, rgb),
       onBeam: (x, rgb)                              => this.renderer.triggerBeam(x, rgb),
+      onCodexDiscover: (kind, id)                   => StorageService.recordCodexDiscovery(kind, id),
       onAudio:  (event, data)        => this.handleAudio(event, data),
       onBlockLand: (cells)           => this.renderer.spawnLandingDust(cells),
       onCombo:     (mult)            => this.renderer.showCombo(mult),

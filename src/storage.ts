@@ -1,4 +1,4 @@
-import type { RunRecord, RunStats, GhostRecord } from './types';
+import type { RunRecord, RunStats, GhostRecord, CodexKind, CodexState } from './types';
 import type { Game } from './game';
 import { Balance } from './balance';
 
@@ -9,6 +9,12 @@ const MUTE_KEY = 'riftcrawler_mute';
 const VOLUME_KEY = 'riftcrawler_volume';
 const GHOSTS_KEY = 'riftcrawler_ghosts_v1';
 const MOTION_KEY = 'riftcrawler_reduced_motion';
+const CODEX_KEY = 'riftcrawler_codex_v1';
+
+/** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
+const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
+  boss: 'bosses', npc: 'npcs', biome: 'biomes', patron: 'patrons',
+};
 
 interface StoredData {
   highXp: number;
@@ -159,5 +165,39 @@ export class StorageService {
       const raw = localStorage.getItem(MOTION_KEY);
       return raw === null ? null : raw === '1';
     } catch { return null; }
+  }
+
+  /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */
+  static loadCodex(): CodexState {
+    try {
+      const raw = localStorage.getItem(CODEX_KEY);
+      if (!raw) return { bosses: [], npcs: [], biomes: [], patrons: [] };
+      const parsed = JSON.parse(raw) as Partial<CodexState>;
+      return {
+        bosses: parsed.bosses ?? [], npcs: parsed.npcs ?? [],
+        biomes: parsed.biomes ?? [], patrons: parsed.patrons ?? [],
+      };
+    } catch { return { bosses: [], npcs: [], biomes: [], patrons: [] }; }
+  }
+
+  /**
+   * Marks `id` as discovered under `kind`, if it isn't already (idempotent —
+   * safe to call on every encounter, not just the first).
+   * @throws {TypeError} If `kind` isn't a valid {@link CodexKind} or `id` is not a non-empty string.
+   */
+  static recordCodexDiscovery(kind: CodexKind, id: string): CodexState {
+    if (!Object.prototype.hasOwnProperty.call(CODEX_LIST_KEY, kind)) {
+      throw new TypeError('StorageService.recordCodexDiscovery: "kind" must be a valid CodexKind');
+    }
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new TypeError('StorageService.recordCodexDiscovery: "id" must be a non-empty string');
+    }
+    const state = StorageService.loadCodex();
+    const listKey = CODEX_LIST_KEY[kind];
+    if (!state[listKey].includes(id)) {
+      state[listKey] = [...state[listKey], id];
+      try { localStorage.setItem(CODEX_KEY, JSON.stringify(state)); } catch { /* quota */ }
+    }
+    return state;
   }
 }

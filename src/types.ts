@@ -398,6 +398,17 @@ export interface GhostRecord {
   date: string;
 }
 
+/** The lore-codex category a discovery belongs to. */
+export type CodexKind = 'boss' | 'npc' | 'biome' | 'patron';
+
+/** Persisted, cross-run record of which bosses/NPCs/biomes/patrons a player has discovered. Bosses are keyed by name (no `id` field on `BossDef`); the rest by `id`. */
+export interface CodexState {
+  bosses: string[];
+  npcs: string[];
+  biomes: string[];
+  patrons: string[];
+}
+
 /** The full set of host-provided hooks a `Game` instance uses to reach the UI/renderer/audio layers. */
 export interface GameCallbacks {
   log: (text: string, cls: LogClass, icon?: string) => void;
@@ -415,6 +426,8 @@ export interface GameCallbacks {
   onRingPulse?: (x: number, y: number, rgb: string) => void;
   /** Vertical column-of-light flourish at column `x` (level-ups, and NPC/tattoo-artist/altar departures). `rgb` defaults to the level-up gold. */
   onBeam?: (x: number, rgb?: string) => void;
+  /** A boss/NPC/biome/patron was encountered for the first time — the host persists it to the lore codex. */
+  onCodexDiscover?: (kind: CodexKind, id: string) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, close: () => void) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;

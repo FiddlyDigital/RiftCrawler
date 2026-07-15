@@ -605,6 +605,17 @@ canvas {
 }
 .char-sheet-row span:first-child { color: #999; }
 .char-sheet-row span:last-child { font-weight: bold; text-align: right; white-space: nowrap; }
+
+/* ── Codex rows: icon + stacked name/description, not the label/value layout above ── */
+.char-sheet-row.codex-row { justify-content: flex-start; align-items: flex-start; }
+.codex-row div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.codex-row strong { font-size: 11px; }
+/* Beats .char-sheet-row span:last-child's nowrap/bold/right-align — the
+   description span here is always its parent div's last child too. */
+.codex-row div span:last-child { font-weight: normal; text-align: left; white-space: normal; color: var(--text-color); font-size: 10px; }
+.codex-row.codex-undiscovered { opacity: 0.45; }
+.codex-row.codex-undiscovered strong { color: #888; letter-spacing: 2px; }
+
 #altar-modal .modifier-btn:hover {
   border-color: #b98fc4;
 }

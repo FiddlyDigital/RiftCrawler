@@ -1701,4 +1701,35 @@ describe('storage', () => {
     expect(() => StorageService.saveMute(true)).not.toThrow();
     expect(() => StorageService.loadMute()).not.toThrow();
   });
+
+  it('StorageService.loadCodex defaults to all-empty lists with nothing stored', () => {
+    expect(StorageService.loadCodex()).toEqual({ bosses: [], npcs: [], biomes: [], patrons: [] });
+  });
+
+  it('StorageService.recordCodexDiscovery adds an id under the right kind and persists it', () => {
+    StorageService.recordCodexDiscovery('boss', 'Oilliphéist');
+    StorageService.recordCodexDiscovery('npc', 'fionnuala');
+    const codex = StorageService.loadCodex();
+    expect(codex.bosses).toEqual(['Oilliphéist']);
+    expect(codex.npcs).toEqual(['fionnuala']);
+    expect(codex.biomes).toEqual([]);
+    expect(codex.patrons).toEqual([]);
+  });
+
+  it('StorageService.recordCodexDiscovery is idempotent — a repeat id is not duplicated', () => {
+    StorageService.recordCodexDiscovery('biome', 'cavern');
+    StorageService.recordCodexDiscovery('biome', 'cavern');
+    expect(StorageService.loadCodex().biomes).toEqual(['cavern']);
+  });
+
+  it('StorageService.recordCodexDiscovery throws on an invalid kind or empty id', () => {
+    expect(() => StorageService.recordCodexDiscovery('invalid' as unknown as 'boss', 'x')).toThrow(TypeError);
+    expect(() => StorageService.recordCodexDiscovery('patron', '')).toThrow(TypeError);
+  });
+
+  it('corrupted codex JSON in storage falls back to defaults instead of throwing', () => {
+    localStorage.setItem('riftcrawler_codex_v1', 'not valid json{');
+    expect(() => StorageService.loadCodex()).not.toThrow();
+    expect(StorageService.loadCodex()).toEqual({ bosses: [], npcs: [], biomes: [], patrons: [] });
+  });
 });
