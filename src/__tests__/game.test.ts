@@ -659,6 +659,22 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(game.map[3]![10]).toBe(Tile.FLOOR);                  // board preserved, not reset
   });
 
+  it('summonGorgoth brings a floor-appropriate Fomorian escort, not scaled to match him', () => {
+    // Escorts land beside him at row 0, which real topped-out boards have
+    // floor tiles at (that's what caused the overflow); a fresh test board
+    // doesn't, so give it one.
+    for (let x = 0; x < 10; x++) game.map[x]![0] = Tile.FLOOR;
+    game.summonGorgoth();
+    const escort = game.monsters.filter(m => !m.isGorgoth);
+    expect(escort.length).toBeGreaterThan(0);
+    expect(escort.length).toBeLessThanOrEqual(3);
+    for (const m of escort) {
+      expect(m.isBoss).toBe(false);
+      expect(m.y).toBe(0);                                  // arrives beside him at the top
+      expect(m.maxHp).toBeLessThan(Balance.CONFIG.gorgoth.maxHp);  // a raiding party, not a second boss
+    }
+  });
+
   it('Gorgoth slowly descends toward the hero, phasing through terrain', () => {
     game.summonGorgoth();
     game.monsters = game.monsters.filter(m => m.isGorgoth); // isolate the boss

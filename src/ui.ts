@@ -536,7 +536,7 @@ export class UIManager {
     const bossRows = [
       ...Boss.ALL.map(b => this.codexRow(b.char, b.name, `${b.flavorText}${b.deathLine ? ` ${b.deathLine}` : ''}`, codex.bosses.includes(b.name))),
       this.codexRow('sprite_boss_gorgoth', 'Bres the Beautiful',
-        'Beautiful and merciless, returned from the depths to complete the causeway home.',
+        'The bridge home is finished — and he means to be first across it.',
         codex.bosses.includes('gorgoth')),
     ].join('');
 

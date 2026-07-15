@@ -2195,6 +2195,20 @@ export class Game {
     boss.isGorgoth = true;
     this.monsters.push(boss);
 
+    // Fomorian escort — an invasion party at his side, scaled the same as any
+    // other floor monster (not buffed to match Bres) so it reads as a raiding
+    // party, not a second boss.
+    let escorts = 0;
+    for (const [dx, dy] of [[-2, 0], [-1, 0], [1, 0], [2, 0]] as Array<[number, number]>) {
+      if (escorts >= 3) break;
+      const ex = gx + dx, ey = 0 + dy;
+      if (ex >= 0 && ex < GameConfig.COLS && ey >= 0 && ey < GameConfig.ROWS && this.isValidMove(ex, ey) && !this.getMonsterAt(ex, ey)) {
+        this.spawnMonster(this.getRandomMonsterKey(), ex, ey);
+        escorts++;
+      }
+    }
+    if (escorts > 0) this.cb.log('Fomorian raiders pour across the finished causeway behind him!', 'log-boss', 'sprite_boss_gorgoth');
+
     // Half-HP: roar and raise two of the Returned beside him — but only the
     // first time he crosses the threshold this run (persists across summons).
     this.activeBossOnHalfHp = (g) => {
@@ -2218,13 +2232,13 @@ export class Game {
       }
     }
 
-    this.cb.log('The stack tops out — BRES THE BEAUTIFUL rises to finish his bridge...', 'log-boss', 'ui_warning');
+    this.cb.log('The causeway is complete! Bres the Beautiful now leads the charge to invade the Emerald Isle...', 'log-boss', 'ui_warning');
     this.cb.onParticle(gx, 0, 'BRES', '#ff1744', 18, 'sprite_boss_gorgoth');
     this.cb.onCodexDiscover?.('boss', 'gorgoth');
 
     this.paused = true;
     this.cb.onBossWarning?.(
-      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: Balance.CONFIG.gorgoth.xpReward, flavorText: 'Beautiful and merciless, returned from the depths to complete the causeway home.' },
+      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: Balance.CONFIG.gorgoth.xpReward, flavorText: 'The bridge home is finished — and he means to be first across it.' },
       () => { this.paused = false; },
     );
     this.pushUI();
