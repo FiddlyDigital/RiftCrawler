@@ -168,12 +168,10 @@ class GameApp {
       }
     });
 
-    this.ui.showStart(StorageService.getHighXp());
-
-    document.getElementById('start-btn')!.addEventListener('click', () => {
+    // The Begin Descent button itself is wired inside <start-modal>.
+    this.ui.showStart(StorageService.getHighXp(), () => {
       audio.init(); // unlock AudioContext on first user gesture
       if (StorageService.loadMute()) audio.toggle();
-      this.ui.hideStart();
       this.launchWithModifier(() => {
         this.game.paused = false;
         this.startTick();
@@ -183,7 +181,6 @@ class GameApp {
       });
     });
 
-    document.getElementById('restart-btn')!.addEventListener('click', () => this.restartRun());
     document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePauseMenu());
 
     // Keyboard: M = mute, Esc/P = pause menu
@@ -479,7 +476,8 @@ class GameApp {
           date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
         });
 
-        this.ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, stats, story);
+        // The Try Again button itself is wired inside <game-over-modal>.
+        this.ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story);
         this.ui.updateBestScore(highXp);
       },
 
@@ -489,7 +487,7 @@ class GameApp {
         audio.playLevelUp();
         const { highXp, history } = StorageService.recordRunEnd(this.game, 'Defeated Bres the Beautiful', stats);
 
-        this.ui.showVictory(floor, totalXpEarned, highXp, history, stats, story);
+        this.ui.showVictory(floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story);
         this.ui.updateBestScore(highXp);
       },
 

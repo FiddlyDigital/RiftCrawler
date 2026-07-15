@@ -10,6 +10,8 @@ import type { OfferModal } from './components/offer-modal';
 import type { ShopModal } from './components/shop-modal';
 import type { CharSheetModal } from './components/char-sheet-modal';
 import type { CodexModal } from './components/codex-modal';
+import type { GameOverModal } from './components/game-over-modal';
+import type { StartModal } from './components/start-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -20,7 +22,8 @@ import type { RunRecord } from './types';
  */
 export class UIManager {
   private readonly logPanel: HTMLElement;
-  private readonly modal: HTMLElement;
+  private readonly modal: GameOverModal;
+  private readonly startModal: StartModal;
   private readonly modifierModal: ModifierModal;
   private readonly bossWarningModal: BossWarningModal;
   private readonly classModal: ClassModal;
@@ -40,7 +43,8 @@ export class UIManager {
 
   constructor() {
     this.logPanel          = document.getElementById('log-panel')!;
-    this.modal             = document.getElementById('game-over-modal')!;
+    this.modal             = document.querySelector('game-over-modal')!;
+    this.startModal        = document.querySelector('start-modal')!;
     this.modifierModal     = document.querySelector('modifier-modal')!;
     this.bossWarningModal  = document.querySelector('boss-warning-modal')!;
     this.classModal        = document.querySelector('class-modal')!;
@@ -65,11 +69,6 @@ export class UIManager {
       hudGold:          document.getElementById('hud-gold-num')!,
       hudNextPreview:   document.getElementById('hud-next-preview')!,
       gold:             document.getElementById('stat-gold')!,
-      deathTitle:       document.getElementById('death-title')!,
-      deathReason:      document.getElementById('death-reason')!,
-      finalFloor:       document.getElementById('final-floor')!,
-      finalScore:       document.getElementById('final-score')!,
-      highScore:        document.getElementById('high-score')!,
       bestScore:        document.getElementById('best-score')!,
       xpBar:            document.getElementById('xp-bar')!,
       xpLabel:          document.getElementById('xp-label')!,
@@ -78,17 +77,12 @@ export class UIManager {
       brandPanel:       document.getElementById('brand-panel')!,
       brandCount:       document.getElementById('brand-count')!,
       statusRow:        document.getElementById('status-row')!,
-      runHistory:       document.getElementById('run-history')!,
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
       heldPreview:      document.getElementById('held-preview-box')!,
       pieceStateBadge:  document.getElementById('piece-state-badge')!,
-      runStatsGrid:     document.getElementById('run-stats-grid')!,
-      runLogFull:       document.getElementById('run-log-full')!,
-      shareContainer:   document.getElementById('share-container')!,
-      shareText:        document.getElementById('share-text')!,
     };
   }
 
@@ -247,113 +241,17 @@ export class UIManager {
   }
 
   /** Shows the death screen with the run's final stats and history. */
-  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
-    this.els['deathTitle']!.textContent  = title;
-    this.els['deathReason']!.textContent = reason;
-    this.modal.querySelector('.modal-card')?.classList.remove('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
+  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string): void {
+    this.modal.showDeath(title, reason, floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story);
   }
 
   /** Shows the victory screen (Bres defeated) with the run's final stats and history. */
-  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
-    this.els['deathTitle']!.innerHTML   = `${SpriteService.iconHTML('item_trophy', 16)}BRES VANQUISHED`;
-    this.els['deathReason']!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
-    this.modal.querySelector('.modal-card')?.classList.add('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
-  }
-
-  /** Shared body for {@link showDeath}/{@link showVictory}: fills in the stats grid, share text, run log, and history table. */
-  private populateEndModal(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
-    this.els['finalFloor']!.textContent  = String(floor);
-    this.els['finalScore']!.textContent  = String(totalXpEarned);
-    this.els['highScore']!.textContent   = String(highXp);
-
-    // Short narrative recap of the run's notable moments
-    const storyEl = document.getElementById('run-story');
-    if (storyEl) {
-      storyEl.textContent = story ?? '';
-      storyEl.style.display = story ? '' : 'none';
-    }
-
-    // Run stats grid
-    if (stats) {
-      this.els['runStatsGrid']!.innerHTML = `
-        <div class="run-stats-grid">
-          <div class="stat-cell">${SpriteService.iconHTML('status_poison', 14)}<b>${stats.monstersKilled}</b><br><span>Monsters</span></div>
-          <div class="stat-cell">${SpriteService.iconHTML('sprite_boss_boneking', 14)}<b>${stats.bossesKilled}</b><br><span>Bosses</span></div>
-          <div class="stat-cell"><span class="brick-icon"></span><b>${stats.linesCleared}</b><br><span>Lines</span></div>
-          <div class="stat-cell">${SpriteService.iconHTML('fx_impact', 14)}<b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
-          <div class="stat-cell">${SpriteService.iconHTML('item_heart', 14)}<b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
-        </div>`;
-      const shareStr = `Fl.${floor} · ${stats.monstersKilled} kills · ${stats.linesCleared} lines · Best combo ×${stats.biggestCombo + 1} · ${totalXpEarned.toLocaleString()} XP`;
-      (this.els['shareText'] as HTMLTextAreaElement).value = shareStr;
-      this.els['shareContainer']!.style.display = '';
-      const copyBtn = document.getElementById('copy-share-btn');
-      if (copyBtn) {
-        copyBtn.onclick = () => {
-          navigator.clipboard?.writeText(shareStr).catch(() => {
-            (this.els['shareText'] as HTMLTextAreaElement).select();
-            document.execCommand('copy');
-          });
-          copyBtn.textContent = 'Copied!';
-          setTimeout(() => { copyBtn.textContent = 'Copy Summary'; }, 1800);
-        };
-      }
-    } else {
-      this.els['runStatsGrid']!.innerHTML = '';
-      this.els['shareContainer']!.style.display = 'none';
-    }
-
-    // Full run log — scrolling box + copy/download
-    this.els['runLogFull']!.innerHTML = this.fullLog.map(e =>
-      `<div class="log-entry ${e.cls}">${e.icon ? `${SpriteService.iconHTML(e.icon, 13, 'sprite-icon log-icon')}${HtmlUtils.escapeHtml(e.text)}` : HtmlUtils.escapeHtml(e.text)}</div>`
-    ).join('') || '<div style="color:#555;font-size:9px">No events recorded.</div>';
-    const logText = this.fullLog.map(e => e.text).join('\n');
-    const copyLogBtn = document.getElementById('copy-log-btn');
-    if (copyLogBtn) {
-      copyLogBtn.onclick = () => {
-        navigator.clipboard?.writeText(logText).catch(() => {
-          const ta = document.createElement('textarea');
-          ta.value = logText;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          ta.remove();
-        });
-        copyLogBtn.textContent = 'Copied!';
-        setTimeout(() => { copyLogBtn.textContent = '📋 Copy Log'; }, 1800);
-      };
-    }
-    const downloadLogBtn = document.getElementById('download-log-btn');
-    if (downloadLogBtn) {
-      downloadLogBtn.onclick = () => {
-        const blob = new Blob([logText], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `causeway-to-eriu-run-log-fl${floor}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-      };
-    }
-
-    // Run history table
-    const lines = history.map((r, i) =>
-      `<div class="history-row${i === 0 ? ' history-latest' : ''}">
-        <span>${r.date}</span><span>Fl.${r.floor}</span>
-        <span>${r.totalXpEarned.toLocaleString()}</span><span>Lv.${r.playerLevel}</span>
-        <span>${r.cause?.split(' ').slice(0, 2).join(' ') ?? ''}</span>
-       </div>`
-    ).join('');
-    this.els['runHistory']!.innerHTML = lines || '<div style="color:#555;font-size:9px">No runs yet.</div>';
-
-    this.modal.style.display = 'flex';
+  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string): void {
+    this.modal.showVictory(floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story);
   }
 
   /** Hides the death/victory modal. */
-  public hideDeath(): void { this.modal.style.display = 'none'; }
+  public hideDeath(): void { this.modal.hide(); }
 
   /** Shows the fatal-error recovery modal with the crash message. */
   public showCrash(message: string): void {
@@ -510,15 +408,13 @@ export class UIManager {
   }
 
   /** Shows the start-screen modal. */
-  public showStart(highScore: number): void {
-    const el = document.getElementById('start-best');
-    if (el) el.textContent = highScore > 0 ? `Best run: ${highScore.toLocaleString()} XP` : '';
-    document.getElementById('start-modal')!.style.display = 'flex';
+  public showStart(highScore: number, onBegin: () => void): void {
+    this.startModal.showStart(highScore, onBegin);
   }
 
   /** Hides the start-screen modal. */
   public hideStart(): void {
-    document.getElementById('start-modal')!.style.display = 'none';
+    this.startModal.hide();
   }
 
   /** Shows the pause menu with the current sound/motion/volume state and button handlers. */

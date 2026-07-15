@@ -11,3 +11,5 @@ import './offer-modal';
 import './shop-modal';
 import './char-sheet-modal';
 import './codex-modal';
+import './game-over-modal';
+import './start-modal';
