@@ -41,7 +41,7 @@ export class Renderer {
   private dropTrails: Array<{ x: number; fromY: number; toY: number; color: string; frames: number; maxFrames: number }> = [];
   private deathFlashes: Array<{ x: number; y: number; char: string; frames: number; maxFrames: number }> = [];
   private rings: Array<{ x: number; y: number; rgb: string; frames: number; maxFrames: number }> = [];
-  private beam: { x: number; frames: number; maxFrames: number } | null = null;
+  private beam: { x: number; rgb: string; frames: number; maxFrames: number } | null = null;
   private moteColor = '#cfc6b0';
   private readonly flashCanvas = document.createElement('canvas');  // scratch for white death-flash tinting
   // Logical (CSS-pixel) canvas size — everything in draw() is written in
@@ -156,10 +156,15 @@ export class Renderer {
     this.rings.push({ x: gx, y: gy, rgb, frames, maxFrames: frames });
   }
 
-  /** Vertical column of light on the player (level-ups). No-op under reduced motion. */
-  public triggerBeam(gx: number, frames = 26): void {
+  /**
+   * Vertical column of light at grid column `gx` — level-ups, and the
+   * departure flourish for a bumped NPC/ghost/tattoo-artist/altar tile.
+   * `rgb` themes the beam to the occasion (defaults to the level-up gold).
+   * No-op under reduced motion.
+   */
+  public triggerBeam(gx: number, rgb = '217,164,65', frames = 26): void {
     if (this.reducedMotion) return;
-    this.beam = { x: gx, frames, maxFrames: frames };
+    this.beam = { x: gx, rgb, frames, maxFrames: frames };
   }
 
   /** Small dust puff at each cell a locked piece landed on. */
@@ -422,7 +427,12 @@ export class Renderer {
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
         ctx.lineWidth = 1;
 
-        const spriteKey = CELL_SPRITE[cell];
+        // The Cell.NPC placeholder resolves to whichever archetype was rolled
+        // at spawn, so the falling preview already shows the same portrait
+        // it will lock in as, rather than a generic sidhe icon that swaps.
+        const spriteKey = cell === Cell.NPC
+          ? (game.pendingNpcId && NPCS.find(n => n.id === game.pendingNpcId)?.char) || CELL_SPRITE[cell]
+          : CELL_SPRITE[cell];
         if (spriteKey) {
           const inset = 2;
           this.drawSprite(spriteKey, tx * TS + inset, ty * TS + inset, TS - 2 * inset, TS - 2 * inset);
@@ -673,14 +683,14 @@ export class Renderer {
       if (r.frames <= 0) this.rings.splice(i, 1);
     }
 
-    // ── Level-up column of light ─────────────────────────────────────────
+    // ── Column of light (level-ups; NPC/ghost/tattoo-artist/altar departures) ──
     if (this.beam) {
       const a = 0.4 * (this.beam.frames / this.beam.maxFrames);
       const bx = this.beam.x * TS;
       const grad = ctx.createLinearGradient(bx, 0, bx + TS, 0);
-      grad.addColorStop(0, 'rgba(217,164,65,0)');
-      grad.addColorStop(0.5, `rgba(255,228,150,${a})`);
-      grad.addColorStop(1, 'rgba(217,164,65,0)');
+      grad.addColorStop(0, `rgba(${this.beam.rgb},0)`);
+      grad.addColorStop(0.5, `rgba(${this.beam.rgb},${a})`);
+      grad.addColorStop(1, `rgba(${this.beam.rgb},0)`);
       ctx.fillStyle = grad;
       ctx.fillRect(bx - TS * 0.2, 0, TS * 1.4, this.logicalH);
       this.beam.frames--;
@@ -858,6 +868,7 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.BOSS]:           'ui_warning',
   [Cell.ALTAR]:          'tile_altar',
   [Cell.NPC]:            'npc_sidhe',
+  [Cell.GHOST]:          'sprite_boss_wraith',
   [Cell.TRAP_SPIKE]:     'trap_spike',
   [Cell.TRAP_SMOKE]:     'trap_smoke',
   [Cell.TRAP_TELEPORT]:  'trap_teleport',

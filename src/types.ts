@@ -411,7 +411,8 @@ export interface GameCallbacks {
   onMonsterDeath?: (x: number, y: number, char: string) => void;
   onHitStop?: (frames: number) => void;
   onRingPulse?: (x: number, y: number, rgb: string) => void;
-  onBeam?: (x: number) => void;
+  /** Vertical column-of-light flourish at column `x` (level-ups, and NPC/tattoo-artist/altar departures). `rgb` defaults to the level-up gold. */
+  onBeam?: (x: number, rgb?: string) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
   onOpenShop?: (stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, close: () => void) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;

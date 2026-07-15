@@ -170,6 +170,12 @@ export class Game {
   /** Caps wandering-NPC tiles per floor. */
   private npcTilesSpawnedThisFloor = 0;
   /**
+   * The specific NPC archetype rolled for the falling piece's `Cell.NPC` cell
+   * (if any), decided at spawn so the falling preview shows the same portrait
+   * it locks in as, rather than a generic placeholder that changes on lock.
+   */
+  public pendingNpcId: string | null = null;
+  /**
    * A vengeance bounty accepted from an NPC — persists across floors (no
    * per-floor reset) until the named boss falls, whenever/wherever that is.
    */
@@ -315,6 +321,7 @@ export class Game {
     const { cursed, blessed } = this.rollPieceCurseState(Math.random());
     this.currentCursed  = cursed;
     this.currentBlessed = blessed;
+    this.pendingNpcId = null;
 
     let stairsInjected = false;
     let bossInjected = false;
@@ -362,6 +369,7 @@ export class Game {
             && Math.random() < Balance.CONFIG.spawnRates.npcChance) {
           npcInjected = true;
           this.npcTilesSpawnedThisFloor++;
+          this.pendingNpcId = Npc.random().id;
           return Cell.NPC;
         }
         // This floor's ghost haunting (rolled at floor start) — a modest
@@ -512,7 +520,10 @@ export class Game {
           this.altarTiles.push({ x: tx, y: ty, tier });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.NPC) {
-          const npc = Npc.random();
+          // Reuse the archetype rolled at spawn so the locked NPC matches the
+          // portrait already shown in the falling-piece preview.
+          const npc = (this.pendingNpcId && NPCS.find(n => n.id === this.pendingNpcId)) || Npc.random();
+          this.pendingNpcId = null;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1c2418';
           this.npcTiles.push({ x: tx, y: ty, npcId: npc.id });
@@ -1572,6 +1583,7 @@ export class Game {
     if (this.isTattooTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
       this.tattooTiles = this.tattooTiles.filter(t => !(t.x === nx && t.y === ny));
+      this.cb.onBeam?.(nx, '217,164,65');  // beams away in a column of gold light
       if (this.player.brandsCapped) {
         this.cb.log('Your body bears its fifth and final Ogham Mark — the Tattoo Artist has nothing left to offer.', 'log-neutral', 'tile_merchant');
       } else {
@@ -1585,6 +1597,7 @@ export class Game {
     if (altar) {
       this.player.x = nx; this.player.y = ny;
       this.altarTiles = this.altarTiles.filter(a => a !== altar);
+      this.cb.onBeam?.(nx, Colors.forTier(altar.tier).rgb);  // beams away in its tier's light
       this.openAltar(altar.tier);
       return;
     }
@@ -1594,7 +1607,9 @@ export class Game {
     if (npcTile) {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
-      if (npcTile.npcId === '__ghost__') {
+      const isGhost = npcTile.npcId === '__ghost__';
+      this.cb.onBeam?.(nx, isGhost ? '176,196,222' : '89,159,124');  // beams away, spectral or fae-green
+      if (isGhost) {
         this.triggerGhostEncounter();
         return;
       }

@@ -426,7 +426,7 @@ class GameApp {
       onMonsterDeath: (x, y, char)                  => { this.renderer.flashDeath(x, y, char); this.renderer.spawnBurst(x, y, 3, '#9aa08a'); },
       onHitStop: (frames)                           => this.renderer.triggerHitStop(frames),
       onRingPulse: (x, y, rgb)                      => this.renderer.triggerRing(x, y, rgb),
-      onBeam: (x)                                   => this.renderer.triggerBeam(x),
+      onBeam: (x, rgb)                              => this.renderer.triggerBeam(x, rgb),
       onAudio:  (event, data)        => this.handleAudio(event, data),
       onBlockLand: (cells)           => this.renderer.spawnLandingDust(cells),
       onCombo:     (mult)            => this.renderer.showCombo(mult),
