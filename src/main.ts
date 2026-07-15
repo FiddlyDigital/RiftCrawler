@@ -1,4 +1,5 @@
 import './style.css';
+import './components';
 import { Game, GameMath } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
@@ -61,9 +62,9 @@ class GameApp {
     // A single safety net for the tick loop, the render loop, and anything else
     // (input handlers, async work) that throws uncaught — reports once and
     // shows a recovery modal rather than leaving a frozen game with no explanation.
+    // The reload button itself is wired inside <crash-modal>.
     window.addEventListener('error', (e) => this.handleFatalError(e.error ?? e.message, 'window'));
     window.addEventListener('unhandledrejection', (e) => this.handleFatalError(e.reason, 'promise'));
-    document.getElementById('crash-reload')?.addEventListener('click', () => location.reload());
 
     // ── Settings ───────────────────────────────────────────────────────────
     this.soundOn = !StorageService.loadMute();

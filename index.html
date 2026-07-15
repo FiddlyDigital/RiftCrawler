@@ -216,14 +216,7 @@
 </div>
 
 <!-- Crash recovery -->
-<div id="crash-modal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="crash-title">
-  <div class="modal-card">
-    <div class="modal-title" id="crash-title" style="color:var(--hp-color);">⚠ SOMETHING WENT WRONG</div>
-    <p style="color:#888;margin:5px 0 10px 0;">An unexpected error occurred and this run can't safely continue. Reloading is the safest way to keep playing — your high score and run history are saved separately and won't be lost.</p>
-    <p id="crash-detail" style="color:#666;font-size:10px;font-family:monospace;margin:8px 0;word-break:break-word;"></p>
-    <button class="restart-btn" id="crash-reload">🔄 Reload Game</button>
-  </div>
-</div>
+<crash-modal id="crash-modal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="crash-title"></crash-modal>
 
 <!-- Game Over modal -->
 <div id="game-over-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="death-title">
@@ -271,16 +264,7 @@
 </div>
 
 <!-- Boss warning cinematic -->
-<div id="boss-warning-modal" class="modal-overlay" role="dialog" aria-modal="true">
-  <div id="boss-warning-card">
-    <div id="boss-warning-emoji" style="font-size:52px;line-height:1;margin-bottom:8px;"></div>
-    <div id="boss-warning-name" class="modal-title" style="color:#c3272a;font-size:22px;"></div>
-    <div id="boss-warning-flavor" style="color:#888;font-size:11px;margin-top:8px;font-style:italic;max-width:280px;line-height:1.4;"></div>
-    <div id="boss-countdown-track" style="width:80%;margin:16px auto 0;background:#1a0000;height:3px;border-radius:2px;">
-      <div id="boss-countdown-bar" style="height:100%;background:#c3272a;width:100%;"></div>
-    </div>
-  </div>
-</div>
+<boss-warning-modal id="boss-warning-modal" class="modal-overlay" role="dialog" aria-modal="true"></boss-warning-modal>
 
 <!-- Class selection modal -->
 <div id="class-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="class-title">
@@ -346,19 +330,7 @@
 </div>
 
 <!-- Pause / settings menu -->
-<div id="pause-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
-  <div class="modal-card" style="max-width:300px;">
-    <div class="modal-title" id="pause-title" style="color:var(--accent-color);">⏸ PAUSED</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
-      <button class="restart-btn" id="pause-resume" style="font-size:15px;letter-spacing:1px;">▶ Resume</button>
-      <button class="settings-row" id="pause-mute"><span>🔊 Sound</span><span id="pause-mute-state" class="settings-val">On</span></button>
-      <button class="settings-row" id="pause-volume"><span>🔉 Volume</span><span id="pause-volume-state" class="settings-val">100%</span></button>
-      <button class="settings-row" id="pause-motion"><span>🎬 Reduced Motion</span><span id="pause-motion-state" class="settings-val">Off</span></button>
-      <button class="restart-btn" id="pause-restart" style="background-color:#3a1414;color:#ffab91;margin-top:4px;">↻ New Run</button>
-    </div>
-    <p class="kbd-only" style="color:#444;font-size:8px;margin-top:10px;">Esc or P to resume · M mutes</p>
-  </div>
-</div>
+<pause-modal id="pause-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title"></pause-modal>
 
 <!-- Gamepad indicator -->
 <div id="gamepad-indicator" style="display:none;text-align:center;font-size:10px;color:#888;padding:4px 0;">🎮 Controller active</div>

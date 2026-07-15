@@ -2,6 +2,9 @@ import { SHAPES } from './config';
 import { SpriteService, HtmlUtils } from './sprites';
 import { Boss, Npc, Biome, Patron } from './content';
 import { StorageService } from './storage';
+import type { CrashModal } from './components/crash-modal';
+import type { PauseModal, PauseMenuState, PauseMenuHandlers } from './components/pause-modal';
+import type { BossWarningModal } from './components/boss-warning-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -14,12 +17,13 @@ export class UIManager {
   private readonly logPanel: HTMLElement;
   private readonly modal: HTMLElement;
   private readonly modifierModal: HTMLElement;
-  private readonly bossWarningModal: HTMLElement;
+  private readonly bossWarningModal: BossWarningModal;
   private readonly classModal: HTMLElement;
   private readonly floorEventModal: HTMLElement;
   private readonly inspectTooltip: HTMLElement;
   private readonly altarModal: HTMLElement;
-  private readonly crashModal: HTMLElement;
+  private readonly crashModal: CrashModal;
+  private readonly pauseModal: PauseModal;
   private readonly charSheetModal: HTMLElement;
   private readonly codexModal: HTMLElement;
   private readonly els: Record<string, HTMLElement>;
@@ -32,12 +36,13 @@ export class UIManager {
     this.logPanel          = document.getElementById('log-panel')!;
     this.modal             = document.getElementById('game-over-modal')!;
     this.modifierModal     = document.getElementById('modifier-modal')!;
-    this.bossWarningModal  = document.getElementById('boss-warning-modal')!;
+    this.bossWarningModal  = document.querySelector('boss-warning-modal')!;
     this.classModal        = document.getElementById('class-modal')!;
     this.floorEventModal   = document.getElementById('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.altarModal        = document.getElementById('altar-modal')!;
-    this.crashModal        = document.getElementById('crash-modal')!;
+    this.crashModal        = document.querySelector('crash-modal')!;
+    this.pauseModal        = document.querySelector('pause-modal')!;
     this.charSheetModal    = document.getElementById('char-sheet-modal')!;
     this.codexModal        = document.getElementById('codex-modal')!;
     this.els = {
@@ -347,9 +352,7 @@ export class UIManager {
 
   /** Shows the fatal-error recovery modal with the crash message. */
   public showCrash(message: string): void {
-    const detail = document.getElementById('crash-detail');
-    if (detail) detail.textContent = message;
-    this.crashModal.style.display = 'flex';
+    this.crashModal.showCrash(message);
   }
 
   /** Shows the run-start modifier (Rift Curse) picker. */
@@ -409,22 +412,7 @@ export class UIManager {
 
   /** Shows the boss-warning cinematic banner for ~1.8s, then calls `onDone`. */
   public showBossWarning(boss: BossDef, onDone: () => void): void {
-    (document.getElementById('boss-warning-emoji') as HTMLElement).innerHTML = SpriteService.iconHTML(boss.char, 32);
-    (document.getElementById('boss-warning-name')  as HTMLElement).textContent = boss.name.toUpperCase();
-    (document.getElementById('boss-warning-flavor') as HTMLElement).textContent = boss.flavorText;
-    this.bossWarningModal.style.display = 'flex';
-    const bar = document.getElementById('boss-countdown-bar') as HTMLElement | null;
-    if (bar) {
-      bar.style.transition = 'none';
-      bar.style.width = '100%';
-      void bar.offsetWidth;
-      bar.style.transition = 'width 1700ms linear';
-      bar.style.width = '0%';
-    }
-    setTimeout(() => {
-      this.bossWarningModal.style.display = 'none';
-      onDone();
-    }, 1800);
+    this.bossWarningModal.showBossWarning(boss, onDone);
   }
 
   /** Updates the displayed best-score figure. */
@@ -745,31 +733,13 @@ export class UIManager {
   }
 
   /** Shows the pause menu with the current sound/motion/volume state and button handlers. */
-  public showPauseMenu(
-    state: { soundOn: boolean; reducedMotion: boolean; volumePct: number },
-    handlers: { onResume: () => void; onToggleMute: () => void; onToggleMotion: () => void; onCycleVolume: () => void; onRestart: () => void },
-  ): void {
-    const modal = document.getElementById('pause-modal');
-    if (!modal) return;
-    const muteState = document.getElementById('pause-mute-state');
-    const motionState = document.getElementById('pause-motion-state');
-    const volumeState = document.getElementById('pause-volume-state');
-    if (muteState) muteState.textContent = state.soundOn ? 'On' : 'Off';
-    if (motionState) motionState.textContent = state.reducedMotion ? 'On' : 'Off';
-    if (volumeState) volumeState.textContent = `${state.volumePct}%`;
-    const bind = (id: string, fn: () => void): void => { const el = document.getElementById(id); if (el) el.onclick = fn; };
-    bind('pause-resume', handlers.onResume);
-    bind('pause-mute', handlers.onToggleMute);
-    bind('pause-motion', handlers.onToggleMotion);
-    bind('pause-volume', handlers.onCycleVolume);
-    bind('pause-restart', handlers.onRestart);
-    modal.style.display = 'flex';
+  public showPauseMenu(state: PauseMenuState, handlers: PauseMenuHandlers): void {
+    this.pauseModal.showPauseMenu(state, handlers);
   }
 
   /** Hides the pause menu. */
   public hidePauseMenu(): void {
-    const modal = document.getElementById('pause-modal');
-    if (modal) modal.style.display = 'none';
+    this.pauseModal.hidePauseMenu();
   }
 
   /** Shows the tap/click-to-inspect tooltip near `(clientX, clientY)`, clamped to stay on-screen. Auto-dismisses after 3s. */
