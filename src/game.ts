@@ -781,7 +781,7 @@ export class Game {
   // a FloorEventDef built at runtime instead of loaded from JSON, so no new
   // UI or callback wiring is needed.
 
-  private triggerNpcEncounter(npc: NpcDef): void {
+  private triggerNpcEncounter(npc: NpcDef, onClosed?: () => void): void {
     let event: FloorEventDef;
 
     if (npc.kind === 'bounty') {
@@ -806,6 +806,7 @@ export class Game {
     } else if (npc.kind === 'trade') {
       if (this.player.boons.length === 0) {
         this.cb.log(`${npc.name}: "You carry nothing worth trading." `, 'log-neutral', npc.char);
+        onClosed?.();
         return;
       }
       const boonOptions = this.player.boons.map(b => ({
@@ -839,15 +840,16 @@ export class Game {
       this.cb.log(msg, 'log-perk', npc.char);
       this.paused = false;
       this.cb.onAction();
+      onClosed?.();
     });
   }
 
   // A fallen character from a previous run, met again. Laying them to rest
   // grants a fragment of their old power and removes them from the ghost
   // file permanently; turning away leaves them haunting future runs.
-  private triggerGhostEncounter(): void {
+  private triggerGhostEncounter(onClosed?: () => void): void {
     const ghost = this.activeGhost;
-    if (!ghost) return;
+    if (!ghost) { onClosed?.(); return; }
     const className = CLASSES.find(c => c.id === ghost.classId)?.name ?? 'wanderer';
     const event: FloorEventDef = {
       id: '__ghost__', emoji: 'sprite_boss_wraith', title: 'A Ghost of Yourself',
@@ -881,6 +883,7 @@ export class Game {
       this.cb.log(msg, 'log-perk', 'sprite_boss_wraith');
       this.paused = false;
       this.cb.onAction();
+      onClosed?.();
     });
   }
 
@@ -1424,8 +1427,8 @@ export class Game {
 
   // ── Tattoo Artist ─────────────────────────────────────────────────────────
 
-  /** Opens the tattoo-artist brand-choice modal (reachable via a tattoo-artist tile). */
-  private openTattooArtist(): void {
+  /** Opens the tattoo-artist brand-choice modal (reachable via a tattoo-artist tile). `onClosed` fires once a mark is chosen. */
+  private openTattooArtist(onClosed?: () => void): void {
     this.paused = true;
     const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
     let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
@@ -1440,6 +1443,7 @@ export class Game {
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
+      onClosed?.();
     };
     this.cb.onOpenTattooArtist?.(choices, commit, {
       gold: this.gold,
@@ -1489,8 +1493,8 @@ export class Game {
     this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
   }
 
-  /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). */
-  private openAltar(tier: 1 | 2 | 3): void {
+  /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). `onClosed` fires once a boon is chosen. */
+  private openAltar(tier: 1 | 2 | 3, onClosed?: () => void): void {
     this.paused = true;
     const pool = Boon.BY_TIER[tier];
     const ownedIds = (): string[] => this.player.boons.map(b => b.id);
@@ -1502,6 +1506,7 @@ export class Game {
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
+      onClosed?.();
     };
     this.cb.onOpenAltar?.(tier, choices, commit, {
       gold: this.gold,
@@ -1583,11 +1588,14 @@ export class Game {
     if (this.isTattooTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
       this.tattooTiles = this.tattooTiles.filter(t => !(t.x === nx && t.y === ny));
-      this.cb.onBeam?.(nx, '217,164,65');  // beams away in a column of gold light
+      // Beams away once the interaction concludes, not on bump — the departure
+      // should read as "their business here is done", after the dialog closes.
+      const departInGold = (): void => { this.cb.onBeam?.(nx, '217,164,65'); };
       if (this.player.brandsCapped) {
         this.cb.log('Your body bears its fifth and final Ogham Mark — the Tattoo Artist has nothing left to offer.', 'log-neutral', 'tile_merchant');
+        departInGold();
       } else {
-        this.openTattooArtist();
+        this.openTattooArtist(departInGold);
       }
       return;
     }
@@ -1597,8 +1605,8 @@ export class Game {
     if (altar) {
       this.player.x = nx; this.player.y = ny;
       this.altarTiles = this.altarTiles.filter(a => a !== altar);
-      this.cb.onBeam?.(nx, Colors.forTier(altar.tier).rgb);  // beams away in its tier's light
-      this.openAltar(altar.tier);
+      const tierRgb = Colors.forTier(altar.tier).rgb;
+      this.openAltar(altar.tier, () => { this.cb.onBeam?.(nx, tierRgb); });
       return;
     }
 
@@ -1608,13 +1616,14 @@ export class Game {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
       const isGhost = npcTile.npcId === '__ghost__';
-      this.cb.onBeam?.(nx, isGhost ? '176,196,222' : '89,159,124');  // beams away, spectral or fae-green
+      const departOnClose = (): void => { this.cb.onBeam?.(nx, isGhost ? '176,196,222' : '89,159,124'); };
       if (isGhost) {
-        this.triggerGhostEncounter();
+        this.triggerGhostEncounter(departOnClose);
         return;
       }
       const npc = NPCS.find(n => n.id === npcTile.npcId);
-      if (npc) this.triggerNpcEncounter(npc);
+      if (npc) this.triggerNpcEncounter(npc, departOnClose);
+      else departOnClose();
       return;
     }
 
