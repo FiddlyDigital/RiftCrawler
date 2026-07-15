@@ -129,5 +129,8 @@
     "encounterChance": 0.15,
     "levelTolerance": 1,
     "maxStored": 10
+  },
+  "narrative": {
+    "closeCallHpFraction": 0.15
   }
 }

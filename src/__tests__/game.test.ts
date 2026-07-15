@@ -271,6 +271,20 @@ describe('Monster clearing & Sacred Brands', () => {
     expect(game.monsters).toContain(b);
   });
 
+  it('killing an elite pushes a one-time story beat, not one per elite kill', () => {
+    expect(game.firstEliteFelled).toBe(false);
+    const a = new Monster(4, 21, 'sprite_berserker_orc', 'Elite A', 1, 1, 1, 5);
+    a.isElite = true;
+    const b = new Monster(5, 21, 'sprite_berserker_orc', 'Elite B', 1, 1, 1, 5);
+    b.isElite = true;
+    game.monsters.push(a, b);
+    CombatSystem.killMonster(a, game);
+    expect(game.firstEliteFelled).toBe(true);
+    expect(game.storyBeats.filter(s => s.includes('cut down an elite'))).toHaveLength(1);
+    CombatSystem.killMonster(b, game);
+    expect(game.storyBeats.filter(s => s.includes('cut down an elite'))).toHaveLength(1);
+  });
+
   it('poison kills a monster on tick, clears it, and awards XP', () => {
     const m = new Monster(4, 21, 'sprite_berserker_orc', 'Goblin', 3, 3, 2, 20);
     m.statuses = [{ type: 'poison', duration: 3, power: 5 }];
@@ -1349,6 +1363,39 @@ describe('Floor events (JSON-configured)', () => {
     const event = FLOOR_EVENTS.find(e => e.id === 'dark_bargain')!;
     const refuse = event.options[1]!;
     expect(refuse.apply(game)).toBe("You refuse the Púca's offer. It shrieks and dissolves into mist.");
+  });
+});
+
+// ── Run-end story recap ────────────────────────────────────────────────────
+
+describe('Game.buildRunStory', () => {
+  it('throws on an invalid outcome', () => {
+    const game = new Game(makeCallbacks());
+    expect(() => game.buildRunStory('draw' as unknown as 'death')).toThrow(TypeError);
+  });
+
+  it('returns just the opener when no story beats were recorded', () => {
+    const game = new Game(makeCallbacks());
+    expect(game.storyBeats).toHaveLength(0);
+    const story = game.buildRunStory('death');
+    expect(story).not.toMatch(/Along the way/);
+    expect(story).toMatch(new RegExp(`Floor ${game.dungeonLevel}`));
+  });
+
+  it('weaves recorded story beats into the recap', () => {
+    const game = new Game(makeCallbacks());
+    game.storyBeats.push('felled a mighty foe');
+    const story = game.buildRunStory('victory');
+    expect(story).toMatch(/Along the way you felled a mighty foe\./);
+  });
+
+  it('caps the recap at the first 5 beats, noting there was more', () => {
+    const game = new Game(makeCallbacks());
+    for (let i = 1; i <= 7; i++) game.storyBeats.push(`did thing ${i}`);
+    const story = game.buildRunStory('death');
+    expect(story).toContain('did thing 5');
+    expect(story).not.toContain('did thing 6');
+    expect(story).toMatch(/and more besides/);
   });
 });
 

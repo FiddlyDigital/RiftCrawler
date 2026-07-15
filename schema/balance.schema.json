@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "player", "progression", "economy", "brands", "ammo", "altars",
-    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts"
+    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts", "narrative"
   ],
   "properties": {
     "player": {
@@ -209,6 +209,14 @@
         "encounterChance": { "type": "number" },
         "levelTolerance": { "type": "number" },
         "maxStored": { "type": "number" }
+      }
+    },
+    "narrative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["closeCallHpFraction"],
+      "properties": {
+        "closeCallHpFraction": { "type": "number" }
       }
     }
   },

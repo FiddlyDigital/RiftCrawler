@@ -39,7 +39,7 @@ export class CombatSystem {
       game.cb.onParticle?.(game.player.x, game.player.y, 'REVIVED', '#e53935', 16, 'item_heart');
       return;
     }
-    game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats(), game.buildRunStory());
+    game.cb.onDeath(title, reason, game.dungeonLevel, game.player.totalXpEarned, game.getRunStats(), game.buildRunStory('death'));
   }
 
   // ── Dice engine ────────────────────────────────────────────────────────────
@@ -314,6 +314,10 @@ export class CombatSystem {
         game.cb.onParticle(m.x, m.y, `+${bonus}`, '#ffd700', undefined, 'item_gold_pouch');
         game.cb.onParticleBurst?.(m.x, m.y, 8, '#d4af37');
         game.cb.log(`Elite vanquished! +${bonus} gold.`, 'log-perk', 'special_sacred');
+        if (!game.firstEliteFelled) {
+          game.firstEliteFelled = true;
+          game.storyBeats.push(`cut down an elite ${m.name}`);
+        }
       }
       const healBonus = game.player.heal(Balance.COMBAT.rewards.healOnKill);
       if (healBonus > 0) {

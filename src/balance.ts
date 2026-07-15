@@ -77,6 +77,7 @@ export interface BalanceConfig {
   };
   eliteMonsters: { spawnChance: number; hpMult: number; atkMult: number; combatLevelBonus: number };
   ghosts: { encounterChance: number; levelTolerance: number; maxStored: number };
+  narrative: { closeCallHpFraction: number };
 }
 
 /**

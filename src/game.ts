@@ -194,6 +194,10 @@ export class Game {
   public storyBeats: string[] = [];
   /** Flavor-kind NPC ids already met this run, so a repeat encounter shows {@link NpcDef.returnLine} instead of a fresh random line. */
   private metFlavorNpcIds = new Set<string>();
+  /** Whether the run's first elite kill has already pushed a story beat (elites can be felled many times a run — only the first is notable). */
+  public firstEliteFelled = false;
+  /** Whether the run's first sub-15%-HP survival has already pushed a "close call" story beat. */
+  private hadCloseCall = false;
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
@@ -990,18 +994,44 @@ export class Game {
   }
 
   /**
+   * Rotating opening sentences for {@link buildRunStory}, keyed by outcome and
+   * templated with `{cls}`/`{floor}`. No leading article before `{cls}` —
+   * class names already carry their own ("The Architect", "An Draoi").
+   */
+  private static readonly STORY_OPENERS: Record<'death' | 'victory', string[]> = {
+    death: [
+      "{cls}'s descent, ended on Floor {floor}.",
+      "{cls} fell to the depths, no further than Floor {floor}.",
+      "The rift claimed {cls}, at Floor {floor}.",
+    ],
+    victory: [
+      "{cls} broke Bres's bridge at Floor {floor} and walked free.",
+      "The causeway falls silent — {cls} saw the far side, from Floor {floor}.",
+      "{cls}'s descent ended in victory, on Floor {floor}.",
+    ],
+  };
+
+  /**
    * Short narrative recap for the death/victory screen, built from the
    * notable moments recorded in {@link storyBeats} over the run.
+   * @param outcome - Whether the run ended in death or victory (picks the opening sentence's tone).
+   * @throws {TypeError} If `outcome` is not `'death'` or `'victory'`.
    */
-  public buildRunStory(): string {
+  public buildRunStory(outcome: 'death' | 'victory'): string {
+    if (outcome !== 'death' && outcome !== 'victory') {
+      throw new TypeError('Game.buildRunStory: "outcome" must be "death" or "victory"');
+    }
     const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'wanderer';
-    const beats = this.storyBeats.slice(0, 4);
-    if (beats.length === 0) return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}.`;
+    const openers = Game.STORY_OPENERS[outcome];
+    const opener = openers[Math.floor(Math.random() * openers.length)]!
+      .replace('{cls}', cls).replace('{floor}', String(this.dungeonLevel));
+    const beats = this.storyBeats.slice(0, 5);
+    if (beats.length === 0) return opener;
     const joined = beats.length === 1
       ? beats[0]!
       : `${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
-    const more = this.storyBeats.length > 4 ? ' …and more besides.' : '';
-    return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}. Along the way you ${joined}.${more}`;
+    const more = this.storyBeats.length > 5 ? ' …and more besides.' : '';
+    return `${opener} Along the way you ${joined}.${more}`;
   }
 
   private instantiateRider(cell: CellValue, tx: number, ty: number): void {
@@ -1300,6 +1330,7 @@ export class Game {
     this.processSpecialTiles();
     if (!this.gorgothSummoned) this.moveGravity();  // no falling blocks during the Gorgoth duel
     MonsterAiSystem.processMonsterTurns(this);
+    this.checkCloseCall();
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
@@ -1326,6 +1357,7 @@ export class Game {
     this.processSpecialTiles();
     this.moveGravity();
     MonsterAiSystem.processMonsterTurns(this);
+    this.checkCloseCall();
     this.tickRangedCooldown();
     this.updateVisibility();
     this.pushUI();
@@ -1338,6 +1370,15 @@ export class Game {
     }
     this.tickVeil();
     this.cb.onAction();
+  }
+
+  /** Pushes a one-time "close call" story beat the first time this run's HP drops to/below {@link Balance.CONFIG}'s `narrative.closeCallHpFraction` and survives. */
+  private checkCloseCall(): void {
+    if (this.hadCloseCall || this.player.hp <= 0) return;
+    if (this.player.hp <= this.player.maxHp * Balance.CONFIG.narrative.closeCallHpFraction) {
+      this.hadCloseCall = true;
+      this.storyBeats.push("clung to life with a hair's breadth of health left");
+    }
   }
 
   /** Decrements the ranged-ability cooldown by one turn, if any remains. */
@@ -1688,6 +1729,7 @@ export class Game {
         this.cb.onFloorEvent(event, (index) => {
           const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
           this.cb.log(msg, 'log-perk', event.emoji);
+          this.storyBeats.push(`answered the call of "${event.title}"`);
           this.paused = false;
           this.cb.onAction();
         });
@@ -2186,7 +2228,7 @@ export class Game {
     this.won = true;
     this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
     this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
-    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory());
+    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('victory'));
   }
 
   /** Shifts the falling piece one column left, if unobstructed. */
