@@ -37,8 +37,27 @@ export default defineConfig({
         // Pages) or a subpath (GitHub Pages project sites, via --base).
         start_url: '.',
         icons: [
-          { src: 'icons/icon-192.svg', sizes: 'any', type: 'image/svg+xml' },
-          { src: 'icons/icon-512.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
+          { src: 'icons/icon-48.png',  sizes: '48x48',   type: 'image/png' },
+          { src: 'icons/icon-72.png',  sizes: '72x72',   type: 'image/png' },
+          { src: 'icons/icon-96.png',  sizes: '96x96',   type: 'image/png' },
+          { src: 'icons/icon-128.png', sizes: '128x128', type: 'image/png' },
+          { src: 'icons/icon-144.png', sizes: '144x144', type: 'image/png' },
+          { src: 'icons/icon-152.png', sizes: '152x152', type: 'image/png' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-384.png', sizes: '384x384', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+        screenshots: [
+          {
+            src: 'screenshots/desktop-1.png', sizes: '682x800', type: 'image/png',
+            form_factor: 'wide', label: 'Building the dungeon floor with falling blocks while exploring as An Draoi',
+          },
+          {
+            src: 'screenshots/mobile-1.png', sizes: '780x1688', type: 'image/png',
+            form_factor: 'narrow', label: 'A run in progress on mobile — Tetris layer above, hero layer below',
+          },
         ],
       },
     }),
