@@ -340,10 +340,12 @@ export class Game {
     let trapInjected = false;
     let monsterInjected = false;
 
-    // A pending normal boss holds off until the built stack has climbed past
-    // half the field — reaching a boss floor's stairs early no longer skips
-    // it, the fight just waits for the player to build up first.
-    const bossReady = this.pendingBossFloor && this.stackTopRow() <= Math.floor(GameConfig.ROWS / 2);
+    // A pending normal boss holds off until the built floor covers at least
+    // half the field overall — reaching a boss floor's stairs early no longer
+    // skips it, the fight just waits for the player to build up first. This
+    // is deliberately the *whole-board* fill fraction, not the tallest single
+    // column, so one narrow spike from careless hard-drops can't trigger it.
+    const bossReady = this.pendingBossFloor && this.filledFraction() >= 0.5;
 
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
@@ -634,6 +636,17 @@ export class Game {
       }
     }
     return stackTop;
+  }
+
+  /** Fraction (0-1) of the whole field's cells currently built as floor — overall fullness, not just the single tallest column. */
+  private filledFraction(): number {
+    let filled = 0;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        if (this.map[x]![y] === Tile.FLOOR) filled++;
+      }
+    }
+    return filled / (GameConfig.COLS * GameConfig.ROWS);
   }
 
   // One-time teaching nudge: when the stack climbs near the ceiling, tell the
