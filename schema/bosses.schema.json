@@ -15,7 +15,8 @@
       "hpMult": { "type": "number" },
       "atkMult": { "type": "number" },
       "xpValue": { "type": "number" },
-      "flavorText": { "type": "string", "minLength": 1 }
+      "flavorText": { "type": "string", "minLength": 1 },
+      "deathLine": { "type": "string", "minLength": 1 }
     }
   }
 }

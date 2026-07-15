@@ -5,8 +5,11 @@
     "name": "Fionnuala the Wandering Fili",
     "kind": "flavor",
     "lines": [
-      "The rift hums with half-remembered verses, wanderer. I have lost my meter chasing Bres's bridge — perhaps you'll finish the poem where I could not."
-    ]
+      "The rift hums with half-remembered verses, wanderer. I have lost my meter chasing Bres's bridge — perhaps you'll finish the poem where I could not.",
+      "Every poet needs an ending. Mine keeps slipping down through the floors, always one verse further than I can follow.",
+      "I recite the old praise-songs to whatever still stands here. The stones don't answer, but they used to."
+    ],
+    "returnLine": "You again. Good — I hadn't finished my verse about you yet."
   },
   {
     "id": "cairn_keeper",
@@ -14,8 +17,11 @@
     "name": "The Cairn-Keeper",
     "kind": "flavor",
     "lines": [
-      "I have watched over these stones since before the causeway split the dark. Every fallen thing bruises Bres's bridge a little more. Keep bruising it."
-    ]
+      "I have watched over these stones since before the causeway split the dark. Every fallen thing bruises Bres's bridge a little more. Keep bruising it.",
+      "Each stone here was carried by someone who never came back for it. I've stopped counting. It stopped meaning anything, and started meaning everything.",
+      "The dead don't need keepers. I stay for the ones still walking — you, for instance, though you won't thank me for it."
+    ],
+    "returnLine": "Still walking, I see. The cairn grows slower for it."
   },
   {
     "id": "fomorian_deserter",
@@ -23,8 +29,11 @@
     "name": "A Fomorian Deserter",
     "kind": "flavor",
     "lines": [
-      "I want no more of Bres's bridge-building. Let it stay unfinished — for all our sakes, and yours."
-    ]
+      "I want no more of Bres's bridge-building. Let it stay unfinished — for all our sakes, and yours.",
+      "They'll call me a coward for walking away. Let them. A finished bridge only leads somewhere worse.",
+      "I've seen what waits on the far side of Bres's causeway. You haven't. Turn back while turning back still means something."
+    ],
+    "returnLine": "You're still descending? Stubborn. I respect it and I pity it in equal measure."
   },
   {
     "id": "aoife",

@@ -210,5 +210,145 @@
         }
       }
     ]
+  },
+  {
+    "id": "salmon_of_knowledge",
+    "emoji": "sprite_crystal",
+    "title": "The Bradán Feasa",
+    "flavor": "A salmon glimmers beneath black water, said to hold all the world's wisdom in its flesh — whoever tastes it first will know all things.",
+    "options": [
+      {
+        "label": "Taste the salmon",
+        "desc": "+3 vision, +2% Max HP regen/tick permanently.",
+        "handler": "scholar_wisdom",
+        "params": {
+          "visionBonus": 3,
+          "regenBonus": 0.02
+        }
+      },
+      {
+        "label": "Let it swim on",
+        "desc": "Nothing happens.",
+        "handler": "static_message",
+        "resultMsg": "You let the salmon swim on, wisdom deferred to another day."
+      }
+    ]
+  },
+  {
+    "id": "warp_spasm_echo",
+    "emoji": "sprite_equip_war_axe",
+    "title": "The Ríastrad's Echo",
+    "flavor": "The echo of the Hound of Ulster's battle-frenzy lingers here — the warp-spasm that turned Cú Chulainn monstrous in war, one eye swallowed and the other bulging forth.",
+    "options": [
+      {
+        "label": "Embrace the ríastrad",
+        "desc": "+14 ATK, −20 Max HP.",
+        "handler": "bargain_accept",
+        "params": {
+          "atkBonus": 14,
+          "hpCost": 20
+        }
+      },
+      {
+        "label": "Master your fury",
+        "desc": "Nothing happens.",
+        "handler": "static_message",
+        "resultMsg": "You steady your breath. The warp-spasm passes you by, this time."
+      }
+    ]
+  },
+  {
+    "id": "banshee_keening",
+    "emoji": "sprite_boss_wraith",
+    "title": "The Keening",
+    "flavor": "A banshee's cry rides the wind — an omen of a death not yet decided. To hear it and live is a kind of luck.",
+    "options": [
+      {
+        "label": "Heed the warning",
+        "desc": "Cure all status effects and gain poison immunity.",
+        "handler": "font_purify"
+      },
+      {
+        "label": "Laugh in its face",
+        "desc": "+6 ATK — but the omen's chill lingers (3 turns poison).",
+        "handler": "armory_cursed_blade",
+        "params": {
+          "atkBonus": 6,
+          "poisonDuration": 3,
+          "poisonPower": 3
+        }
+      }
+    ]
+  },
+  {
+    "id": "well_of_segais",
+    "emoji": "sprite_mana_potion",
+    "title": "The Well of Segais",
+    "flavor": "Nine hazel trees ring this well, forever dropping their nuts of wisdom into the water below — the source of every river in Ériu.",
+    "options": [
+      {
+        "label": "Drink from the well",
+        "desc": "Heal 30 HP and gain +2% Max HP regen per tick.",
+        "handler": "spring_fill_flask",
+        "params": {
+          "healAmount": 30,
+          "regenBonus": 0.02
+        }
+      },
+      {
+        "label": "Stare into its depths",
+        "desc": "+2 vision radius permanently.",
+        "handler": "tome_lore",
+        "params": {
+          "visionBonus": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "selkie_pelt",
+    "emoji": "sprite_charm",
+    "title": "The Selkie's Pelt",
+    "flavor": "A sealskin lies discarded on cold stone, warm as though shed only moments ago. To wear it is to become something Other.",
+    "options": [
+      {
+        "label": "Wear the pelt",
+        "desc": "Absorb the power of the Otherworld.",
+        "handler": "champion_take_boon",
+        "params": {
+          "tierBreakFloor": 6
+        }
+      },
+      {
+        "label": "Leave it be",
+        "desc": "Nothing happens.",
+        "handler": "static_message",
+        "resultMsg": "Some transformations aren't meant for you. You leave the pelt for its owner."
+      }
+    ]
+  },
+  {
+    "id": "manannan_mist",
+    "emoji": "sprite_ward",
+    "title": "Manannán's Mist",
+    "flavor": "A silver fog rolls in off an unseen sea — Manannán mac Lir's mist, which hides the Otherworld's roads from mortal eyes.",
+    "options": [
+      {
+        "label": "Walk blind into the mist",
+        "desc": "50/50: gain 2200 gold OR stumble into a trap (−28 HP).",
+        "handler": "cache_gamble",
+        "params": {
+          "successChance": 0.5,
+          "jackpotGold": 2200,
+          "trapDamage": 28
+        }
+      },
+      {
+        "label": "Wait for it to clear",
+        "desc": "Nothing happens.",
+        "handler": "static_message",
+        "resultMsg": "The mist thins and rolls back out to sea. Nothing ventured."
+      }
+    ]
   }
 ]

@@ -2,7 +2,7 @@ import type { Game } from '../game';
 import type { Monster } from '../entities';
 import { StatMath } from '../entities';
 import { Balance } from '../balance';
-import { Boon } from '../content';
+import { Boon, BOSSES } from '../content';
 
 type CombatOutcome = 'miss' | 'weak' | 'normal' | 'power' | 'critical';
 
@@ -287,7 +287,8 @@ export class CombatSystem {
       game.player.killAtkFloorBonus += atkGain;
     }
     if (m.isBoss) {
-      game.cb.log(`BOSS SLAIN: ${m.name}!`, 'log-boss', 'sprite_equip_iron_sword');
+      const deathLine = BOSSES.find(b => b.name === m.name)?.deathLine;
+      game.cb.log(`BOSS SLAIN: ${m.name}!${deathLine ? ` ${deathLine}` : ''}`, 'log-boss', 'sprite_equip_iron_sword');
       game.cb.onParticle(m.x, m.y, 'BOSS!', '#ffd54f', undefined, 'item_trophy');
       game.cb.onParticleBurst?.(m.x, m.y, 14, '#c1443c');
       game.cb.onImpactGlow?.(m.x, m.y, '139,26,26', 20);

@@ -6,7 +6,8 @@
     "hpMult": 5,
     "atkMult": 2,
     "xpValue": 200,
-    "flavorText": "The earth trembles as the great worm surfaces..."
+    "flavorText": "The earth trembles as the great worm surfaces...",
+    "deathLine": "The great worm coils once more, and goes still. The earth stops trembling."
   },
   {
     "id": "bone_king",
@@ -15,7 +16,8 @@
     "hpMult": 4,
     "atkMult": 2.5,
     "xpValue": 250,
-    "flavorText": "All roads lead to his house in the end."
+    "flavorText": "All roads lead to his house in the end.",
+    "deathLine": "Donn's crown rolls into the dark. For once, a road leads away from his house."
   },
   {
     "id": "shadow_wraith",
@@ -24,7 +26,8 @@
     "hpMult": 4,
     "atkMult": 2,
     "xpValue": 220,
-    "flavorText": "Hoofbeats with no rider to guide them. Cold seeps in."
+    "flavorText": "Hoofbeats with no rider to guide them. Cold seeps in.",
+    "deathLine": "The hoofbeats fade. Whatever the Dullahan came to call, it will have to call another night."
   },
   {
     "id": "vampire_lord",
@@ -33,7 +36,8 @@
     "hpMult": 5,
     "atkMult": 1.5,
     "xpValue": 230,
-    "flavorText": "No grave has ever managed to hold him."
+    "flavorText": "No grave has ever managed to hold him.",
+    "deathLine": "Abhartach crumbles to old dust. This grave, at least, might finally hold."
   },
   {
     "id": "brood_mother",
@@ -42,6 +46,7 @@
     "hpMult": 3,
     "atkMult": 3,
     "xpValue": 260,
-    "flavorText": "Mother of monsters — thousands of eyes open."
+    "flavorText": "Mother of monsters — thousands of eyes open.",
+    "deathLine": "The thousand eyes close, one by one, until only the dark is watching."
   }
 ]

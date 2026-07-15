@@ -240,10 +240,12 @@ export interface NpcDef {
   name: string;
   /** Encounter category. */
   kind: 'flavor' | 'bounty' | 'trade';
-  /** Pool of flavor dialogue lines (for `kind: 'flavor'`). */
+  /** Pool of flavor dialogue lines (for `kind: 'flavor'`) — one is picked at random per encounter. */
   lines?: string[];
   /** Opening line shown before any offer/dialogue. */
   introLine?: string;
+  /** Shown instead of a random {@link lines} pick on a repeat encounter within the same run (`kind: 'flavor'` only). */
+  returnLine?: string;
 }
 
 /** A live trap-hazard tile (spike/smoke/teleport) on the dungeon floor. */
@@ -483,6 +485,8 @@ export interface BossDef {
   xpReward: number;
   /** Flavor text shown on the boss-warning banner. */
   flavorText: string;
+  /** Flavor line logged alongside the "BOSS SLAIN" message, if set. */
+  deathLine?: string;
   /** Restricts this boss to a specific biome, if set. */
   biomeId?: string;
   /** One-time effect fired when the boss first drops to/below half HP. */

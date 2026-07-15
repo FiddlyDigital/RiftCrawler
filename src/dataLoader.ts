@@ -572,6 +572,7 @@ export class Npc implements NpcDef {
   readonly kind: 'flavor' | 'bounty' | 'trade';
   readonly lines?: string[];
   readonly introLine?: string;
+  readonly returnLine?: string;
 
   /** @throws {TypeError} If `raw` is missing a non-empty `id`. */
   constructor(raw: NpcDef) {
@@ -584,6 +585,7 @@ export class Npc implements NpcDef {
     this.kind = raw.kind;
     this.lines = raw.lines;
     this.introLine = raw.introLine;
+    this.returnLine = raw.returnLine;
   }
 
   /** Every NPC archetype loaded from `data/npcs.json`. */
@@ -704,11 +706,12 @@ export class MonsterTemplate implements MonsterDef {
 
 interface RawBoss {
   displayName: string; visualAsset: string;
-  hpMult: number; atkMult: number; xpValue: number; flavorText: string;
+  hpMult: number; atkMult: number; xpValue: number; flavorText: string; deathLine?: string;
 }
 
 interface RawBossParams {
   char: string; name: string; hpMult: number; atkMult: number; xpReward: number; flavorText: string;
+  deathLine?: string;
   biomeId?: string;
   onHalfHp?: (game: Game) => void;
   onDeath?: (game: Game, x: number, y: number) => void;
@@ -722,6 +725,7 @@ export class Boss implements BossDef {
   readonly atkMult: number;
   readonly xpReward: number;
   readonly flavorText: string;
+  readonly deathLine?: string;
   readonly biomeId?: string;
   readonly onHalfHp?: (game: Game) => void;
   readonly onDeath?: (game: Game, x: number, y: number) => void;
@@ -737,6 +741,7 @@ export class Boss implements BossDef {
     this.atkMult = raw.atkMult;
     this.xpReward = raw.xpReward;
     this.flavorText = raw.flavorText;
+    this.deathLine = raw.deathLine;
     this.biomeId = raw.biomeId;
     this.onHalfHp = raw.onHalfHp;
     this.onDeath = raw.onDeath;
@@ -746,19 +751,21 @@ export class Boss implements BossDef {
   static readonly ALL: Boss[] = [
     ...(bossesData as RawBoss[]).map(raw => new Boss({
       char: raw.visualAsset, name: raw.displayName, hpMult: raw.hpMult, atkMult: raw.atkMult,
-      xpReward: raw.xpValue, flavorText: raw.flavorText,
+      xpReward: raw.xpValue, flavorText: raw.flavorText, deathLine: raw.deathLine,
     })),
     // Biome-specific bosses — never appear outside their biome
     new Boss({
       biomeId: 'cavern', char: 'sprite_boss_crystal_golem', name: "Cailleach's Stoneward",
       hpMult: 4.5, atkMult: 2.0, xpReward: 240,
       flavorText: 'The Cailleach shaped these stones. It cannot be destroyed... only shattered.',
+      deathLine: 'The Stoneward shatters into a hundred glittering pieces. The Cailleach will need to shape another.',
       onDeath: (game, x, y) => game.spawnCrystalShards(x, y),
     }),
     new Boss({
       biomeId: 'rift', char: 'sprite_boss_rift_tyrant', name: "Balor's Herald",
       hpMult: 5.0, atkMult: 2.5, xpReward: 280,
       flavorText: 'Its single eye opens, and the bridge groans closer to complete...',
+      deathLine: "The single eye closes for the last time. Balor's bridge groans, and settles no further.",
       onHalfHp: (game) => game.triggerGravityBurst(),
     }),
   ];

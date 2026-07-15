@@ -1300,8 +1300,8 @@ describe('Balance config', () => {
 // ── Floor events (src/data/floor-events.json via src/dataLoader.ts) ──────────
 
 describe('Floor events (JSON-configured)', () => {
-  it('has all 9 events with a handler-backed apply on every option', () => {
-    expect(FLOOR_EVENTS.length).toBe(9);
+  it('has all 15 events with a handler-backed apply on every option', () => {
+    expect(FLOOR_EVENTS.length).toBe(15);
     for (const event of FLOOR_EVENTS) {
       for (const option of event.options) {
         expect(typeof option.apply).toBe('function');

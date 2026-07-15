@@ -192,6 +192,8 @@ export class Game {
 
   /** Notable moments this run — feeds the death/victory screen's short "tale of the run" recap. */
   public storyBeats: string[] = [];
+  /** Flavor-kind NPC ids already met this run, so a repeat encounter shows {@link NpcDef.returnLine} instead of a fresh random line. */
+  private metFlavorNpcIds = new Set<string>();
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
   private activeBossOnHalfHp: ((game: Game) => void) | null = null;
@@ -826,8 +828,12 @@ export class Game {
         options: [...boonOptions, { label: 'Never mind', desc: '', apply: (): string => 'You keep your Geasa close.' }],
       };
     } else {
+      const metBefore = this.metFlavorNpcIds.has(npc.id);
+      const lines = npc.lines!;
+      const flavor = metBefore && npc.returnLine ? npc.returnLine : lines[Math.floor(Math.random() * lines.length)]!;
+      this.metFlavorNpcIds.add(npc.id);
       event = {
-        id: npc.id, emoji: npc.char, title: npc.name, flavor: npc.lines!.join(' '),
+        id: npc.id, emoji: npc.char, title: npc.name, flavor,
         options: [{ label: 'Farewell', desc: '', apply: (): string => 'You part ways.' }],
       };
     }
@@ -1197,9 +1203,18 @@ export class Game {
     this.maybeOfferPact();
   }
 
-  /** Syncs `biomeId`/`biomeMonsterHpMult`/`biomeGravityPct` to the current dungeon level. */
+  /** Icon shown alongside a biome's flavor line on first entry — keyed by id since `BiomeDef` has no icon field of its own. */
+  private static readonly BIOME_ICON: Record<string, string> = {
+    stone: 'tile_stone_a', cavern: 'sprite_crystal', rift: 'fx_arcane',
+  };
+
+  /** Syncs `biomeId`/`biomeMonsterHpMult`/`biomeGravityPct` to the current dungeon level, logging the biome's flavor text the first time a run crosses into it. */
   private updateBiome(): void {
     const biome = Biome.forFloor(this.dungeonLevel);
+    if (biome.id !== this.biomeId) {
+      this.cb.log(`${biome.name} — ${biome.desc}`, 'log-tetris', Game.BIOME_ICON[biome.id] ?? 'tile_stone_a');
+      this.storyBeats.push(`delved into ${biome.name}`);
+    }
     this.biomeId = biome.id;
     this.biomeMonsterHpMult = biome.monsterHpMult;
     this.biomeGravityPct = biome.gravityPctBonus;
