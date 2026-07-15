@@ -1,6 +1,12 @@
+/**
+ * Procedural sound effects and ambient bed, synthesized entirely with the
+ * Web Audio API (no audio files). One `AudioEngine` singleton ({@link audio})
+ * powers every effect in the game; each `playX()` method is a fire-and-forget
+ * cue triggered by a game event.
+ */
 export class AudioEngine {
   private ctx: AudioContext | null = null;
-  enabled = true;
+  public enabled = true;
 
   private ambientOscs: OscillatorNode[] = [];
   private ambientGain: GainNode | null = null;
@@ -28,13 +34,18 @@ export class AudioEngine {
     return this.master;
   }
 
-  setVolume(v: number): void {
+  /**
+   * Sets the master volume, clamped to `[0, 1]`.
+   * @throws {TypeError} If `v` is not a finite number.
+   */
+  public setVolume(v: number): void {
+    if (typeof v !== 'number' || !Number.isFinite(v)) throw new TypeError('AudioEngine.setVolume: "v" must be a finite number');
     this.volume = Math.min(1, Math.max(0, v));
     if (this.master && this.ctx) this.master.gain.setValueAtTime(this.volume, this.ctx.currentTime);
   }
 
-  // Called on first user gesture to unlock AudioContext in all browsers
-  init(): void { this.getCtx(); }
+  /** Unlocks the `AudioContext` on the first user gesture (required by all browsers). */
+  public init(): void { this.getCtx(); }
 
   private osc(
     freq: number, duration: number, type: OscillatorType,
@@ -74,22 +85,24 @@ export class AudioEngine {
     src.start(t);
   }
 
-  playBlockLand():    void { this.noise(0.08, 0.18); this.osc(70, 0.12, 'sine', 0.2); }
-  playBlockRotate():  void { this.osc(380, 0.04, 'sine', 0.08); }
-  playBlockMove():    void { this.osc(280, 0.03, 'sine', 0.06); }
-  playHit():          void { this.noise(0.05, 0.2); this.osc(220, 0.07, 'square', 0.12); }
-  playPlayerDamage(): void { this.osc(140, 0.15, 'sawtooth', 0.28); this.osc(90, 0.18, 'sawtooth', 0.2, 0.12); }
-  playPoison():       void { this.osc(200, 0.1, 'triangle', 0.14); this.osc(140, 0.12, 'triangle', 0.1, 0.09); }
-  playShop():         void { this.osc(900, 0.06, 'sine', 0.15); this.osc(1100, 0.07, 'sine', 0.12, 0.07); }
-  playPerk():         void { [550, 700, 900, 1100].forEach((f, i) => this.osc(f, 0.09, 'sine', 0.18, i * 0.08)); }
+  /** @group Sound effects — each is a short, fire-and-forget synthesized cue for a game event. */
+  public playBlockLand():    void { this.noise(0.08, 0.18); this.osc(70, 0.12, 'sine', 0.2); }
+  public playBlockRotate():  void { this.osc(380, 0.04, 'sine', 0.08); }
+  public playBlockMove():    void { this.osc(280, 0.03, 'sine', 0.06); }
+  public playHit():          void { this.noise(0.05, 0.2); this.osc(220, 0.07, 'square', 0.12); }
+  public playPlayerDamage(): void { this.osc(140, 0.15, 'sawtooth', 0.28); this.osc(90, 0.18, 'sawtooth', 0.2, 0.12); }
+  public playPoison():       void { this.osc(200, 0.1, 'triangle', 0.14); this.osc(140, 0.12, 'triangle', 0.1, 0.09); }
+  public playShop():         void { this.osc(900, 0.06, 'sine', 0.15); this.osc(1100, 0.07, 'sine', 0.12, 0.07); }
+  public playPerk():         void { [550, 700, 900, 1100].forEach((f, i) => this.osc(f, 0.09, 'sine', 0.18, i * 0.08)); }
 
-  playKill(): void {
+  public playKill(): void {
     this.osc(280, 0.07, 'square', 0.18);
     this.osc(420, 0.07, 'square', 0.14, 0.07);
     this.osc(560, 0.09, 'square', 0.1,  0.14);
   }
 
-  playLineClear(count: number): void {
+  /** Bigger fanfare for a tetris (4-line clear); a plainer chime otherwise. */
+  public playLineClear(count: number): void {
     if (count >= 4) {
       [300, 400, 600, 900].forEach((f, i) => this.osc(f, 0.14, 'square', 0.22, i * 0.07));
       this.noise(0.1, 0.15, 0.28);
@@ -100,59 +113,59 @@ export class AudioEngine {
     }
   }
 
-  playLevelUp(): void {
+  public playLevelUp(): void {
     [350, 440, 550, 700, 880].forEach((f, i) => this.osc(f, 0.1, 'sine', 0.22, i * 0.08));
   }
 
-  playDescend(): void {
+  public playDescend(): void {
     this.osc(350, 0.12, 'sawtooth', 0.18);
     this.osc(250, 0.14, 'sawtooth', 0.14, 0.12);
     this.osc(160, 0.18, 'sawtooth', 0.1,  0.26);
   }
 
-  playBossWarn(): void {
+  public playBossWarn(): void {
     this.osc(80, 0.6, 'sawtooth', 0.3);
     this.osc(160, 0.4, 'sawtooth', 0.2, 0.25);
     this.noise(0.15, 0.25, 0.6);
     this.osc(320, 0.2, 'square', 0.15, 0.8);
   }
 
-  playDeath(): void {
+  public playDeath(): void {
     this.noise(0.2, 0.12);
     this.osc(260, 0.3, 'sawtooth', 0.28, 0.05);
     this.osc(180, 0.4, 'sawtooth', 0.22, 0.3);
     this.osc(100, 0.5, 'sawtooth', 0.16, 0.65);
   }
 
-  playTeleport(): void {
+  public playTeleport(): void {
     this.osc(180, 0.28, 'sine', 0.20, 0, 900);
     this.noise(0.06, 0.10, 0.22);
   }
 
-  // Warm two-note hail — a friendly stranger noticing you.
-  playNpcGreeting(): void {
+  /** Warm two-note hail — a friendly stranger noticing you. */
+  public playNpcGreeting(): void {
     this.osc(440, 0.12, 'sine', 0.16);
     this.osc(550, 0.14, 'sine', 0.14, 0.11);
     this.osc(660, 0.18, 'sine', 0.10, 0.22);
   }
 
-  // Eerie, hollow descent — detuned sines sliding down with a cold hiss.
-  playGhost(): void {
+  /** Eerie, hollow descent — detuned sines sliding down with a cold hiss. */
+  public playGhost(): void {
     this.osc(620, 0.9, 'sine', 0.12, 0, 210);
     this.osc(624, 0.9, 'sine', 0.10, 0.05, 205);
     this.osc(311, 0.5, 'triangle', 0.08, 0.35, 155);
     this.noise(0.5, 0.05, 0.15);
   }
 
-  // Triumphant oath-fulfilled fanfare — brighter than a plain perk.
-  playBountyFulfilled(): void {
+  /** Triumphant oath-fulfilled fanfare — brighter than a plain perk. */
+  public playBountyFulfilled(): void {
     [392, 494, 587, 784].forEach((f, i) => this.osc(f, 0.13, 'square', 0.14, i * 0.09));
     this.osc(988, 0.22, 'sine', 0.12, 0.36);
     this.noise(0.08, 0.08, 0.36);
   }
 
-  // Low solemn chord swelling into a bright overtone — an oath made binding.
-  playPactSworn(): void {
+  /** Low solemn chord swelling into a bright overtone — an oath made binding. */
+  public playPactSworn(): void {
     this.osc(110, 0.8, 'triangle', 0.20);
     this.osc(165, 0.8, 'triangle', 0.16, 0.05);
     this.osc(220, 0.6, 'sine', 0.14, 0.3);
@@ -160,13 +173,14 @@ export class AudioEngine {
     this.osc(880, 0.35, 'sine', 0.07, 0.8);
   }
 
-  playComboMilestone(mult: number): void {
+  public playComboMilestone(mult: number): void {
     const freqs = mult >= 5 ? [300, 420, 560, 750, 1000] : [300, 420, 560, 750];
     freqs.forEach((f, i) => this.osc(f, 0.09, 'square', 0.16, i * 0.07));
     this.noise(0.08, 0.12, freqs.length * 0.07);
   }
 
-  startAmbient(): void {
+  /** Starts the low ambient drone bed (fades in over 3s), if not already playing. */
+  public startAmbient(): void {
     const ctx = this.getCtx();
     if (!ctx || this.ambientOscs.length > 0) return;
 
@@ -202,7 +216,8 @@ export class AudioEngine {
     this.ambientOscs = [o1, o2, lfo];
   }
 
-  stopAmbient(): void {
+  /** Fades out and stops the ambient drone bed, if playing. */
+  public stopAmbient(): void {
     const ctx = this.ctx;
     if (!ctx || !this.ambientGain) return;
     this.ambientGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
@@ -216,7 +231,8 @@ export class AudioEngine {
     this.ambientGain = null;
   }
 
-  toggle(): boolean {
+  /** Toggles sound on/off, starting/stopping the ambient bed to match. Returns the new enabled state. */
+  public toggle(): boolean {
     this.enabled = !this.enabled;
     if (this.enabled) {
       this.startAmbient();
@@ -227,4 +243,5 @@ export class AudioEngine {
   }
 }
 
+/** The single shared `AudioEngine` instance used throughout the app. */
 export const audio = new AudioEngine();

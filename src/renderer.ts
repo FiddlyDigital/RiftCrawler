@@ -11,6 +11,13 @@ const FADE_FRAMES = 10;
 
 interface Mote { x: number; y: number; vy: number; alpha: number; size: number }
 
+/**
+ * The canvas renderer: owns the frame loop and every visual-only effect
+ * (particles, screen shake, glows, vignettes, ambient motes). Reads `Game`
+ * state each frame but never mutates it — `main.ts` drives the game/UI
+ * layers and calls the `triggerX`/`spawnX` methods here in response to
+ * `Game`'s callbacks.
+ */
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly particles: ParticlePool;
@@ -45,7 +52,9 @@ export class Renderer {
   private readonly logicalW = GameConfig.COLS * GameConfig.TILE_SIZE;
   private readonly logicalH = GameConfig.ROWS * GameConfig.TILE_SIZE;
 
+  /** @throws {TypeError} If `canvas` is null/undefined. */
   constructor(canvas: HTMLCanvasElement) {
+    if (canvas === null || canvas === undefined) throw new TypeError('Renderer: "canvas" must not be null/undefined');
     this.ctx = canvas.getContext('2d')!;
     this.particles = new ParticlePool(90);
     this.motes = Array.from({ length: 14 }, () => this.spawnMote(true));
@@ -84,29 +93,34 @@ export class Renderer {
     this.ctx.setTransform(w / this.logicalW, 0, 0, h / this.logicalH, 0, 0);
   }
 
-  spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
+  /** Spawns a single floating text/icon particle (damage number, heal tick, etc.). */
+  public spawnParticle(gridX: number, gridY: number, text: string, color: string, fontSize = 13, icon = ''): void {
     this.particles.spawn(gridX, gridY, text, color, fontSize, icon);
   }
 
-  spawnBurst(gridX: number, gridY: number, count: number, color: string, icon = ''): void {
+  /** Radial particle burst for a high-impact moment (crit, kill, level-up). No-op under reduced motion. */
+  public spawnBurst(gridX: number, gridY: number, count: number, color: string, icon = ''): void {
     if (this.reducedMotion) return;
     this.particles.spawnBurst(gridX, gridY, count, color, icon);
   }
 
-  triggerImpactGlow(gx: number, gy: number, rgb: string, frames = 16): void {
+  /** One-shot radial glow at a tile (crit/boss/phase moments). No-op under reduced motion. */
+  public triggerImpactGlow(gx: number, gy: number, rgb: string, frames = 16): void {
     if (this.reducedMotion) return;
     this.impactGlow = { x: gx, y: gy, rgb, frames, maxFrames: frames };
   }
 
-  // Freeze rendering for a couple of frames on big hits — classic impact trick.
-  triggerHitStop(frames: number): void {
+  /** Freezes rendering for a couple of frames on big hits — classic impact trick. No-op under reduced motion. */
+  public triggerHitStop(frames: number): void {
     if (this.reducedMotion) return;
     this.hitStopFrames = Math.max(this.hitStopFrames, frames);
   }
 
-  // Cleared rows: white flash along the rows + everything above sliding down
-  // into place, plus a sweep of spark particles across each row.
-  triggerRowClear(rows: number[]): void {
+  /**
+   * Cleared rows: white flash along the rows + everything above sliding down
+   * into place, plus a sweep of spark particles across each row. No-op under reduced motion.
+   */
+  public triggerRowClear(rows: number[]): void {
     if (this.reducedMotion || rows.length === 0) return;
     this.rowFlash = { ys: [...rows], frames: 8, maxFrames: 8 };
     this.rowSlide = { belowY: Math.max(...rows), count: rows.length, frames: 5, maxFrames: 5 };
@@ -122,33 +136,34 @@ export class Renderer {
     }
   }
 
-  // Ghostly streaks along a hard drop's travel path.
-  spawnDropTrail(columns: Array<{ x: number; fromY: number; toY: number }>, color: string): void {
+  /** Ghostly streaks along a hard drop's travel path. No-op under reduced motion. */
+  public spawnDropTrail(columns: Array<{ x: number; fromY: number; toY: number }>, color: string): void {
     if (this.reducedMotion) return;
     for (const c of columns) {
       if (c.toY > c.fromY) this.dropTrails.push({ ...c, color, frames: 9, maxFrames: 9 });
     }
   }
 
-  // A killed monster flashes white for a few frames instead of just vanishing.
-  flashDeath(gx: number, gy: number, char: string): void {
+  /** A killed monster flashes white for a few frames instead of just vanishing. No-op under reduced motion. */
+  public flashDeath(gx: number, gy: number, char: string): void {
     if (this.reducedMotion) return;
     this.deathFlashes.push({ x: gx, y: gy, char, frames: 5, maxFrames: 5 });
   }
 
-  // Expanding ring pulse (ability flourishes: Time Dilation, Consecrate).
-  triggerRing(gx: number, gy: number, rgb: string, frames = 22): void {
+  /** Expanding ring pulse (ability flourishes: Time Dilation, Consecrate). No-op under reduced motion. */
+  public triggerRing(gx: number, gy: number, rgb: string, frames = 22): void {
     if (this.reducedMotion) return;
     this.rings.push({ x: gx, y: gy, rgb, frames, maxFrames: frames });
   }
 
-  // Vertical column of light on the player (level-ups).
-  triggerBeam(gx: number, frames = 26): void {
+  /** Vertical column of light on the player (level-ups). No-op under reduced motion. */
+  public triggerBeam(gx: number, frames = 26): void {
     if (this.reducedMotion) return;
     this.beam = { x: gx, frames, maxFrames: frames };
   }
 
-  spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
+  /** Small dust puff at each cell a locked piece landed on. */
+  public spawnLandingDust(cells: Array<{ x: number; y: number }>): void {
     for (const c of cells) {
       const n = 2 + Math.floor(Math.random() * 2);
       for (let i = 0; i < n; i++) {
@@ -158,6 +173,7 @@ export class Renderer {
     }
   }
 
+  /** A fresh ambient dust mote, at a random x and (optionally) random y. */
   private spawnMote(randomY = false): Mote {
     const w = GameConfig.COLS * GameConfig.TILE_SIZE, h = GameConfig.ROWS * GameConfig.TILE_SIZE;
     return {
@@ -169,6 +185,7 @@ export class Renderer {
     };
   }
 
+  /** Draws a sprite-map icon contain-fit and centered in the given box. Returns whether it actually drew (the sheet image may still be loading). */
   private drawSprite(key: string, dx: number, dy: number, dw: number, dh: number): boolean {
     const coord = SpriteService.MAP[key];
     if (!coord || !coord.sheet) return false;
@@ -207,6 +224,7 @@ export class Renderer {
     this.drawSprite(char, gx * TS + inset + jitterX, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
   }
 
+  /** A slow-pulsing radial glow behind a tile (stairs, altars, threatened monsters). */
   private drawPulseGlow(gx: number, gy: number, rgb: string): void {
     const TS = GameConfig.TILE_SIZE;
     const alpha = 0.18 + 0.18 * Math.sin(performance.now() / 400);
@@ -218,7 +236,13 @@ export class Renderer {
     this.ctx.fillRect(px - TS * 1.1, py - TS * 1.1, TS * 2.2, TS * 2.2);
   }
 
-  start(game: Game, onError?: (err: unknown) => void): void {
+  /**
+   * Starts the `requestAnimationFrame` render loop for `game`. Stops any
+   * previous loop first, so calling this again safely restarts rendering.
+   * @throws {TypeError} If `game` is null/undefined.
+   */
+  public start(game: Game, onError?: (err: unknown) => void): void {
+    if (game === null || game === undefined) throw new TypeError('Renderer.start: "game" must not be null/undefined');
     cancelAnimationFrame(this.rafId);
     const loop = (): void => {
       if (!game.active) return;
@@ -228,6 +252,7 @@ export class Renderer {
     this.rafId = requestAnimationFrame(loop);
   }
 
+  /** Renders one full frame: board, falling piece, entities, and every active visual-effect layer, back to front. */
   private draw(game: Game): void {
     const { ctx } = this;
     const TS = GameConfig.TILE_SIZE;
@@ -739,6 +764,7 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Advances every ambient dust mote one frame, respawning any that have drifted off-screen. */
   private updateMotes(): void {
     for (const m of this.motes) {
       m.y -= m.vy;
@@ -746,6 +772,7 @@ export class Renderer {
     }
   }
 
+  /** Draws every ambient dust mote at its current position. */
   private drawMotes(): void {
     const { ctx } = this;
     ctx.save();
@@ -792,26 +819,30 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  /** Shows a fading "×N COMBO" banner overlay. */
   public showCombo(multiplier: number): void {
     this.comboOverlay = { text: `×${multiplier} COMBO`, alpha: 1.0, mult: multiplier };
   }
 
+  /** Toggles the reduced-motion accessibility mode, gating every juice effect below. */
   public setReducedMotion(on: boolean): void { this.reducedMotion = on; }
+  /** Brief full-screen red flash on player damage. No-op under reduced motion. */
   public triggerDamageFlash(): void { if (!this.reducedMotion) this.damageFlashFrames = 8; }
+  /** Screen shake for a set duration/intensity. No-op under reduced motion. */
   public triggerShake(intensity: number, duration: number): void {
     if (this.reducedMotion) return;  // no screen shake when reduced motion is on
     this.shakeIntensity = intensity;
     this.shakeFrames = duration;
   }
 
+  /** Whether `(x, y)` is an active tattoo-artist tile, via `Game`'s own public accessor. */
   private isMerchantTile(game: Game, x: number, y: number): boolean {
-    return (game as unknown as { tattooTiles: Array<{ x: number; y: number }> })
-      .tattooTiles.some((t: { x: number; y: number }) => t.x === x && t.y === y);
+    return game.isTattooTile(x, y);
   }
 
+  /** The altar at `(x, y)`, if any. */
   private getAltarAt(game: Game, x: number, y: number): { tier: 1 | 2 | 3 } | undefined {
-    return (game as unknown as { altarTiles: Array<{ x: number; y: number; tier: 1 | 2 | 3 }> })
-      .altarTiles.find((a: { x: number; y: number }) => a.x === x && a.y === y);
+    return game.altarTiles.find(a => a.x === x && a.y === y);
   }
 }
 

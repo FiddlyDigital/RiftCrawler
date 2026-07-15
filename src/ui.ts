@@ -3,6 +3,11 @@ import { SpriteService, HtmlUtils } from './sprites';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
+/**
+ * Owns every DOM-facing HUD/modal/tooltip element and renders `Game` state
+ * and callbacks into them. `main.ts` is the only caller — it wires `Game`'s
+ * callbacks to these methods and drives modal show/hide around user actions.
+ */
 export class UIManager {
   private readonly logPanel: HTMLElement;
   private readonly modal: HTMLElement;
@@ -72,7 +77,8 @@ export class UIManager {
     };
   }
 
-  log(text: string, cls: LogClass = 'log-neutral', icon?: string): void {
+  /** Appends one line to the scrolling log panel (and the full-run log kept for the death-screen recap). */
+  public log(text: string, cls: LogClass = 'log-neutral', icon?: string): void {
     const div = document.createElement('div');
     div.className = `log-entry ${cls}`;
     div.innerHTML = icon ? `${SpriteService.iconHTML(icon, 13, 'sprite-icon log-icon')}${HtmlUtils.escapeHtml(text)}` : HtmlUtils.escapeHtml(text);
@@ -92,7 +98,8 @@ export class UIManager {
     });
   }
 
-  updateStats(state: UIState): void {
+  /** Pushes a fresh `UIState` snapshot into every HUD/sidebar element. Called once per game tick/action. */
+  public updateStats(state: UIState): void {
     this.hydrateSpriteSlots();
     this.els['floor']!.textContent       = String(state.floor);
     this.els['xpTotal']!.textContent     = String(state.totalXpEarned);
@@ -224,20 +231,23 @@ export class UIManager {
     }
   }
 
-  showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
+  /** Shows the death screen with the run's final stats and history. */
+  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
     this.els['deathTitle']!.textContent  = title;
     this.els['deathReason']!.textContent = reason;
     this.modal.querySelector('.modal-card')?.classList.remove('victory');
     this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
   }
 
-  showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
+  /** Shows the victory screen (Bres defeated) with the run's final stats and history. */
+  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
     this.els['deathTitle']!.innerHTML   = `${SpriteService.iconHTML('item_trophy', 16)}BRES VANQUISHED`;
     this.els['deathReason']!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
     this.modal.querySelector('.modal-card')?.classList.add('victory');
     this.populateEndModal(floor, totalXpEarned, highXp, history, stats, story);
   }
 
+  /** Shared body for {@link showDeath}/{@link showVictory}: fills in the stats grid, share text, run log, and history table. */
   private populateEndModal(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], stats?: RunStats, story?: string): void {
     this.els['finalFloor']!.textContent  = String(floor);
     this.els['finalScore']!.textContent  = String(totalXpEarned);
@@ -327,15 +337,18 @@ export class UIManager {
     this.modal.style.display = 'flex';
   }
 
-  hideDeath(): void { this.modal.style.display = 'none'; }
+  /** Hides the death/victory modal. */
+  public hideDeath(): void { this.modal.style.display = 'none'; }
 
-  showCrash(message: string): void {
+  /** Shows the fatal-error recovery modal with the crash message. */
+  public showCrash(message: string): void {
     const detail = document.getElementById('crash-detail');
     if (detail) detail.textContent = message;
     this.crashModal.style.display = 'flex';
   }
 
-  showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
+  /** Shows the run-start modifier (Rift Curse) picker. */
+  public showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
     const container = document.getElementById('modifier-choices')!;
     container.innerHTML = '';
     for (const mod of mods) {
@@ -351,7 +364,8 @@ export class UIManager {
     this.modifierModal.style.display = 'flex';
   }
 
-  showClassSelection(classes: ClassDef[], onSelect: (id: string) => void): void {
+  /** Shows the run-start class picker. */
+  public showClassSelection(classes: ClassDef[], onSelect: (id: string) => void): void {
     const container = document.getElementById('class-choices')!;
     container.innerHTML = '';
     for (const cls of classes) {
@@ -368,7 +382,8 @@ export class UIManager {
     this.classModal.style.display = 'flex';
   }
 
-  showFloorEvent(event: FloorEventDef, onChoice: (index: number) => void): void {
+  /** Shows a narrative floor-event modal (shrine, spring, NPC encounter, pact ceremony, etc.). */
+  public showFloorEvent(event: FloorEventDef, onChoice: (index: number) => void): void {
     (document.getElementById('floor-event-emoji') as HTMLElement).innerHTML  = SpriteService.iconHTML(event.emoji, 28);
     (document.getElementById('floor-event-title') as HTMLElement).textContent  = event.title;
     (document.getElementById('floor-event-flavor') as HTMLElement).textContent = event.flavor;
@@ -387,7 +402,8 @@ export class UIManager {
     this.floorEventModal.style.display = 'flex';
   }
 
-  showBossWarning(boss: BossDef, onDone: () => void): void {
+  /** Shows the boss-warning cinematic banner for ~1.8s, then calls `onDone`. */
+  public showBossWarning(boss: BossDef, onDone: () => void): void {
     (document.getElementById('boss-warning-emoji') as HTMLElement).innerHTML = SpriteService.iconHTML(boss.char, 32);
     (document.getElementById('boss-warning-name')  as HTMLElement).textContent = boss.name.toUpperCase();
     (document.getElementById('boss-warning-flavor') as HTMLElement).textContent = boss.flavorText;
@@ -406,7 +422,8 @@ export class UIManager {
     }, 1800);
   }
 
-  updateBestScore(score: number): void {
+  /** Updates the displayed best-score figure. */
+  public updateBestScore(score: number): void {
     this.els['bestScore']!.textContent = String(score);
   }
 
@@ -420,7 +437,8 @@ export class UIManager {
     });
   }
 
-  updateBoons(boons: UIState['boons']): void {
+  /** Rebuilds the boon (Geis) chip row in the sidebar. */
+  public updateBoons(boons: UIState['boons']): void {
     const panel = this.els['boonPanel']!;
     panel.innerHTML = '';
     if (boons.length === 0) { panel.textContent = '—'; return; }
@@ -438,7 +456,8 @@ export class UIManager {
     }
   }
 
-  updateBrands(brands: UIState['brands']): void {
+  /** Rebuilds the brand (Ogham Mark) chip row in the sidebar, grouped by brand with a set-completion indicator. */
+  public updateBrands(brands: UIState['brands']): void {
     const panel = this.els['brandPanel']!;
     panel.innerHTML = '';
     if (brands.length === 0) { panel.textContent = '—'; return; }
@@ -475,7 +494,8 @@ export class UIManager {
     }
   }
 
-  showCharacterSheet(): void {
+  /** Shows the full character-sheet modal, from the most recent `updateStats` snapshot. */
+  public showCharacterSheet(): void {
     this.els['charSheetBody']!.innerHTML = this.lastCharacterSheet.map(section => `
       <div class="char-sheet-section">
         <div class="char-sheet-section-title">${SpriteService.iconHTML(section.icon, 13)}${HtmlUtils.escapeHtml(section.title)}</div>
@@ -486,11 +506,13 @@ export class UIManager {
     this.charSheetModal.style.display = 'flex';
   }
 
-  hideCharacterSheet(): void {
+  /** Hides the character-sheet modal. */
+  public hideCharacterSheet(): void {
     this.charSheetModal.style.display = 'none';
   }
 
-  isCharacterSheetOpen(): boolean {
+  /** Whether the character-sheet modal is currently open. */
+  public isCharacterSheetOpen(): boolean {
     return this.charSheetModal.style.display === 'flex';
   }
 
@@ -572,7 +594,8 @@ export class UIManager {
     this.altarModal.style.display = 'flex';
   }
 
-  showShop(stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void): void {
+  /** Shows the wandering peddler's shop modal. */
+  public showShop(stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void): void {
     const modal  = document.getElementById('shop-modal')!;
     const goldEl = document.getElementById('shop-gold')!;
     const items  = document.getElementById('shop-items')!;
@@ -605,7 +628,8 @@ export class UIManager {
     modal.style.display = 'flex';
   }
 
-  showTattooModal(
+  /** Shows the tattoo-artist brand-choice modal, with an optional gold reroll. */
+  public showTattooModal(
     choices: BrandDef[],
     ownedBrands: Array<{ slot: BodyPart; brand: BrandDef }>,
     onChoice: (i: number) => void,
@@ -621,7 +645,8 @@ export class UIManager {
     });
   }
 
-  showAltarModal(
+  /** Shows the altar boon-choice modal for the given reward tier, with an optional gold reroll. */
+  public showAltarModal(
     tier: 1 | 2 | 3,
     choices: BoonDef[],
     ownedBoons: Array<{ id: string; stacks: number; def: BoonDef }>,
@@ -640,17 +665,20 @@ export class UIManager {
     });
   }
 
-  showStart(highScore: number): void {
+  /** Shows the start-screen modal. */
+  public showStart(highScore: number): void {
     const el = document.getElementById('start-best');
     if (el) el.textContent = highScore > 0 ? `Best run: ${highScore.toLocaleString()} XP` : '';
     document.getElementById('start-modal')!.style.display = 'flex';
   }
 
-  hideStart(): void {
+  /** Hides the start-screen modal. */
+  public hideStart(): void {
     document.getElementById('start-modal')!.style.display = 'none';
   }
 
-  showPauseMenu(
+  /** Shows the pause menu with the current sound/motion/volume state and button handlers. */
+  public showPauseMenu(
     state: { soundOn: boolean; reducedMotion: boolean; volumePct: number },
     handlers: { onResume: () => void; onToggleMute: () => void; onToggleMotion: () => void; onCycleVolume: () => void; onRestart: () => void },
   ): void {
@@ -671,12 +699,14 @@ export class UIManager {
     modal.style.display = 'flex';
   }
 
-  hidePauseMenu(): void {
+  /** Hides the pause menu. */
+  public hidePauseMenu(): void {
     const modal = document.getElementById('pause-modal');
     if (modal) modal.style.display = 'none';
   }
 
-  showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
+  /** Shows the tap/click-to-inspect tooltip near `(clientX, clientY)`, clamped to stay on-screen. Auto-dismisses after 3s. */
+  public showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
     const el = this.inspectTooltip;
     el.innerHTML = `
       <div class="inspect-header"><span class="inspect-icon">${SpriteService.iconHTML(info.icon, 20)}</span><span class="inspect-title">${info.title}</span></div>
@@ -702,20 +732,24 @@ export class UIManager {
     this.inspectDismissTimer = setTimeout(() => this.hideInspectTooltip(), 3000);
   }
 
-  hideInspectTooltip(): void {
+  /** Hides the inspect tooltip. */
+  public hideInspectTooltip(): void {
     this.inspectTooltip.hidden = true;
     this.inspectTooltip.classList.remove('inspect-show');
     if (this.inspectDismissTimer) { clearTimeout(this.inspectDismissTimer); this.inspectDismissTimer = null; }
   }
 
-  isInspectTooltipVisible(): boolean {
+  /** Whether the inspect tooltip is currently visible. */
+  public isInspectTooltipVisible(): boolean {
     return !this.inspectTooltip.hidden;
   }
 
-  showError(message: string): void {
+  /** Logs an error to the console and the in-game log panel. */
+  public showError(message: string): void {
     console.error('[CausewayToEriu]', message);
     this.log(message, 'log-damage', 'ui_warning');
   }
 
-  clearLog(): void { this.logPanel.innerHTML = ''; this.fullLog.length = 0; }
+  /** Clears the log panel and the full-run log. */
+  public clearLog(): void { this.logPanel.innerHTML = ''; this.fullLog.length = 0; }
 }

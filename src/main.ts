@@ -2,7 +2,7 @@ import './style.css';
 import { Game, GameMath } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
-import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
+import { InputBinder } from './input';
 import { StorageService } from './storage';
 import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
@@ -453,12 +453,12 @@ function launchWithModifier(onReady: () => void): void {
 // ── Boot sequence ─────────────────────────────────────────────────────────────
 
 startGame(true); // initialise paused — start screen sits on top
-bindKeyboard(() => game);
-bindButtons(() => game);
-bindGamepad(() => game);
+InputBinder.bindKeyboard(() => game);
+InputBinder.bindButtons(() => game);
+InputBinder.bindGamepad(() => game);
 
 let lastInspectTile: { x: number; y: number } | null = null;
-bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
+InputBinder.bindCanvasInspect(canvas, () => game, (gx, gy, clientX, clientY) => {
   if (lastInspectTile && lastInspectTile.x === gx && lastInspectTile.y === gy && ui.isInspectTooltipVisible()) {
     ui.hideInspectTooltip();
     lastInspectTile = null;

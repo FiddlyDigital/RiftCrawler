@@ -468,7 +468,7 @@ export class Game {
   }
 
   /** Whether `(x, y)` is an active tattoo-artist tile. */
-  private isTattooTile(x: number, y: number): boolean {
+  public isTattooTile(x: number, y: number): boolean {
     return this.tattooTiles.some(t => t.x === x && t.y === y);
   }
 
