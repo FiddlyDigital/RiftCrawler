@@ -1415,6 +1415,26 @@ describe('Game.buildRunStory', () => {
   });
 });
 
+// ── Wandering NPC encounters ────────────────────────────────────────────────
+
+describe('Wandering NPC encounters', () => {
+  it('a trade-kind NPC with no boons to trade still opens a dialog, not a silent log line', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    expect(game.player.boons).toHaveLength(0);
+    const tx = game.player.x + 1, ty = game.player.y;
+    game.map[tx]![ty] = Tile.FLOOR;
+    game.npcTiles = [{ x: tx, y: ty, npcId: 'fomorian_tinker' }];
+    game.handleHeroMove(1, 0);
+    expect(onFloorEvent).toHaveBeenCalledTimes(1);
+    const [event] = onFloorEvent.mock.calls[0]!;
+    expect(event.title).toBe('A Fomorian Tinker');
+    expect(event.options.length).toBeGreaterThan(0);
+    expect(game.npcTiles).toHaveLength(0);  // tile still consumed on bump
+  });
+});
+
 // ── Hazards (previously untested) ─────────────────────────────────────────────
 
 describe('Hazards', () => {

@@ -813,12 +813,15 @@ export class Game {
           { label: 'Not now', desc: '', apply: (): string => `${npc.name} nods, unsurprised, and fades back into the dark.` },
         ],
       };
+    } else if (npc.kind === 'trade' && this.player.boons.length === 0) {
+      // Still a real encounter (dialog + departure beam), just with nothing
+      // to trade yet — not a silent log line while the NPC vanishes.
+      event = {
+        id: npc.id, emoji: npc.char, title: npc.name,
+        flavor: `${npc.introLine} ...but you carry nothing worth trading. Come back once you've gathered some Geasa.`,
+        options: [{ label: 'Nothing to offer', desc: '', apply: (): string => `${npc.name} shrugs and fades back into the dark.` }],
+      };
     } else if (npc.kind === 'trade') {
-      if (this.player.boons.length === 0) {
-        this.cb.log(`${npc.name}: "You carry nothing worth trading." `, 'log-neutral', npc.char);
-        onClosed?.();
-        return;
-      }
       const boonOptions = this.player.boons.map(b => ({
         label: `Give up ${b.def.name} (×${b.stacks})`,
         desc: b.def.desc,
