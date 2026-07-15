@@ -75,8 +75,12 @@ class GameApp {
     audio.setVolume(this.masterVolume);
 
     // ── Fullscreen ─────────────────────────────────────────────────────────
+    // Fullscreens the whole document, not just #game-wrapper — every modal
+    // (char sheet, codex, pause menu, etc.) lives as a sibling of #game-wrapper
+    // in the DOM, and the Fullscreen API only paints the fullscreen element's
+    // own subtree, so scoping this any narrower hides those modals entirely.
     this.fullscreenBtn = document.getElementById('fullscreen-btn') as HTMLButtonElement | null;
-    this.fullscreenTarget = document.getElementById('game-wrapper') ?? document.documentElement;
+    this.fullscreenTarget = document.documentElement;
     if (this.fullscreenBtn && document.fullscreenEnabled) {
       this.fullscreenBtn.hidden = false;
       this.fullscreenBtn.addEventListener('click', () => { void this.toggleFullscreen(); });
