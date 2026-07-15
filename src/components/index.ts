@@ -8,3 +8,4 @@ import './modifier-modal';
 import './class-modal';
 import './floor-event-modal';
 import './offer-modal';
+import './shop-modal';

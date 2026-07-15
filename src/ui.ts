@@ -9,6 +9,7 @@ import type { ModifierModal } from './components/modifier-modal';
 import type { ClassModal } from './components/class-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
 import type { OfferModal } from './components/offer-modal';
+import type { ShopModal } from './components/shop-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -26,6 +27,7 @@ export class UIManager {
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
   private readonly offerModal: OfferModal;
+  private readonly shopModal: ShopModal;
   private readonly crashModal: CrashModal;
   private readonly pauseModal: PauseModal;
   private readonly charSheetModal: HTMLElement;
@@ -45,6 +47,7 @@ export class UIManager {
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.offerModal        = document.querySelector('offer-modal')!;
+    this.shopModal         = document.querySelector('shop-modal')!;
     this.crashModal        = document.querySelector('crash-modal')!;
     this.pauseModal        = document.querySelector('pause-modal')!;
     this.charSheetModal    = document.getElementById('char-sheet-modal')!;
@@ -537,36 +540,7 @@ export class UIManager {
 
   /** Shows the wandering peddler's shop modal. */
   public showShop(stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void): void {
-    const modal  = document.getElementById('shop-modal')!;
-    const goldEl = document.getElementById('shop-gold')!;
-    const items  = document.getElementById('shop-items')!;
-
-    const render = (g: number): void => {
-      goldEl.textContent = `${g.toLocaleString()}g`;
-      items.innerHTML = '';
-      for (const item of stock) {
-        const btn = document.createElement('button');
-        btn.className = 'shop-item-btn';
-        btn.disabled = item.purchased || g < item.cost;
-        btn.innerHTML =
-          `<span style="display:flex;align-items:center;gap:8px;">${SpriteService.iconHTML(item.icon, 18)}` +
-          `<span style="text-align:left;"><b>${HtmlUtils.escapeHtml(item.name)}</b><br>` +
-          `<span style="color:#888;font-size:10px;">${HtmlUtils.escapeHtml(item.desc)}</span></span></span>` +
-          `<span class="shop-cost">${item.purchased ? 'SOLD' : `${item.cost}g`}</span>`;
-        btn.addEventListener('click', () => {
-          const result = buy(item.id);
-          if (result.ok) render(result.gold);
-        });
-        items.appendChild(btn);
-      }
-    };
-
-    render(gold);
-    (document.getElementById('shop-close') as HTMLButtonElement).onclick = () => {
-      modal.style.display = 'none';
-      onClose();
-    };
-    modal.style.display = 'flex';
+    this.shopModal.showShop(stock, gold, buy, onClose);
   }
 
   /** Shows the tattoo-artist brand-choice modal, with an optional gold reroll. */
