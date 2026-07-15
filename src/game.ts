@@ -47,60 +47,75 @@ function describeToll(effects: EffectSpec[] | undefined): string {
   }).join(', ');
 }
 
-// ── Pure helpers (exported for unit tests) ───────────────────────────────────
+// ── Pure helpers ────────────────────────────────────────────────────────────
 
-export function rotateMatrix(matrix: CellValue[][]): CellValue[][] {
-  const rows = matrix.length;
-  const cols = matrix[0]!.length;
-  const out: CellValue[][] = Array.from({ length: cols }, () => Array(rows).fill(0) as CellValue[]);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      out[c]![rows - 1 - r] = matrix[r]![c]!;
+/** Pure tetromino/timing/scoring math shared by `Game` and the tick loop in `main.ts`. */
+export class GameMath {
+  /** Rotates a piece matrix 90° clockwise. @throws {TypeError} If `matrix` is null/undefined/empty. */
+  static rotateMatrix(matrix: CellValue[][]): CellValue[][] {
+    if (!matrix || matrix.length === 0) throw new TypeError('GameMath.rotateMatrix: "matrix" must be a non-empty 2D array');
+    const rows = matrix.length;
+    const cols = matrix[0]!.length;
+    const out: CellValue[][] = Array.from({ length: cols }, () => Array(rows).fill(0) as CellValue[]);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        out[c]![rows - 1 - r] = matrix[r]![c]!;
+      }
     }
+    return out;
   }
-  return out;
-}
 
-export function tickMsForLevel(level: number, slowPercent: number): number {
-  const base = Math.max(Balance.CONFIG.progression.tickMinMs, Balance.CONFIG.progression.tickBaseMs - (level - 1) * Balance.CONFIG.progression.tickMsPerDungeonLevel);
-  return Math.floor(base * (1 + slowPercent / 100));
-}
+  /** Milliseconds per gravity tick at the given dungeon level and slow percentage. */
+  static tickMsForLevel(level: number, slowPercent: number): number {
+    const base = Math.max(Balance.CONFIG.progression.tickMinMs, Balance.CONFIG.progression.tickBaseMs - (level - 1) * Balance.CONFIG.progression.tickMsPerDungeonLevel);
+    return Math.floor(base * (1 + slowPercent / 100));
+  }
 
-export function scoreForLines(count: number, level: number): number {
-  return (Balance.CONFIG.progression.lineClearScoreBase[count] ?? Balance.CONFIG.progression.lineClearScoreOverflow) * level;
+  /** Gold awarded for clearing `count` rows at dungeon level `level`. */
+  static scoreForLines(count: number, level: number): number {
+    return (Balance.CONFIG.progression.lineClearScoreBase[count] ?? Balance.CONFIG.progression.lineClearScoreOverflow) * level;
+  }
 }
 
 // ── Game class ───────────────────────────────────────────────────────────────
 
+/**
+ * The central run controller: owns the dungeon-floor grid, the falling
+ * tetromino, the player and monsters, and every run-scoped counter (gold,
+ * XP multipliers, biome/class/patron state, boss mechanics, and the
+ * Gorgoth endgame). `main.ts`/`input.ts`/`ui.ts`/`renderer.ts` drive it
+ * entirely through its public methods and read its public fields for
+ * display — there is exactly one `Game` instance per run.
+ */
 export class Game {
   // Map state
-  map: TileValue[][];
-  colors: (string | null)[][];
-  visibility: boolean[][];
-  explored: boolean[][];
+  public map: TileValue[][];
+  public colors: (string | null)[][];
+  public visibility: boolean[][];
+  public explored: boolean[][];
 
   // Entities
-  player: Player;
-  monsters: Monster[];
+  public player: Player;
+  public monsters: Monster[];
 
   // Active block
-  blockMatrix: CellValue[][] = [];
-  blockX = 0;
-  blockY = 0;
-  blockColor = '';
-  currentType: ShapeKey = 'I';
-  nextType: ShapeKey = 'I';
+  public blockMatrix: CellValue[][] = [];
+  public blockX = 0;
+  public blockY = 0;
+  public blockColor = '';
+  public currentType: ShapeKey = 'I';
+  public nextType: ShapeKey = 'I';
 
   // Game state
-  active = true;
-  paused = false;
-  gold = 0;
-  dungeonLevel = 1;
+  public active = true;
+  public paused = false;
+  public gold = 0;
+  public dungeonLevel = 1;
 
-  // Hazard tiles (persist per floor)
+  /** Hazard tiles (persist per floor). */
   public hazards: HazardTile[] = [];
 
-  // Shape-based special terrain tiles
+  /** Shape-based special terrain tiles. */
   public specialTiles: SpecialTile[] = [];
 
   // Piece state (set fresh each spawn)
@@ -120,10 +135,14 @@ export class Game {
 
   // Class state
   public activeClassId: string | null = null;
-  public activePatronId: string | null = null;  // An Draoi's sworn deity (null until the pact ceremony)
-  public timeDilationTurns = 0;    // Chronomancer: turns remaining at the slow below
-  public timeDilationSlowPct = 0;  // magnitude of the slow while timeDilationTurns > 0 (class-configurable)
-  public killsThisFloor    = 0;  // kill counter for the Overload ability type
+  /** An Draoi's sworn deity (null until the pact ceremony). */
+  public activePatronId: string | null = null;
+  /** Chronomancer: turns remaining at the slow below. */
+  public timeDilationTurns = 0;
+  /** Magnitude of the slow while `timeDilationTurns > 0` (class-configurable). */
+  public timeDilationSlowPct = 0;
+  /** Kill counter for the Overload ability type. */
+  public killsThisFloor = 0;
 
   // Biome state
   public biomeId = 'stone';
@@ -144,24 +163,28 @@ export class Game {
   public comboCount = 0;
   private lastLineClearMs = 0;
   private tattooTiles: Array<{ x: number; y: number }> = [];
-  private tattooTilesSpawnedThisFloor = 0;  // caps Ogham Mark tiles per floor
+  /** Caps Ogham Mark tiles per floor. */
+  private tattooTilesSpawnedThisFloor = 0;
   public altarTiles: AltarTile[] = [];
   public npcTiles: NpcTile[] = [];
-  private npcTilesSpawnedThisFloor = 0;  // caps wandering-NPC tiles per floor
-  // A vengeance bounty accepted from an NPC — persists across floors (no
-  // per-floor reset) until the named boss falls, whenever/wherever that is.
+  /** Caps wandering-NPC tiles per floor. */
+  private npcTilesSpawnedThisFloor = 0;
+  /**
+   * A vengeance bounty accepted from an NPC — persists across floors (no
+   * per-floor reset) until the named boss falls, whenever/wherever that is.
+   */
   public activeBountyQuest: { bossName: string; floor: number } | null = null;
 
-  // Ghost files — fallen characters from previous runs (loaded by main.ts
-  // after construction; the first floor therefore never rolls a ghost).
-  // activeGhost is this floor's haunting, chosen at floor start when a stored
-  // ghost's level is within tolerance of the current hero's.
+  /**
+   * Fallen characters from previous runs (loaded by `main.ts` after
+   * construction; the first floor therefore never rolls a ghost).
+   */
   public availableGhosts: GhostRecord[] = [];
+  /** This floor's haunting, chosen at floor start when a stored ghost's level is within tolerance of the current hero's. */
   private activeGhost: GhostRecord | null = null;
   private ghostPlaced = false;
 
-  // Notable moments this run — feeds the death/victory screen's short "tale
-  // of the run" recap.
+  /** Notable moments this run — feeds the death/victory screen's short "tale of the run" recap. */
   public storyBeats: string[] = [];
 
   // Active boss mechanics (set at spawn, cleared on floor reset)
@@ -169,18 +192,32 @@ export class Game {
   private activeBossOnDeath:   ((game: Game, x: number, y: number) => void) | null = null;
   private bossHalfHpTriggered = false;
 
-  // Endgame: overflowing the stack summons Gorgoth the Returned. While summoned,
-  // no tetrominoes fall — the run becomes a boss duel. Killing him wins.
+  /**
+   * Endgame: overflowing the stack summons Gorgoth the Returned. While
+   * summoned, no tetrominoes fall — the run becomes a boss duel. Killing
+   * him wins.
+   */
   public gorgothSummoned = false;
   public won = false;
-  private gorgothHintShown = false;   // one-time nudge toward the win condition
-  private gorgothHp = Balance.CONFIG.gorgoth.maxHp;  // carries over between summons (escape & retry)
+  /** One-time nudge toward the win condition. */
+  private gorgothHintShown = false;
+  /** Carries over between summons (escape & retry). */
+  private gorgothHp = Balance.CONFIG.gorgoth.maxHp;
   private gorgothHalfTriggered = false;
-  public gorgothEverSummoned = false;  // once true, line clears chip the causeway (his stored HP)
+  /** Once true, line clears chip the causeway (his stored HP). */
+  public gorgothEverSummoned = false;
 
-  readonly cb: GameCallbacks;
+  public readonly cb: GameCallbacks;
 
+  /**
+   * Starts a fresh run: builds an empty floor, places the hero on the
+   * starting platform, and spawns the first falling piece.
+   * @throws {TypeError} If `callbacks` is null/undefined.
+   */
   constructor(callbacks: GameCallbacks) {
+    if (callbacks === null || callbacks === undefined) {
+      throw new TypeError('Game: "callbacks" must not be null/undefined');
+    }
     this.cb = callbacks;
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
@@ -198,18 +235,22 @@ export class Game {
 
   // ── Grid helpers ─────────────────────────────────────────────────────────
 
+  /** A fresh all-VOID terrain grid. */
   private emptyMap(): TileValue[][] {
     return Array.from({ length: GameConfig.COLS }, () => Array<TileValue>(GameConfig.ROWS).fill(Tile.VOID));
   }
 
+  /** A fresh all-null tile-color grid. */
   private emptyColors(): (string | null)[][] {
     return Array.from({ length: GameConfig.COLS }, () => Array<string | null>(GameConfig.ROWS).fill(null));
   }
 
+  /** A fresh grid filled with `val` (used for visibility/explored state). */
   private emptyBoolGrid(val: boolean): boolean[][] {
     return Array.from({ length: GameConfig.COLS }, () => Array(GameConfig.ROWS).fill(val) as boolean[]);
   }
 
+  /** Lays down the fixed 6×2 floor tile the hero stands on at run/floor start. */
   private generateStartPlatform(): void {
     for (let x = 2; x < 8; x++) {
       this.map[x]![23] = Tile.FLOOR; this.colors[x]![23] = '#333344';
@@ -217,6 +258,7 @@ export class Game {
     }
   }
 
+  /** A uniformly random tetromino shape key. */
   private randomShapeKey(): ShapeKey {
     const keys = Object.keys(SHAPES) as ShapeKey[];
     return keys[Math.floor(Math.random() * keys.length)]!;
@@ -224,7 +266,8 @@ export class Game {
 
   // ── Fog of war ───────────────────────────────────────────────────────────
 
-  updateVisibility(): void {
+  /** Recomputes visibility/explored state around the player (or reveals the whole arena during the Gorgoth duel). */
+  private updateVisibility(): void {
     // During the Gorgoth duel the whole arena stays lit (revealed at summon) so
     // the player can watch him descend — don't re-fog to the vision radius.
     if (this.gorgothSummoned) return;
@@ -394,7 +437,8 @@ export class Game {
 
   // ── Collision ────────────────────────────────────────────────────────────
 
-  checkBlockCollision(bx: number, by: number, matrix: CellValue[][]): boolean {
+  /** Whether placing `matrix` at `(bx, by)` would collide with the board edge or locked terrain. */
+  public checkBlockCollision(bx: number, by: number, matrix: CellValue[][]): boolean {
     for (let r = 0; r < matrix.length; r++) {
       for (let c = 0; c < matrix[r]!.length; c++) {
         if (matrix[r]![c] !== Cell.EMPTY) {
@@ -407,7 +451,8 @@ export class Game {
     return false;
   }
 
-  computeGhostBlockY(): number {
+  /** The row the falling piece would land on if hard-dropped now — used for the ghost-piece preview. */
+  public computeGhostBlockY(): number {
     // No active piece (e.g. during the Gorgoth duel): an empty matrix never
     // collides, so the loop below would spin forever and freeze the renderer.
     if (this.blockMatrix.length === 0) return this.blockY;
@@ -416,20 +461,23 @@ export class Game {
     return ghostY;
   }
 
-  isValidMove(x: number, y: number): boolean {
+  /** Whether an entity can stand on `(x, y)` — floor, stairs, or an interactable tile (tattoo artist / altar). */
+  public isValidMove(x: number, y: number): boolean {
     if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return false;
     return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isTattooTile(x, y) || this.isAltarTile(x, y);
   }
 
+  /** Whether `(x, y)` is an active tattoo-artist tile. */
   private isTattooTile(x: number, y: number): boolean {
     return this.tattooTiles.some(t => t.x === x && t.y === y);
   }
 
+  /** Whether `(x, y)` is an active altar tile. */
   private isAltarTile(x: number, y: number): boolean {
     return this.altarTiles.some(a => a.x === x && a.y === y);
   }
 
-  getHazardAt(x: number, y: number): HazardTile | undefined {
+  private getHazardAt(x: number, y: number): HazardTile | undefined {
     return this.hazards.find(h => h.x === x && h.y === y);
   }
 
@@ -592,6 +640,7 @@ export class Game {
 
   // ── Monster spawning helper ───────────────────────────────────────────────
 
+  /** Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the resulting `Monster` at `(tx, ty)`. */
   private spawnMonster(key: string, tx: number, ty: number): void {
     const def = MONSTERS[key];
     if (!def) return;
@@ -623,8 +672,8 @@ export class Game {
     }
   }
 
-  // Called by Cailleach's Stoneward onDeath
-  spawnCrystalShards(bx: number, by: number): void {
+  /** Spawns up to two Crystal Shard adds beside a fallen Cailleach's Stoneward. Called by that boss's `onDeath` hook. */
+  public spawnCrystalShards(bx: number, by: number): void {
     const shardHp  = Balance.CONFIG.crystalShards.baseHp + this.dungeonLevel * Balance.CONFIG.crystalShards.hpPerDungeonLevel;
     const shardAtk = Balance.CONFIG.crystalShards.baseAtk + Math.floor(this.dungeonLevel * Balance.CONFIG.crystalShards.atkPerDungeonLevel);
     const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
@@ -643,8 +692,8 @@ export class Game {
     this.cb.log("Cailleach's Stoneward shatters — shards emerge!", 'log-boss', 'sprite_boss_crystal_golem');
   }
 
-  // Called by Balor's Herald onHalfHp
-  triggerGravityBurst(): void {
+  /** Yanks the falling piece 5 rows down. Called by Balor's Herald's `onHalfHp` hook. */
+  public triggerGravityBurst(): void {
     this.blockY = Math.max(0, this.blockY - 5);
     this.cb.log("Balor's Herald tears the weave — gravity surges!", 'log-boss', 'fx_impact');
     this.cb.onParticle(this.player.x, this.player.y, 'SURGE!', '#aa00ff', undefined, 'fx_impact');
@@ -658,6 +707,7 @@ export class Game {
     this.spawnRoom(Math.random() < 0.5 ? 'vault' : 'den');
   }
 
+  /** A monster key, weighted toward tougher species as the dungeon deepens. */
   private getRandomMonsterKey(): string {
     const all = ['rat', 'skeleton', 'goblin_archer', 'cave_slime', 'berserker_orc', 'plague_bat'];
     const maxIdx = Math.min(all.length - 1, 1 + Math.floor(this.dungeonLevel / 3));
@@ -858,7 +908,14 @@ export class Game {
     return true;
   }
 
-  applyPatron(id: string): void {
+  /**
+   * Swears An Draoi's pact with the named deity: applies the patron's
+   * passive, grants the level-appropriate spells (paying each one's toll),
+   * and swaps in the signature spell as the active ranged ability.
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  public applyPatron(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyPatron: "id" must be a non-empty string');
     const patron = PATRONS.find(p => p.id === id);
     if (!patron) return;
     this.activePatronId = id;
@@ -898,9 +955,11 @@ export class Game {
     }
   }
 
-  // Cycle the active spell (An Draoi with 2+ unlocked spells). Shared
-  // cooldown — switching is free but doesn't dodge the wait.
-  handleCycleSpell(): void {
+  /**
+   * Cycles the active spell (An Draoi with 2+ unlocked spells). Shared
+   * cooldown — switching is free but doesn't dodge the wait.
+   */
+  public handleCycleSpell(): void {
     if (this.player.hp <= 0 || this.paused) return;
     const book = this.player.spellbook;
     if (book.length < 2) return;
@@ -910,9 +969,11 @@ export class Game {
     this.pushUI();
   }
 
-  // Short narrative recap for the death/victory screen, built from the
-  // notable moments recorded in storyBeats over the run.
-  buildRunStory(): string {
+  /**
+   * Short narrative recap for the death/victory screen, built from the
+   * notable moments recorded in {@link storyBeats} over the run.
+   */
+  public buildRunStory(): string {
     const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'wanderer';
     const beats = this.storyBeats.slice(0, 4);
     if (beats.length === 0) return `A ${cls}'s descent, ended on Floor ${this.dungeonLevel}.`;
@@ -957,6 +1018,7 @@ export class Game {
 
   // ── Line clears ──────────────────────────────────────────────────────────
 
+  /** Clears every full row, shifts the stack down, and applies all the line-clear rewards (gold, combo, XP, heal, Gorgoth causeway chip). */
   private checkLineClears(): void {
     let rowsCleared = 0;
     const clearedRows: number[] = [];
@@ -1010,7 +1072,7 @@ export class Game {
       this.lastLineClearMs = now;
       if (this.comboCount > this.biggestCombo) this.biggestCombo = this.comboCount;
 
-      let goldAdded = Math.floor(scoreForLines(rowsCleared, this.dungeonLevel));
+      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel));
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
         goldAdded = Math.floor(goldAdded * mult);
@@ -1099,6 +1161,7 @@ export class Game {
     }
   }
 
+  /** Shifts monsters and the player down one row above a just-cleared line (part of the collapse animation's bookkeeping). */
   private shiftEntitiesDown(thresholdY: number): void {
     for (const m of this.monsters) { if (m.y < thresholdY) m.y++; }
     if (this.player.y < thresholdY) {
@@ -1109,6 +1172,7 @@ export class Game {
 
   // ── Floor transitions ────────────────────────────────────────────────────
 
+  /** Advances the dungeon level counter and rebuilds the floor (used when the stack's top row itself scrolls off the bottom). */
   private transitionToNextFloor(): void {
     this.dungeonLevel++;
     this.floorsDescended++;
@@ -1119,6 +1183,7 @@ export class Game {
     this.maybeOfferPact();
   }
 
+  /** Syncs `biomeId`/`biomeMonsterHpMult`/`biomeGravityPct` to the current dungeon level. */
   private updateBiome(): void {
     const biome = Biome.forFloor(this.dungeonLevel);
     this.biomeId = biome.id;
@@ -1126,7 +1191,8 @@ export class Game {
     this.biomeGravityPct = biome.gravityPctBonus;
   }
 
-  resetDungeonState(): void {
+  /** Rebuilds the floor grid and per-floor state (monsters, hazards, ghost roll, tattoo/altar/NPC tiles) for a fresh descent. */
+  public resetDungeonState(): void {
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
     this.visibility = this.emptyBoolGrid(false);
@@ -1184,6 +1250,7 @@ export class Game {
 
   // ── Gravity ──────────────────────────────────────────────────────────────
 
+  /** Drops the falling piece one row, or locks it if it can't descend further. */
   private moveGravity(): void {
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) {
       this.blockY++;
@@ -1194,7 +1261,8 @@ export class Game {
 
   // ── Auto-tick (timer-driven) ─────────────────────────────────────────────
 
-  autoTick(): void {
+  /** One timer-driven simulation tick: status effects, hazards, gravity, monster turns. Called on the game loop's interval; a no-op while paused or dead. */
+  public autoTick(): void {
     if (this.player.hp <= 0 || this.paused) return;
     StatusEffectSystem.applyStatusEffects(this);
     StatusEffectSystem.applyRegen(this);
@@ -1219,6 +1287,7 @@ export class Game {
 
   // ── Player turn (action-driven) ──────────────────────────────────────────
 
+  /** The action-driven counterpart to {@link autoTick} — runs the same per-turn resolution, then notifies the host to reset its tick timer. */
   private advanceTurn(): void {
     if (this.player.hp <= 0) return;
     StatusEffectSystem.applyStatusEffects(this);
@@ -1242,6 +1311,7 @@ export class Game {
     this.cb.onAction();
   }
 
+  /** Decrements the ranged-ability cooldown by one turn, if any remains. */
   private tickRangedCooldown(): void {
     if (this.player.rangedCooldown > 0) this.player.rangedCooldown--;
   }
@@ -1254,7 +1324,8 @@ export class Game {
     }
   }
 
-  getRunStats(): RunStats {
+  /** Snapshot of this run's aggregate stats, for the death/victory/recap screen. */
+  public getRunStats(): RunStats {
     return {
       monstersKilled: this.monstersKilled,
       bossesKilled:   this.bossesKilled,
@@ -1266,7 +1337,8 @@ export class Game {
 
   // ── Level-up boon pick ───────────────────────────────────────────────────
 
-  openLevelUpBoons(): void {
+  /** Opens the level-up boon-choice modal. The single choke point every level-up passes through (kills, tomes, scholars, line-clear XP), so it's also where patron spell unlocks sync. */
+  public openLevelUpBoons(): void {
     this.paused = true;
     this.syncSpellUnlocks();  // patron spells gated on the level just reached
     this.cb.onBeam?.(this.player.x);
@@ -1284,11 +1356,24 @@ export class Game {
 
   // ── Class selection ──────────────────────────────────────────────────────
 
-  getRandomClasses(count = 2): ClassDef[] {
+  /**
+   * The classes offered on the start-screen picker.
+   * @throws {TypeError} If `count` is not a positive finite number.
+   */
+  public getRandomClasses(count = 2): ClassDef[] {
+    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
+      throw new TypeError('Game.getRandomClasses: "count" must be a positive finite number');
+    }
     return CLASSES.slice(0, count);
   }
 
-  applyClass(id: string): void {
+  /**
+   * Applies the chosen starting class's stat effects/ability and sets the
+   * hero's board sprite to match.
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  public applyClass(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyClass: "id" must be a non-empty string');
     const cls = CLASSES.find(c => c.id === id);
     if (!cls) return;
     cls.apply(this.player);
@@ -1300,12 +1385,24 @@ export class Game {
 
   // ── Modifier selection ───────────────────────────────────────────────────
 
-  getRandomModifiers(count = 3): ModifierDef[] {
+  /**
+   * A random selection of run modifiers (Rift Curses) for the start-screen picker.
+   * @throws {TypeError} If `count` is not a positive finite number.
+   */
+  public getRandomModifiers(count = 3): ModifierDef[] {
+    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
+      throw new TypeError('Game.getRandomModifiers: "count" must be a positive finite number');
+    }
     const shuffled = [...MODIFIERS].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
   }
 
-  applyModifier(id: string): void {
+  /**
+   * Applies the chosen run modifier's effect for the whole run.
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  public applyModifier(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyModifier: "id" must be a non-empty string');
     const mod = MODIFIERS.find(m => m.id === id);
     if (!mod) return;
     mod.apply(this);
@@ -1316,7 +1413,8 @@ export class Game {
 
   // ── Tattoo Artist ─────────────────────────────────────────────────────────
 
-  openTattooArtist(): void {
+  /** Opens the tattoo-artist brand-choice modal (reachable via a tattoo-artist tile). */
+  private openTattooArtist(): void {
     this.paused = true;
     const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
     let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
@@ -1346,9 +1444,11 @@ export class Game {
     });
   }
 
-  // The Fear Dearg's stall — the gold sink. Prices scale with depth; each
-  // item can be bought once per visit.
-  openPeddler(): void {
+  /**
+   * The Fear Dearg's stall — the gold sink. Prices scale with depth; each
+   * item can be bought once per visit.
+   */
+  public openPeddler(): void {
     if (!this.cb.onOpenShop) return;
     this.paused = true;
     const prices = Balance.CONFIG.economy.shop.prices;
@@ -1378,7 +1478,8 @@ export class Game {
     this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
   }
 
-  openAltar(tier: 1 | 2 | 3): void {
+  /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). */
+  private openAltar(tier: 1 | 2 | 3): void {
     this.paused = true;
     const pool = Boon.BY_TIER[tier];
     const ownedIds = (): string[] => this.player.boons.map(b => b.id);
@@ -1407,7 +1508,17 @@ export class Game {
 
   // ── Action handlers ──────────────────────────────────────────────────────
 
-  handleHeroMove(dx: number, dy: number): void {
+  /**
+   * Moves the hero one tile (or attacks, if a monster occupies the
+   * destination), triggering whatever the destination tile does (combat,
+   * hazard, altar, tattoo artist, NPC, stairs).
+   * @param dx - Column delta, expected to be `-1`, `0`, or `1`.
+   * @param dy - Row delta, expected to be `-1`, `0`, or `1`.
+   * @throws {TypeError} If `dx` or `dy` is not a finite number.
+   */
+  public handleHeroMove(dx: number, dy: number): void {
+    if (typeof dx !== 'number' || !Number.isFinite(dx)) throw new TypeError('Game.handleHeroMove: "dx" must be a finite number');
+    if (typeof dy !== 'number' || !Number.isFinite(dy)) throw new TypeError('Game.handleHeroMove: "dy" must be a finite number');
     if (this.player.hp <= 0 || this.paused) return;
     if (this.player.isStunned) {
       this.cb.log('You are stunned!', 'log-damage');
@@ -1551,7 +1662,8 @@ export class Game {
     }
   }
 
-  handleHeroWait(): void {
+  /** Rests one turn: a small heal (more on sacred ground, less with a monster adjacent). */
+  public handleHeroWait(): void {
     if (this.player.hp <= 0 || this.paused) return;
     const nearbyMonster = this.monsters.some(m => Math.abs(m.x - this.player.x) <= 1 && Math.abs(m.y - this.player.y) <= 1);
     const healAmt = nearbyMonster ? 1 : 4;
@@ -1574,17 +1686,20 @@ export class Game {
     this.advanceTurn();
   }
 
+  /** Reads a numeric tuning param off an ability, or `fallback` if absent/non-numeric. */
   private abilityNum(ability: import('./types').RangedAbility, key: string, fallback: number): number {
     const v = ability.params?.[key];
     return typeof v === 'number' ? v : fallback;
   }
 
+  /** Reads a string tuning param off an ability, or `fallback` if absent/non-string. */
   private abilityStr(ability: import('./types').RangedAbility, key: string, fallback: string): string {
     const v = ability.params?.[key];
     return typeof v === 'string' ? v : fallback;
   }
 
-  handleRangedAttack(): void {
+  /** Casts the player's active ranged ability/spell, dispatched by `abilityType`. HP-pact spells pre-check a valid target before charging the cost. */
+  public handleRangedAttack(): void {
     if (this.player.hp <= 0 || this.paused) return;
     const ability = this.player.rangedAbility;
     if (!ability) {
@@ -1898,6 +2013,7 @@ export class Game {
     this.advanceTurn();
   }
 
+  /** The nearest visible, line-of-sight monster within `range`, or `null`. */
   private findRangedTarget(range: number): import('./entities').Monster | null {
     const inRange = this.monsters.filter(m => {
       const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
@@ -1913,6 +2029,7 @@ export class Game {
     return inRange[0] ?? null;
   }
 
+  /** Emits a dotted particle trail from the player to `(tx, ty)`, for ranged-attack visual feedback. */
   private emitProjectileTrail(tx: number, ty: number, icon: string): void {
     // Bresenham path from player to target, emit a dot particle at each step
     let x = this.player.x, y = this.player.y;
@@ -1928,7 +2045,8 @@ export class Game {
     this.cb.onParticle(tx, ty, '', '#ffcc02', undefined, icon);
   }
 
-  handleBlockHold(): void {
+  /** Holds the current piece for later (swapping with any already-held piece), once per lock. */
+  public handleBlockHold(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.canHold) {
       this.cb.log('Already held this piece — lock it first.', 'log-neutral');
@@ -1948,6 +2066,7 @@ export class Game {
     this.cb.onAction();
   }
 
+  /** Force-swaps the falling piece to `type` (used by hold-swap). */
   private setBlockType(type: ShapeKey): void {
     this.currentType = type;
     const shape = SHAPES[type];
@@ -1968,7 +2087,7 @@ export class Game {
   // ── Endgame: Gorgoth the Returned ─────────────────────────────────────────
 
   /** Overflowing the stack summons the final boss into a cleared arena. */
-  summonGorgoth(): void {
+  public summonGorgoth(): void {
     if (this.gorgothSummoned) return;
     this.gorgothSummoned = true;
     if (!this.gorgothEverSummoned) this.storyBeats.push('called Bres the Beautiful forth to battle');
@@ -2023,7 +2142,7 @@ export class Game {
   }
 
   /** Gorgoth defeated — the run is won. Idempotent. */
-  triggerVictory(): void {
+  public triggerVictory(): void {
     if (this.won) return;
     this.won = true;
     this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
@@ -2031,29 +2150,34 @@ export class Game {
     this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory());
   }
 
-  handleBlockLeft(): void {
+  /** Shifts the falling piece one column left, if unobstructed. */
+  public handleBlockLeft(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
-  handleBlockRight(): void {
+  /** Shifts the falling piece one column right, if unobstructed. */
+  public handleBlockRight(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
-  handleBlockRotate(): void {
+  /** Rotates the falling piece 90°, if the rotated shape doesn't collide. */
+  public handleBlockRotate(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
-    const rotated = rotateMatrix(this.blockMatrix);
+    const rotated = GameMath.rotateMatrix(this.blockMatrix);
     if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); this.advanceTurn(); }
   }
 
-  handleBlockSoftDrop(): void {
+  /** Drops the falling piece one row, locking it in place if it can't descend further. */
+  public handleBlockSoftDrop(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) { this.blockY++; this.advanceTurn(); }
     else { this.lockBlock(); this.advanceTurn(); }
   }
 
-  handleBlockDrop(): void {
+  /** Instantly drops the falling piece to the floor and locks it, with an afterimage trail along its travel path. */
+  public handleBlockDrop(): void {
     if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
     const startY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
@@ -2082,13 +2206,21 @@ export class Game {
 
   // ── Lookups ──────────────────────────────────────────────────────────────
 
-  getMonsterAt(x: number, y: number): Monster | undefined {
+  /** The monster standing at `(x, y)`, if any. */
+  public getMonsterAt(x: number, y: number): Monster | undefined {
     return this.monsters.find(m => m.x === x && m.y === y);
   }
 
   // ── Tap-to-inspect ───────────────────────────────────────────────────────
 
-  getInspectInfo(x: number, y: number): InspectInfo | null {
+  /**
+   * Builds the inspect-tooltip content for whatever occupies `(x, y)` —
+   * the hero, a monster, a hazard, or a floor feature.
+   * @throws {TypeError} If `x` or `y` is not a finite number.
+   */
+  public getInspectInfo(x: number, y: number): InspectInfo | null {
+    if (typeof x !== 'number' || !Number.isFinite(x)) throw new TypeError('Game.getInspectInfo: "x" must be a finite number');
+    if (typeof y !== 'number' || !Number.isFinite(y)) throw new TypeError('Game.getInspectInfo: "y" must be a finite number');
     if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return null;
 
     if (this.player.x === x && this.player.y === y) {
@@ -2167,6 +2299,7 @@ export class Game {
   // display-ready snapshot. Boons/brands/shop purchases all mutate the same
   // Player fields directly, so reading Player state IS reading the totals.
 
+  /** Aggregates every effective player stat into a display-ready character-sheet snapshot. */
   private buildCharacterSheet(): CharacterSheetSection[] {
     const p = this.player;
     const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
@@ -2232,6 +2365,7 @@ export class Game {
 
   // ── UI push ──────────────────────────────────────────────────────────────
 
+  /** Pushes a fresh {@link UIState} snapshot to the host UI via `cb.updateUI`. */
   private pushUI(): void {
     const activeMod = MODIFIERS.find(m => m.id === this.activeModifierId);
     const activeCls = CLASSES.find(c => c.id === this.activeClassId);
@@ -2245,7 +2379,7 @@ export class Game {
       floor: this.dungeonLevel,
       totalXpEarned: this.player.totalXpEarned,
       gold: this.gold,
-      gravityRate: tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
+      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
       nextType: this.nextType,
       heldType: this.heldType,
       canHold: this.canHold,

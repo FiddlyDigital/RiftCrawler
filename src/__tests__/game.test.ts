@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Game, rotateMatrix, tickMsForLevel, scoreForLines } from '../game';
+import { Game, GameMath } from '../game';
 import { Cell, Tile } from '../types';
 import type { GameCallbacks, HazardTile } from '../types';
 import { Monster } from '../entities';
@@ -19,7 +19,7 @@ import { StorageService } from '../storage';
 describe('rotateMatrix', () => {
   it('rotates a 1×4 I-piece to 4×1', () => {
     const matrix = [[1, 1, 1, 1]] as unknown as import('../types').CellValue[][];
-    const result = rotateMatrix(matrix);
+    const result = GameMath.rotateMatrix(matrix);
     expect(result).toHaveLength(4);
     expect(result[0]).toHaveLength(1);
     expect(result.map(r => r[0])).toEqual([1, 1, 1, 1]);
@@ -28,13 +28,13 @@ describe('rotateMatrix', () => {
   it('rotates a 2×2 O-piece back to itself after 4 rotations', () => {
     const matrix = [[1, 1], [1, 1]] as unknown as import('../types').CellValue[][];
     let m = matrix;
-    for (let i = 0; i < 4; i++) m = rotateMatrix(m);
+    for (let i = 0; i < 4; i++) m = GameMath.rotateMatrix(m);
     expect(m).toEqual(matrix);
   });
 
   it('rotates a T-piece 90° clockwise', () => {
     const matrix = [[0, 1, 0], [1, 1, 1]] as unknown as import('../types').CellValue[][];
-    const result = rotateMatrix(matrix);
+    const result = GameMath.rotateMatrix(matrix);
     expect(result).toHaveLength(3);
     expect(result[0]).toHaveLength(2);
     expect(result[0]).toEqual([1, 0]);
@@ -47,19 +47,19 @@ describe('rotateMatrix', () => {
 // These constants now live in src/data/balance.json (progression); the literals
 // below match its current defaults (3000/400/100).
 describe('tickMsForLevel', () => {
-  it('returns 3000ms on floor 1 with no slow', () => expect(tickMsForLevel(1, 0)).toBe(3000));
-  it('returns 2900ms on floor 2', () => expect(tickMsForLevel(2, 0)).toBe(2900));
-  it('returns 400ms minimum', () => expect(tickMsForLevel(999, 0)).toBe(400));
-  it('applies slow perk percentage', () => expect(tickMsForLevel(1, 15)).toBe(Math.floor(3000 * 1.15)));
+  it('returns 3000ms on floor 1 with no slow', () => expect(GameMath.tickMsForLevel(1, 0)).toBe(3000));
+  it('returns 2900ms on floor 2', () => expect(GameMath.tickMsForLevel(2, 0)).toBe(2900));
+  it('returns 400ms minimum', () => expect(GameMath.tickMsForLevel(999, 0)).toBe(400));
+  it('applies slow perk percentage', () => expect(GameMath.tickMsForLevel(1, 15)).toBe(Math.floor(3000 * 1.15)));
 });
 
 // lineClearScoreBase/lineClearScoreOverflow now live in src/data/balance.json (progression).
 describe('scoreForLines', () => {
-  it('returns 100 for 1 line on floor 1', () => expect(scoreForLines(1, 1)).toBe(100));
-  it('scales with dungeon level', () => expect(scoreForLines(1, 3)).toBe(300));
-  it('returns 300 for 2 lines', () => expect(scoreForLines(2, 1)).toBe(300));
-  it('returns 1000 for 4 lines (tetris)', () => expect(scoreForLines(4, 1)).toBe(1000));
-  it('caps at 1200 base for 5+ lines', () => expect(scoreForLines(5, 1)).toBe(1200));
+  it('returns 100 for 1 line on floor 1', () => expect(GameMath.scoreForLines(1, 1)).toBe(100));
+  it('scales with dungeon level', () => expect(GameMath.scoreForLines(1, 3)).toBe(300));
+  it('returns 300 for 2 lines', () => expect(GameMath.scoreForLines(2, 1)).toBe(300));
+  it('returns 1000 for 4 lines (tetris)', () => expect(GameMath.scoreForLines(4, 1)).toBe(1000));
+  it('caps at 1200 base for 5+ lines', () => expect(GameMath.scoreForLines(5, 1)).toBe(1200));
 });
 
 // ── Game class tests ─────────────────────────────────────────────────────────
@@ -365,7 +365,7 @@ describe('Balance levers', () => {
       const before = game.player.tickSlowPercent;
       boon.onAdd(game.player, 1);
       expect(game.player.tickSlowPercent).toBeGreaterThan(before);
-      expect(tickMsForLevel(1, game.player.tickSlowPercent)).toBeGreaterThan(tickMsForLevel(1, before));
+      expect(GameMath.tickMsForLevel(1, game.player.tickSlowPercent)).toBeGreaterThan(GameMath.tickMsForLevel(1, before));
     }
   });
 

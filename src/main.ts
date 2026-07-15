@@ -1,5 +1,5 @@
 import './style.css';
-import { Game, tickMsForLevel } from './game';
+import { Game, GameMath } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { bindKeyboard, bindButtons, bindCanvasInspect, bindGamepad } from './input';
@@ -37,7 +37,7 @@ document.getElementById('crash-reload')?.addEventListener('click', () => locatio
 // ── Tick management ──────────────────────────────────────────────────────────
 
 function getTickMs(): number {
-  return tickMsForLevel(
+  return GameMath.tickMsForLevel(
     game.dungeonLevel,
     game.player.tickSlowPercent + game.biomeGravityPct + (game.timeDilationTurns > 0 ? game.timeDilationSlowPct : 0),
   );
