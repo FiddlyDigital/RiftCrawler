@@ -8,6 +8,7 @@ import type { BossWarningModal } from './components/boss-warning-modal';
 import type { ModifierModal } from './components/modifier-modal';
 import type { ClassModal } from './components/class-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
+import type { OfferModal } from './components/offer-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -24,7 +25,7 @@ export class UIManager {
   private readonly classModal: ClassModal;
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
-  private readonly altarModal: HTMLElement;
+  private readonly offerModal: OfferModal;
   private readonly crashModal: CrashModal;
   private readonly pauseModal: PauseModal;
   private readonly charSheetModal: HTMLElement;
@@ -43,7 +44,7 @@ export class UIManager {
     this.classModal        = document.querySelector('class-modal')!;
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
-    this.altarModal        = document.getElementById('altar-modal')!;
+    this.offerModal        = document.querySelector('offer-modal')!;
     this.crashModal        = document.querySelector('crash-modal')!;
     this.pauseModal        = document.querySelector('pause-modal')!;
     this.charSheetModal    = document.getElementById('char-sheet-modal')!;
@@ -534,84 +535,6 @@ export class UIManager {
     return this.charSheetModal.style.display === 'flex';
   }
 
-  // Owned-summary chips shown above the choices so a player picking a new
-  // Geis/Ogham Mark can see what they already have before committing.
-  private buildOwnedBoonsHTML(boons: Array<{ id: string; stacks: number; def: BoonDef }>): string {
-    if (boons.length === 0) return '';
-    return boons.map(b =>
-      `<span class="boon-chip" title="${HtmlUtils.escapeHtml(b.def.desc)}">${SpriteService.iconHTML(b.def.char, 14)}${HtmlUtils.escapeHtml(b.def.name)} ×${b.stacks}</span>`,
-    ).join('');
-  }
-
-  private buildOwnedBrandsHTML(brands: Array<{ slot: BodyPart; brand: BrandDef }>): string {
-    if (brands.length === 0) return '';
-    const grouped = new Map<string, { char: string; name: string; count: number; setSize: number }>();
-    for (const b of brands) {
-      const existing = grouped.get(b.brand.id);
-      if (existing) existing.count++;
-      else grouped.set(b.brand.id, { char: b.brand.char, name: b.brand.name, count: 1, setSize: b.brand.setSize });
-    }
-    return Array.from(grouped.values()).map(g => {
-      const setActive = g.count >= g.setSize;
-      return `<span class="brand-chip${setActive ? ' brand-set-active' : ''}" title="${HtmlUtils.escapeHtml(g.name)}${setActive ? ' — set active' : ''}">${SpriteService.iconHTML(g.char, 14)}${HtmlUtils.escapeHtml(g.name)} ×${g.count}</span>`;
-    }).join('');
-  }
-
-  // Shared renderer for the 3-choice altar/tattoo modal. Supports an optional
-  // gold reroll that redraws the choices in place without closing the modal.
-  private renderOfferModal<T extends { char: string; name: string }>(opts: {
-    title: string;
-    titleIcon?: string;
-    subtitle: string;
-    choices: T[];
-    buttonInner: (c: T) => string;
-    onChoice: (index: number) => void;
-    reroll?: RerollCfg<T>;
-    ownedHTML?: string;
-  }): void {
-    const titleEl = document.getElementById('altar-title')!;
-    titleEl.innerHTML = opts.titleIcon ? `${SpriteService.iconHTML(opts.titleIcon, 16)}${HtmlUtils.escapeHtml(opts.title)}` : HtmlUtils.escapeHtml(opts.title);
-    const subEl = document.getElementById('altar-subtitle');
-    if (subEl) subEl.textContent = opts.subtitle;
-    const ownedWrap = document.getElementById('altar-owned-summary');
-    const ownedChips = document.getElementById('altar-owned-chips');
-    if (ownedWrap && ownedChips) {
-      if (opts.ownedHTML) { ownedChips.innerHTML = opts.ownedHTML; ownedWrap.style.display = ''; }
-      else { ownedChips.innerHTML = ''; ownedWrap.style.display = 'none'; }
-    }
-    const container = document.getElementById('altar-choices')!;
-
-    const render = (choices: T[], gold: number, cost: number): void => {
-      container.innerHTML = '';
-      choices.forEach((c, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'modifier-btn';
-        btn.innerHTML = opts.buttonInner(c);
-        btn.addEventListener('click', () => {
-          this.altarModal.style.display = 'none';
-          opts.onChoice(i);
-        });
-        container.appendChild(btn);
-      });
-      if (opts.reroll) {
-        const rb = document.createElement('button');
-        rb.className = 'reroll-btn';
-        rb.disabled = gold < cost;
-        rb.innerHTML = gold >= cost
-          ? `${SpriteService.iconHTML('item_dice', 14)}Reroll — ${cost}g (you have ${gold}g)`
-          : `${SpriteService.iconHTML('item_dice', 14)}Reroll — need ${cost - gold} more gold`;
-        rb.addEventListener('click', () => {
-          const next = opts.reroll!.run();
-          if (next) render(next.choices, next.gold, next.cost);
-        });
-        container.appendChild(rb);
-      }
-    };
-
-    render(opts.choices, opts.reroll?.gold ?? 0, opts.reroll?.cost ?? 0);
-    this.altarModal.style.display = 'flex';
-  }
-
   /** Shows the wandering peddler's shop modal. */
   public showShop(stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void): void {
     const modal  = document.getElementById('shop-modal')!;
@@ -653,14 +576,7 @@ export class UIManager {
     onChoice: (i: number) => void,
     reroll?: RerollCfg<BrandDef>,
   ): void {
-    this.renderOfferModal({
-      title: 'Occult Tattoo Artist — Choose an Ogham Mark',
-      titleIcon: 'tile_altar',
-      subtitle: 'Ogham marks are permanent — you may only ever bear 5 in this life. Choose your identity.',
-      choices, onChoice, reroll,
-      ownedHTML: this.buildOwnedBrandsHTML(ownedBrands),
-      buttonInner: (b) => `<span class="modifier-emoji">${SpriteService.iconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span><span style="font-size:9px;color:#a78bfa;">${b.setDesc} (need ${b.setSize})</span></div>`,
-    });
+    this.offerModal.showTattooModal(choices, ownedBrands, onChoice, reroll);
   }
 
   /** Shows the altar boon-choice modal for the given reward tier, with an optional gold reroll. */
@@ -672,15 +588,7 @@ export class UIManager {
     titleOverride?: string,
     reroll?: RerollCfg<BoonDef>,
   ): void {
-    const tierNames: Record<1 | 2 | 3, string> = { 1: 'Minor Altar', 2: 'Ruined Altar', 3: 'Grand Altar' };
-    this.renderOfferModal({
-      title: titleOverride ?? `${tierNames[tier]} — Choose a Geis`,
-      titleIcon: 'tile_altar',
-      subtitle: 'Geasa are unlimited — stack freely, and pick the same one again to amplify its effect.',
-      choices, onChoice, reroll,
-      ownedHTML: this.buildOwnedBoonsHTML(ownedBoons),
-      buttonInner: (b) => `<span class="modifier-emoji">${SpriteService.iconHTML(b.char, 24)}</span><div class="modifier-info"><strong>${b.name}</strong><span>${b.desc}</span></div>`,
-    });
+    this.offerModal.showAltarModal(tier, choices, ownedBoons, onChoice, titleOverride, reroll);
   }
 
   /** Shows the start-screen modal. */
