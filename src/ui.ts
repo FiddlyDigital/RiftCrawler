@@ -1,7 +1,5 @@
 import { SHAPES } from './config';
 import { SpriteService, HtmlUtils } from './sprites';
-import { Boss, Npc, Biome, Patron } from './content';
-import { StorageService } from './storage';
 import type { CrashModal } from './components/crash-modal';
 import type { PauseModal, PauseMenuState, PauseMenuHandlers } from './components/pause-modal';
 import type { BossWarningModal } from './components/boss-warning-modal';
@@ -10,6 +8,8 @@ import type { ClassModal } from './components/class-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
 import type { OfferModal } from './components/offer-modal';
 import type { ShopModal } from './components/shop-modal';
+import type { CharSheetModal } from './components/char-sheet-modal';
+import type { CodexModal } from './components/codex-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -30,8 +30,8 @@ export class UIManager {
   private readonly shopModal: ShopModal;
   private readonly crashModal: CrashModal;
   private readonly pauseModal: PauseModal;
-  private readonly charSheetModal: HTMLElement;
-  private readonly codexModal: HTMLElement;
+  private readonly charSheetModal: CharSheetModal;
+  private readonly codexModal: CodexModal;
   private readonly els: Record<string, HTMLElement>;
   private lastXpEarned = -1;
   private lastCharacterSheet: CharacterSheetSection[] = [];
@@ -50,8 +50,8 @@ export class UIManager {
     this.shopModal         = document.querySelector('shop-modal')!;
     this.crashModal        = document.querySelector('crash-modal')!;
     this.pauseModal        = document.querySelector('pause-modal')!;
-    this.charSheetModal    = document.getElementById('char-sheet-modal')!;
-    this.codexModal        = document.getElementById('codex-modal')!;
+    this.charSheetModal    = document.querySelector('char-sheet-modal')!;
+    this.codexModal        = document.querySelector('codex-modal')!;
     this.els = {
       floor:            document.getElementById('stat-floor')!,
       xpTotal:          document.getElementById('stat-xp-total')!,
@@ -89,8 +89,6 @@ export class UIManager {
       runLogFull:       document.getElementById('run-log-full')!,
       shareContainer:   document.getElementById('share-container')!,
       shareText:        document.getElementById('share-text')!,
-      charSheetBody:    document.getElementById('char-sheet-body')!,
-      codexBody:        document.getElementById('codex-body')!,
     };
   }
 
@@ -455,87 +453,33 @@ export class UIManager {
   }
 
   /** Shows the full character-sheet modal, from the most recent `updateStats` snapshot. */
-  public showCharacterSheet(): void {
-    this.els['charSheetBody']!.innerHTML = this.lastCharacterSheet.map(section => `
-      <div class="char-sheet-section">
-        <div class="char-sheet-section-title">${SpriteService.iconHTML(section.icon, 13)}${HtmlUtils.escapeHtml(section.title)}</div>
-        <div class="char-sheet-rows">
-          ${section.stats.map(s => `<div class="char-sheet-row"><span>${HtmlUtils.escapeHtml(s.label)}</span><span>${HtmlUtils.escapeHtml(s.value)}</span></div>`).join('')}
-        </div>
-      </div>`).join('');
-    this.charSheetModal.style.display = 'flex';
+  public showCharacterSheet(onClose: () => void): void {
+    this.charSheetModal.showCharacterSheet(this.lastCharacterSheet, onClose);
   }
 
   /** Hides the character-sheet modal. */
   public hideCharacterSheet(): void {
-    this.charSheetModal.style.display = 'none';
-  }
-
-  // Fallback icon per biome id — BiomeDef carries no icon field of its own.
-  private static readonly CODEX_BIOME_ICON: Record<string, string> = {
-    stone: 'tile_stone_a', cavern: 'sprite_crystal', rift: 'fx_arcane',
-  };
-
-  /** One codex row: the real entry if discovered, a "???" placeholder otherwise. */
-  private codexRow(icon: string, name: string, text: string, discovered: boolean): string {
-    if (!discovered) {
-      return `<div class="char-sheet-row codex-row codex-undiscovered"><span class="codex-icon">?</span><div><strong>???</strong></div></div>`;
-    }
-    return `<div class="char-sheet-row codex-row"><span class="codex-icon">${SpriteService.iconHTML(icon, 16)}</span><div><strong>${HtmlUtils.escapeHtml(name)}</strong><span>${HtmlUtils.escapeHtml(text)}</span></div></div>`;
+    this.charSheetModal.hide();
   }
 
   /** Shows the lore codex: every boss/NPC/biome/patron discovered across all past runs, from `StorageService`'s persisted record. */
-  public showCodex(): void {
-    const codex = StorageService.loadCodex();
-
-    const bossRows = [
-      ...Boss.ALL.map(b => this.codexRow(b.char, b.name, `${b.flavorText}${b.deathLine ? ` ${b.deathLine}` : ''}`, codex.bosses.includes(b.name))),
-      this.codexRow('sprite_boss_gorgoth', 'Bres the Beautiful',
-        'The bridge home is finished — and he means to be first across it.',
-        codex.bosses.includes('gorgoth')),
-    ].join('');
-
-    const npcRows = Npc.ALL.map(n => {
-      const text = n.kind === 'flavor' ? (n.lines ?? []).join(' ') : (n.introLine ?? '');
-      return this.codexRow(n.char, n.name, text, codex.npcs.includes(n.id));
-    }).join('');
-
-    const biomeRows = Biome.ALL.map(b =>
-      this.codexRow(UIManager.CODEX_BIOME_ICON[b.id] ?? 'tile_stone_a', b.name, b.desc, codex.biomes.includes(b.id)),
-    ).join('');
-
-    const patronRows = Patron.ALL.map(p =>
-      this.codexRow(p.char, p.name, `${p.tagline} ${p.tollDesc}`, codex.patrons.includes(p.id)),
-    ).join('');
-
-    const section = (title: string, icon: string, rows: string): string => `
-      <div class="char-sheet-section">
-        <div class="char-sheet-section-title">${SpriteService.iconHTML(icon, 13)}${HtmlUtils.escapeHtml(title)}</div>
-        <div class="char-sheet-rows">${rows}</div>
-      </div>`;
-
-    this.els['codexBody']!.innerHTML = [
-      section('Bosses', 'sprite_boss_dragon', bossRows),
-      section('Wanderers', 'npc_fili', npcRows),
-      section('Biomes', 'special_sacred', biomeRows),
-      section('Patrons', 'fx_arcane', patronRows),
-    ].join('');
-    this.codexModal.style.display = 'flex';
+  public showCodex(onClose: () => void): void {
+    this.codexModal.showCodex(onClose);
   }
 
   /** Hides the lore codex modal. */
   public hideCodex(): void {
-    this.codexModal.style.display = 'none';
+    this.codexModal.hide();
   }
 
   /** Whether the lore codex modal is currently open. */
   public isCodexOpen(): boolean {
-    return this.codexModal.style.display === 'flex';
+    return this.codexModal.isOpen;
   }
 
   /** Whether the character-sheet modal is currently open. */
   public isCharacterSheetOpen(): boolean {
-    return this.charSheetModal.style.display === 'flex';
+    return this.charSheetModal.isOpen;
   }
 
   /** Shows the wandering peddler's shop modal. */

@@ -270,24 +270,10 @@
 <offer-modal id="altar-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="altar-title"></offer-modal>
 
 <!-- Character sheet: aggregated totals from boons + brands + shop purchases -->
-<div id="char-sheet-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="char-sheet-title">
-  <div class="modal-card char-sheet-card">
-    <div class="modal-title" id="char-sheet-title" style="color:var(--accent-color);font-size:18px;">📜 CHARACTER SHEET</div>
-    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Every effective stat currently on your hero — base, Geasa, Ogham Marks, and stall purchases combined.</p>
-    <div id="char-sheet-body" class="char-sheet-body"></div>
-    <button class="restart-btn" id="char-sheet-close">Close</button>
-  </div>
-</div>
+<char-sheet-modal id="char-sheet-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="char-sheet-title"></char-sheet-modal>
 
 <!-- Lore codex: every boss/NPC/biome/patron discovered across all runs, persisted across sessions -->
-<div id="codex-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="codex-title">
-  <div class="modal-card char-sheet-card">
-    <div class="modal-title" id="codex-title" style="color:var(--accent-color);font-size:18px;">📖 CODEX</div>
-    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">What you've discovered across every run. Undiscovered entries show as "???" until you meet them.</p>
-    <div id="codex-body" class="char-sheet-body"></div>
-    <button class="restart-btn" id="codex-close">Close</button>
-  </div>
-</div>
+<codex-modal id="codex-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="codex-title"></codex-modal>
 
 <!-- Floor event modal -->
 <floor-event-modal id="floor-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="floor-event-title"></floor-event-modal>

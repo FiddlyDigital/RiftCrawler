@@ -108,13 +108,13 @@ class GameApp {
 
     // ── Character sheet ────────────────────────────────────────────────────
     // Read-only stat totals overlay — pauses like the drawer so reading it is free.
+    // The close button itself is wired inside <char-sheet-modal>.
     document.getElementById('char-sheet-btn')?.addEventListener('click', () => this.openCharacterSheet());
-    document.getElementById('char-sheet-close')?.addEventListener('click', () => this.closeCharacterSheet());
 
     // ── Lore codex ──────────────────────────────────────────────────────────
     // Read-only, cross-run discovery log — pauses like the character sheet.
+    // The close button itself is wired inside <codex-modal>.
     document.getElementById('codex-btn')?.addEventListener('click', () => this.openCodex());
-    document.getElementById('codex-close')?.addEventListener('click', () => this.closeCodex());
 
     // ── Drawer swipe gestures (mobile) ─────────────────────────────────────
     // Edge-swipe in from the right screen edge opens the drawer; swiping right
@@ -379,7 +379,7 @@ class GameApp {
   // ── Character sheet ──────────────────────────────────────────────────────
 
   private openCharacterSheet(): void {
-    this.ui.showCharacterSheet();
+    this.ui.showCharacterSheet(() => this.closeCharacterSheet());
     if (!this.manualPaused && !this.game.paused && this.game.player.hp > 0) {
       this.charSheetPausedGame = true;
       this.game.paused = true;
@@ -398,7 +398,7 @@ class GameApp {
   // ── Lore codex ────────────────────────────────────────────────────────────
 
   private openCodex(): void {
-    this.ui.showCodex();
+    this.ui.showCodex(() => this.closeCodex());
     if (!this.manualPaused && !this.game.paused && this.game.player.hp > 0) {
       this.codexPausedGame = true;
       this.game.paused = true;
