@@ -255,25 +255,13 @@
 </div>
 
 <!-- Run modifier pick modal -->
-<div id="modifier-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modifier-title">
-  <div class="modal-card" style="max-width:340px;">
-    <div class="modal-title" id="modifier-title" style="color:#b9672a;font-size:20px;">CHOOSE YOUR CURSE</div>
-    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">One modifier shapes the entire run. Choose wisely.</p>
-    <div id="modifier-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
-  </div>
-</div>
+<modifier-modal id="modifier-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modifier-title"></modifier-modal>
 
 <!-- Boss warning cinematic -->
 <boss-warning-modal id="boss-warning-modal" class="modal-overlay" role="dialog" aria-modal="true"></boss-warning-modal>
 
 <!-- Class selection modal -->
-<div id="class-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="class-title">
-  <div class="modal-card" style="max-width:340px;">
-    <div class="modal-title" id="class-title" style="color:#8d6fd4;font-size:20px;">CHOOSE YOUR CLASS</div>
-    <p style="color:#666;margin:4px 0 12px 0;font-size:11px;">Your class shapes the entire run. There is no going back.</p>
-    <div id="class-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
-  </div>
-</div>
+<class-modal id="class-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="class-title"></class-modal>
 
 <!-- Wandering peddler shop -->
 <div id="shop-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-title">
@@ -320,14 +308,7 @@
 </div>
 
 <!-- Floor event modal -->
-<div id="floor-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="floor-event-title">
-  <div class="modal-card" style="max-width:340px;">
-    <div id="floor-event-emoji" style="font-size:36px;margin-bottom:6px;line-height:1;"></div>
-    <div class="modal-title" id="floor-event-title" style="color:#d99a3d;font-size:18px;"></div>
-    <p id="floor-event-flavor" style="color:#666;margin:6px 0 14px 0;font-size:11px;font-style:italic;"></p>
-    <div id="floor-event-choices" style="display:flex;flex-direction:column;gap:8px;"></div>
-  </div>
-</div>
+<floor-event-modal id="floor-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="floor-event-title"></floor-event-modal>
 
 <!-- Pause / settings menu -->
 <pause-modal id="pause-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title"></pause-modal>

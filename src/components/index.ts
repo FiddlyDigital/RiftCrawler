@@ -4,3 +4,6 @@
 import './crash-modal';
 import './pause-modal';
 import './boss-warning-modal';
+import './modifier-modal';
+import './class-modal';
+import './floor-event-modal';

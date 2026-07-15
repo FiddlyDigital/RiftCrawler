@@ -5,6 +5,9 @@ import { StorageService } from './storage';
 import type { CrashModal } from './components/crash-modal';
 import type { PauseModal, PauseMenuState, PauseMenuHandlers } from './components/pause-modal';
 import type { BossWarningModal } from './components/boss-warning-modal';
+import type { ModifierModal } from './components/modifier-modal';
+import type { ClassModal } from './components/class-modal';
+import type { FloorEventModal } from './components/floor-event-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
 import type { RunRecord } from './types';
 
@@ -16,10 +19,10 @@ import type { RunRecord } from './types';
 export class UIManager {
   private readonly logPanel: HTMLElement;
   private readonly modal: HTMLElement;
-  private readonly modifierModal: HTMLElement;
+  private readonly modifierModal: ModifierModal;
   private readonly bossWarningModal: BossWarningModal;
-  private readonly classModal: HTMLElement;
-  private readonly floorEventModal: HTMLElement;
+  private readonly classModal: ClassModal;
+  private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
   private readonly altarModal: HTMLElement;
   private readonly crashModal: CrashModal;
@@ -35,10 +38,10 @@ export class UIManager {
   constructor() {
     this.logPanel          = document.getElementById('log-panel')!;
     this.modal             = document.getElementById('game-over-modal')!;
-    this.modifierModal     = document.getElementById('modifier-modal')!;
+    this.modifierModal     = document.querySelector('modifier-modal')!;
     this.bossWarningModal  = document.querySelector('boss-warning-modal')!;
-    this.classModal        = document.getElementById('class-modal')!;
-    this.floorEventModal   = document.getElementById('floor-event-modal')!;
+    this.classModal        = document.querySelector('class-modal')!;
+    this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.altarModal        = document.getElementById('altar-modal')!;
     this.crashModal        = document.querySelector('crash-modal')!;
@@ -357,57 +360,17 @@ export class UIManager {
 
   /** Shows the run-start modifier (Rift Curse) picker. */
   public showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
-    const container = document.getElementById('modifier-choices')!;
-    container.innerHTML = '';
-    for (const mod of mods) {
-      const btn = document.createElement('button');
-      btn.className = 'modifier-btn';
-      btn.innerHTML = `<span class="modifier-emoji">${SpriteService.iconHTML(mod.emoji, 24)}</span><div class="modifier-info"><strong>${mod.name}</strong><span>${mod.desc}</span></div>`;
-      btn.addEventListener('click', () => {
-        this.modifierModal.style.display = 'none';
-        onSelect(mod.id);
-      });
-      container.appendChild(btn);
-    }
-    this.modifierModal.style.display = 'flex';
+    this.modifierModal.showModifierPick(mods, onSelect);
   }
 
   /** Shows the run-start class picker. */
   public showClassSelection(classes: ClassDef[], onSelect: (id: string) => void): void {
-    const container = document.getElementById('class-choices')!;
-    container.innerHTML = '';
-    for (const cls of classes) {
-      const btn = document.createElement('button');
-      btn.className = 'modifier-btn';
-      const chips = cls.statChips.map(c => `<span class="class-chip">${HtmlUtils.escapeHtml(c)}</span>`).join('');
-      btn.innerHTML = `<span class="modifier-emoji">${SpriteService.iconHTML(cls.emoji, 24)}</span><div class="modifier-info"><strong>${cls.name}</strong><span>${cls.tagline}</span><span class="class-chip-row">${chips}</span></div>`;
-      btn.addEventListener('click', () => {
-        this.classModal.style.display = 'none';
-        onSelect(cls.id);
-      });
-      container.appendChild(btn);
-    }
-    this.classModal.style.display = 'flex';
+    this.classModal.showClassSelection(classes, onSelect);
   }
 
   /** Shows a narrative floor-event modal (shrine, spring, NPC encounter, pact ceremony, etc.). */
   public showFloorEvent(event: FloorEventDef, onChoice: (index: number) => void): void {
-    (document.getElementById('floor-event-emoji') as HTMLElement).innerHTML  = SpriteService.iconHTML(event.emoji, 28);
-    (document.getElementById('floor-event-title') as HTMLElement).textContent  = event.title;
-    (document.getElementById('floor-event-flavor') as HTMLElement).textContent = event.flavor;
-    const container = document.getElementById('floor-event-choices')!;
-    container.innerHTML = '';
-    event.options.forEach((opt, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'modifier-btn';
-      btn.innerHTML = `<div class="modifier-info"><strong>${opt.label}</strong><span>${opt.desc}</span></div>`;
-      btn.addEventListener('click', () => {
-        this.floorEventModal.style.display = 'none';
-        onChoice(i);
-      });
-      container.appendChild(btn);
-    });
-    this.floorEventModal.style.display = 'flex';
+    this.floorEventModal.showFloorEvent(event, onChoice);
   }
 
   /** Shows the boss-warning cinematic banner for ~1.8s, then calls `onDone`. */
