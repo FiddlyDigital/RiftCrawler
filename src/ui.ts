@@ -16,8 +16,10 @@ import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, Cl
 import type { RunRecord } from './types';
 
 /**
- * Owns every DOM-facing HUD/modal/tooltip element and renders `Game` state
- * and callbacks into them. `main.ts` is the only caller — it wires `Game`'s
+ * Owns the always-visible HUD (stats, log, sidebar chips, inspect tooltip)
+ * and is a thin typed delegator to every modal, each its own custom element
+ * under `src/components/` (`<crash-modal>`, `<start-modal>`, …) grabbed via
+ * `document.querySelector`. `main.ts` is the only caller — it wires `Game`'s
  * callbacks to these methods and drives modal show/hide around user actions.
  */
 export class UIManager {
