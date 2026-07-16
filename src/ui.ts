@@ -475,7 +475,7 @@ export class UIManager {
   }
 
   /** Shows a brief auto-dismissing banner over the canvas (e.g. an ambient floor hint). Replaces any toast already showing. */
-  public showToast(text: string, icon?: string, durationMs = 3200): void {
+  public showToast(text: string, icon?: string, durationMs = 9000): void {
     if (this.toastDismissTimer) clearTimeout(this.toastDismissTimer);
     this.toastBanner.innerHTML = icon ? `${SpriteService.iconHTML(icon, 13, 'sprite-icon')}${HtmlUtils.escapeHtml(text)}` : HtmlUtils.escapeHtml(text);
     this.toastBanner.classList.add('visible');
