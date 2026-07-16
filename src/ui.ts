@@ -31,6 +31,8 @@ export class UIManager {
   private readonly classModal: ClassModal;
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
+  private readonly toastBanner: HTMLElement;
+  private toastDismissTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly offerModal: OfferModal;
   private readonly shopModal: ShopModal;
   private readonly crashModal: CrashModal;
@@ -52,6 +54,7 @@ export class UIManager {
     this.classModal        = document.querySelector('class-modal')!;
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
+    this.toastBanner       = document.getElementById('toast-banner')!;
     this.offerModal        = document.querySelector('offer-modal')!;
     this.shopModal         = document.querySelector('shop-modal')!;
     this.crashModal        = document.querySelector('crash-modal')!;
@@ -469,6 +472,17 @@ export class UIManager {
   /** Whether the inspect tooltip is currently visible. */
   public isInspectTooltipVisible(): boolean {
     return !this.inspectTooltip.hidden;
+  }
+
+  /** Shows a brief auto-dismissing banner over the canvas (e.g. an ambient floor hint). Replaces any toast already showing. */
+  public showToast(text: string, icon?: string, durationMs = 3200): void {
+    if (this.toastDismissTimer) clearTimeout(this.toastDismissTimer);
+    this.toastBanner.innerHTML = icon ? `${SpriteService.iconHTML(icon, 13, 'sprite-icon')}${HtmlUtils.escapeHtml(text)}` : HtmlUtils.escapeHtml(text);
+    this.toastBanner.classList.add('visible');
+    this.toastDismissTimer = setTimeout(() => {
+      this.toastBanner.classList.remove('visible');
+      this.toastDismissTimer = null;
+    }, durationMs);
   }
 
   /** Logs an error to the console and the in-game log panel. */

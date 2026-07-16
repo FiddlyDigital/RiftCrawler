@@ -975,6 +975,7 @@ export class Game {
     if (this.dungeonLevel % Balance.CONFIG.smiths.floorInterval !== 0) return;
     this.pendingSmithFloor = true;
     this.cb.log('You hear the clang of an anvil in the distance...', 'log-perk', 'fx_impact');
+    this.cb.onToast?.('You hear the clang of an anvil in the distance...', 'fx_impact');
     this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#d9a441');
   }
 

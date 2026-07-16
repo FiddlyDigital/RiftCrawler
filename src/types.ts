@@ -463,6 +463,8 @@ export interface GameCallbacks {
   onCombo?: (multiplier: number) => void;
   onFloorEvent?: (event: import('./types').FloorEventDef, onChoice: (index: number) => void) => void;
   onOpenAltar?: (tier: 1 | 2 | 3, choices: BoonDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BoonDef>) => void;
+  /** A brief on-screen banner (auto-dismissing) — for ambient heads-up flavor that shouldn't require a click, e.g. the smith-floor anvil hint. */
+  onToast?: (text: string, icon?: string) => void;
 }
 
 /** A single completed run's summary, kept in the run-history list. */

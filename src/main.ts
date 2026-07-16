@@ -455,6 +455,7 @@ class GameApp {
       onHitStop: (frames)                           => this.renderer.triggerHitStop(frames),
       onRingPulse: (x, y, rgb)                      => this.renderer.triggerRing(x, y, rgb),
       onBeam: (x, rgb)                              => this.renderer.triggerBeam(x, rgb),
+      onToast: (text, icon)                         => this.ui.showToast(text, icon),
       onCodexDiscover: (kind, id)                   => StorageService.recordCodexDiscovery(kind, id),
       onAudio:  (event, data)        => this.handleAudio(event, data),
       onBlockLand: (cells)           => this.renderer.spawnLandingDust(cells),

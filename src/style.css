@@ -112,6 +112,22 @@ body {
 }
 #drawer-toggle-btn:hover, #drawer-toggle-btn:active { border-color: var(--accent-color); color: var(--accent-color); }
 
+/* Ambient heads-up banner (e.g. the smith-floor anvil hint) — fades in/out
+   over the canvas, auto-dismisses, never blocks input. */
+.toast-banner {
+  position: absolute; top: 8px; left: 50%; z-index: 6;
+  transform: translate(-50%, -6px);
+  max-width: calc(100% - 100px);
+  background: rgba(10,10,18,.82); border: 1px solid var(--accent-color);
+  border-radius: 6px; padding: 6px 14px; box-sizing: border-box;
+  font-family: var(--font-pixel); font-size: 11px; color: var(--text-color);
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; pointer-events: none;
+  transition: opacity .35s ease, transform .35s ease;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.toast-banner.visible { opacity: 1; transform: translate(-50%, 0); }
+
 /* Persistent minimal HUD strip (mobile) — HP / floor / next-piece, always
    visible over the canvas even while the sidebar drawer is closed. A short
    vertical column tucked under the top-right buttons, not a long bar. */
