@@ -32,6 +32,7 @@ const FILES = [
   'npcs.json',
   'patrons.json',
   'shapes.json',
+  'smiths.json',
   'sprite-map.json',
 ];
 

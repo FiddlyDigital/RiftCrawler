@@ -7,7 +7,8 @@
   "additionalProperties": false,
   "required": [
     "player", "progression", "economy", "brands", "ammo", "altars",
-    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts", "narrative"
+    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts", "narrative",
+    "smiths", "spearOfLugh"
   ],
   "properties": {
     "player": {
@@ -128,14 +129,12 @@
     "gorgoth": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["maxHp", "atk", "xpReward", "combatLevel", "causewayDamagePerRowPerFloor", "causewayChipFloorPct"],
+      "required": ["maxHp", "atk", "xpReward", "combatLevel"],
       "properties": {
         "maxHp": { "type": "number" },
         "atk": { "type": "number" },
         "xpReward": { "type": "number" },
-        "combatLevel": { "type": "number" },
-        "causewayDamagePerRowPerFloor": { "type": "number" },
-        "causewayChipFloorPct": { "type": "number", "minimum": 0, "maximum": 1 }
+        "combatLevel": { "type": "number" }
       }
     },
     "crystalShards": {
@@ -217,6 +216,24 @@
       "required": ["closeCallHpFraction"],
       "properties": {
         "closeCallHpFraction": { "type": "number" }
+      }
+    },
+    "smiths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["floorInterval", "pieceThreshold"],
+      "properties": {
+        "floorInterval": { "type": "number" },
+        "pieceThreshold": { "type": "number" }
+      }
+    },
+    "spearOfLugh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dmgMult", "cooldownMax"],
+      "properties": {
+        "dmgMult": { "type": "number" },
+        "cooldownMax": { "type": "number" }
       }
     }
   },

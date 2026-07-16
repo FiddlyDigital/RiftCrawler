@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/smiths.schema.json",
+  "title": "Smiths",
+  "description": "The three legendary Tuatha Dé Danann craftsmen who each carry one part of Lugh's Spear. Mirrors SmithDef in src/types.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "char", "name", "partKey", "partName", "tagline", "flavor"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "char": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "partKey": { "type": "string", "enum": ["shaft", "bolts", "head"] },
+      "partName": { "type": "string", "minLength": 1 },
+      "tagline": { "type": "string", "minLength": 1 },
+      "flavor": { "type": "string", "minLength": 1 }
+    }
+  }
+}

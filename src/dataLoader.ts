@@ -9,7 +9,8 @@ import biomesData         from './data/biomes.json';
 import floorEventsData    from './data/floor-events.json';
 import npcsData           from './data/npcs.json';
 import patronsData        from './data/patrons.json';
-import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef } from './types';
+import smithsData          from './data/smiths.json';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
@@ -599,6 +600,34 @@ export class Npc implements NpcDef {
   }
 }
 
+/** One of the three legendary smiths (Lugh's Spear questline), loaded from `data/smiths.json`. */
+export class Smith implements SmithDef {
+  readonly id: string;
+  readonly char: string;
+  readonly name: string;
+  readonly partKey: 'shaft' | 'bolts' | 'head';
+  readonly partName: string;
+  readonly tagline: string;
+  readonly flavor: string;
+
+  /** @throws {TypeError} If `raw` is missing a non-empty `id`. */
+  constructor(raw: SmithDef) {
+    if (!raw || typeof raw.id !== 'string' || raw.id.length === 0) {
+      throw new TypeError('Smith: raw smith data must include a non-empty "id"');
+    }
+    this.id = raw.id;
+    this.char = raw.char;
+    this.name = raw.name;
+    this.partKey = raw.partKey;
+    this.partName = raw.partName;
+    this.tagline = raw.tagline;
+    this.flavor = raw.flavor;
+  }
+
+  /** The three smiths loaded from `data/smiths.json`, in encounter order (Luchta → Credne → Goibniu). */
+  static readonly ALL: Smith[] = (smithsData as SmithDef[]).map(raw => new Smith(raw));
+}
+
 /** A deity pact for An Draoi, loaded from `data/patrons.json`. */
 export class Patron implements PatronDef {
   readonly id: string;
@@ -788,3 +817,4 @@ export const BIOMES: BiomeDef[] = Biome.ALL;
 export const FLOOR_EVENTS: FloorEventDef[] = FloorEvent.ALL;
 export const NPCS: NpcDef[] = Npc.ALL;
 export const PATRONS: PatronDef[] = Patron.ALL;
+export const SMITHS: SmithDef[] = Smith.ALL;

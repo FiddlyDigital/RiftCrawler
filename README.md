@@ -37,7 +37,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 
 **Combat** is dice-based and turn-based (see below). **Progression** is XP → player level → bigger combat dice, layered with **boons** (Geasa), **brands** (Ogham Marks), **curses**, a starting **class**, and — for the Draoi class — a **patron pact** with one of three deities.
 
-**Winning.** There is one true win condition: let the tetromino stack reach the ceiling. Instead of dying, the Rift stops producing blocks and summons **Bres the Beautiful**, a colossal fixed-stat boss who descends slowly from the top of the board as he nears completing his bridge to Ériu. Defeat him and you win. This is a deliberate choice — you gather strength across floors, then commit when ready. (Flee down a ladder mid-fight and his remaining HP is banked, so you can chip him down over multiple attempts.)
+**Winning.** There is one true win condition: let the tetromino stack reach the ceiling. Instead of dying, the Rift stops producing blocks and summons **Bres the Beautiful**, a colossal fixed-stat boss who descends slowly from the top of the board as he nears completing his bridge to Ériu. Defeat him and you win. This is a deliberate choice — you gather strength across floors, then commit when ready. Once he's summoned there's no retreat: the causeway is finished, so every remaining stairs tile on the board vanishes (beaming away like any other departing NPC/altar) — you either finish the fight or you don't.
 
 **Losing.** Your HP hits zero.
 
@@ -62,7 +62,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 | **Floor events** | `src/data/floor-events.json` | A narrative choice-modal every few descents (skip boss floors) — standing stones, wandering peddlers, etc., each with data-driven option handlers. |
 | **Lore codex** | `src/storage.ts`, `<codex-modal>` | Cross-run discovery log for bosses/NPCs/biomes/patrons, persisted in `localStorage`. |
 | **Combat legibility** | `renderer.ts`, `game.ts` | Tap any tile to inspect it (incl. your hit-chance vs a monster). Monsters that can strike next turn are telegraphed. |
-| **Gorgoth endgame** | `src/game.ts`, `monsterAI.ts` | Fixed stats (1400 HP, ATK 48, D20). Descends one tile every ~2 turns, phasing through terrain. HP persists across ladder escapes. |
+| **Gorgoth endgame** | `src/game.ts`, `monsterAI.ts` | Fixed stats (1450 HP, ATK 54, D20 — see `balance.json`'s `gorgoth` block). Descends one tile every ~2 turns, phasing through terrain. No retreat once summoned — stairs vanish from the board the moment he appears. |
 
 **Controls.** Two virtual D-pads (Block / Hero) plus keyboard and gamepad. Keyboard: `WASD`/arrows move the hero, `Space` waits/heals, `Q` uses a ranged ability, `J`/`L`/`I`/`K`/`X` drive the block, `H` holds, `M` mutes, `Esc`/`P` pause. Movement and attacks are strictly **orthogonal** for hero and monsters alike.
 

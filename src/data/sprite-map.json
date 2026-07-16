@@ -96,5 +96,13 @@
   "npc_cairn_keeper":    { "sheet": "rogues", "sx": 128, "sy": 192, "sw": 32, "sh": 32 },
   "npc_deserter":        { "sheet": "rogues", "sx": 0,   "sy": 0,   "sw": 32, "sh": 32 },
   "npc_sidhe":           { "sheet": "rogues", "sx": 192, "sy": 64,  "sw": 32, "sh": 32 },
-  "npc_tinker":          { "sheet": "rogues", "sx": 32,  "sy": 96,  "sw": 32, "sh": 32 }
+  "npc_tinker":          { "sheet": "rogues", "sx": 32,  "sy": 96,  "sw": 32, "sh": 32 },
+
+  "smith_luchta":        { "sheet": "rogues", "sx": 64,  "sy": 160, "sw": 32, "sh": 32 },
+  "smith_credne":        { "sheet": "rogues", "sx": 96,  "sy": 160, "sw": 32, "sh": 32 },
+  "smith_goibniu":       { "sheet": "rogues", "sx": 64,  "sy": 192, "sw": 32, "sh": 32 },
+  "item_spear_shaft":    { "sheet": "items",  "sx": 0,   "sy": 192, "sw": 32, "sh": 32 },
+  "item_spear_bolts":    { "sheet": "items",  "sx": 0,   "sy": 224, "sw": 32, "sh": 32 },
+  "item_spear_head":     { "sheet": "items",  "sx": 32,  "sy": 192, "sw": 32, "sh": 32 },
+  "item_spear_of_lugh":  { "sheet": "items",  "sx": 128, "sy": 192, "sw": 32, "sh": 32 }
 }

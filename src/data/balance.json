@@ -76,12 +76,10 @@
     "combatLevel": 5
   },
   "gorgoth": {
-    "maxHp": 1050,
-    "atk": 44,
-    "xpReward": 2000,
-    "combatLevel": 6,
-    "causewayDamagePerRowPerFloor": 8,
-    "causewayChipFloorPct": 0.25
+    "maxHp": 1450,
+    "atk": 54,
+    "xpReward": 2400,
+    "combatLevel": 6
   },
   "crystalShards": {
     "baseHp": 8,
@@ -132,5 +130,13 @@
   },
   "narrative": {
     "closeCallHpFraction": 0.15
+  },
+  "smiths": {
+    "floorInterval": 3,
+    "pieceThreshold": 100
+  },
+  "spearOfLugh": {
+    "dmgMult": 3,
+    "cooldownMax": 8
   }
 }

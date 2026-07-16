@@ -92,6 +92,7 @@ export const Cell = {
   ALTAR: 19,
   NPC: 20,
   GHOST: 21,
+  SMITH: 22,
 } as const;
 /** Value type of {@link Cell}. */
 export type CellValue = (typeof Cell)[keyof typeof Cell];
@@ -223,7 +224,11 @@ export interface AltarTile {
 export interface NpcTile {
   x: number;
   y: number;
-  /** References an {@link NpcDef} by id (or the sentinel `'__ghost__'` for a ghost encounter). */
+  /**
+   * References an {@link NpcDef} by id, or a sentinel: `'__ghost__'` for a
+   * ghost encounter, or `` `__smith_${SmithDef['id']}__` `` for one of the
+   * three legendary smiths.
+   */
   npcId: string;
 }
 
@@ -248,6 +253,24 @@ export interface NpcDef {
   introLine?: string;
   /** Shown instead of a random {@link lines} pick on a repeat encounter within the same run (`kind: 'flavor'` only). */
   returnLine?: string;
+}
+
+/** One of the three legendary Tuatha Dé Danann smiths, each carrying one part of Lugh's Spear. */
+export interface SmithDef {
+  /** Stable identifier. */
+  id: string;
+  /** Sprite-map key. */
+  char: string;
+  /** Display name. */
+  name: string;
+  /** Stable key for the part this smith grants — used for quest-state tracking. */
+  partKey: 'shaft' | 'bolts' | 'head';
+  /** Display name of the part granted, e.g. `"the Spear-Shaft"`. */
+  partName: string;
+  /** One-line flavor for the "clang of an anvil" floor-entry hint. */
+  tagline: string;
+  /** Flavor text shown in the encounter dialog. */
+  flavor: string;
 }
 
 /** A live trap-hazard tile (spike/smoke/teleport) on the dungeon floor. */
@@ -313,7 +336,7 @@ export interface RangedAbility {
   /** Status effect this ability can inflict, if any. */
   statusEffect?: 'stun';
   /** Which activation handler in the ability-dispatch engine processes this ability. */
-  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain' | 'blight' | 'blink';
+  abilityType?: 'bolt' | 'time_dilation' | 'gravity_well' | 'consecrate' | 'overload' | 'shriek' | 'veil' | 'drain' | 'blight' | 'blink' | 'spear_bolt';
   /** Ability-type-specific tuning numbers/strings (e.g. `hpCostPct`, `dmgMult`). */
   params?: Record<string, number | string>;
   /** Patron spells only: player level required to unlock this spell (`1` = the pact's signature spell). */

@@ -78,6 +78,7 @@ function makeCallbacks(): GameCallbacks & { logs: string[] } {
     onVictory: vi.fn(),
     onBossWarning: (_boss, onDone) => onDone(),  // resolve the cinematic immediately in tests
     onAction: vi.fn(),
+    onBeam: vi.fn(),
   };
 }
 
@@ -498,37 +499,6 @@ describe('Balance levers', () => {
     expect(game.player.totalXpEarned).toBe(xpBefore + 15 + 20);
   });
 
-  it('after Bres first appears, line clears chip his stored HP — but never below the causeway floor', () => {
-    game.gorgothEverSummoned = true;
-    game.dungeonLevel = 10;
-    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
-    (game as unknown as { checkLineClears(): void }).checkLineClears();
-    expect(cb.logs.some(l => l.includes('causeway shudders'))).toBe(true);
-    game.summonGorgoth();
-    const bres = game.monsters.find(m => m.isGorgoth)!;
-    // 8 dmg × 1 row × floor 10 = 80 chipped off the max
-    expect(bres.hp).toBe(Balance.CONFIG.gorgoth.maxHp - 80);
-
-    // Grind him from afar: HP clamps at the causeway floor (a fraction of max
-    // HP) — you can weaken him this way, but never finish him without a fight.
-    const g = game as unknown as { gorgothHp: number };
-    game.monsters = [];
-    (game as unknown as { gorgothSummoned: boolean }).gorgothSummoned = false;
-    g.gorgothHp = Balance.CONFIG.gorgoth.maxHp;
-    for (let i = 0; i < 50; i++) {
-      for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
-      (game as unknown as { checkLineClears(): void }).checkLineClears();
-    }
-    const chipFloor = Math.ceil(Balance.CONFIG.gorgoth.maxHp * Balance.CONFIG.gorgoth.causewayChipFloorPct);
-    expect(g.gorgothHp).toBe(chipFloor);
-
-    // Already below the floor from a real fight: passive chip must not heal him.
-    g.gorgothHp = 5;
-    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
-    (game as unknown as { checkLineClears(): void }).checkLineClears();
-    expect(g.gorgothHp).toBe(5);
-  });
-
   it('the peddler sells each item once, deducts gold, and applies the effect', () => {
     let captured: { stock: import('../types').ShopItem[]; buy: (id: string) => { gold: number; ok: boolean } } | null = null;
     cb.onOpenShop = (stock, _gold, buy) => { captured = { stock, buy }; };
@@ -733,34 +703,26 @@ describe('Gorgoth the Returned (endgame)', () => {
     expect(cb.onVictory).toHaveBeenCalledTimes(1);
   });
 
-  it('descending a ladder while Gorgoth is up escapes the duel and resumes normal play', () => {
+  it('summoning Gorgoth sweeps every stairs tile to plain floor and beams each column', () => {
+    game.map[4]![22] = Tile.STAIRS;
+    game.map[7]![10] = Tile.STAIRS;
     game.summonGorgoth();
-    const boss = game.monsters.find(m => m.isGorgoth)!;
-    boss.x = 0; boss.y = 0;                 // keep him away from the ladder
-    game.player.x = 4; game.player.y = 23;
-    game.map[4]![22] = Tile.STAIRS;         // ladder directly above the hero
-    const floor0 = game.dungeonLevel;
-    game.handleHeroMove(0, -1);             // step onto the ladder
-    expect(game.gorgothSummoned).toBe(false);
-    expect(game.dungeonLevel).toBe(floor0 + 1);
-    expect(game.monsters.find(m => m.isGorgoth)).toBeUndefined();  // left behind
-    expect(game.blockMatrix.flat().length).toBeGreaterThan(0);      // tetrominoes resume
+    expect(game.map[4]![22]).toBe(Tile.FLOOR);
+    expect(game.map[7]![10]).toBe(Tile.FLOOR);
+    expect(cb.onBeam).toHaveBeenCalledWith(4, expect.any(String));
+    expect(cb.onBeam).toHaveBeenCalledWith(7, expect.any(String));
   });
 
-  it('Gorgoth keeps his wounds across escape and re-summon (whittle him down)', () => {
+  it('no stairs tile survives once Gorgoth is up — stepping where one was just continues the duel', () => {
     game.summonGorgoth();
-    const boss1 = game.monsters.find(m => m.isGorgoth)!;
-    boss1.hp = 600;                          // damaged him this attempt
-    boss1.x = 0; boss1.y = 0;
+    const boss = game.monsters.find(m => m.isGorgoth)!;
+    boss.x = 0; boss.y = 0;                 // keep him away from the hero
     game.player.x = 4; game.player.y = 23;
-    game.map[4]![22] = Tile.STAIRS;
-    game.handleHeroMove(0, -1);              // flee down the ladder
-    expect(game.gorgothSummoned).toBe(false);
-
-    game.summonGorgoth();                     // face him again later
-    const boss2 = game.monsters.find(m => m.isGorgoth)!;
-    expect(boss2.hp).toBe(600);               // carried his wounds
-    expect(boss2.maxHp).toBe(Balance.CONFIG.gorgoth.maxHp);           // out of full
+    game.map[4]![22] = Tile.STAIRS;         // simulate one somehow still present
+    const floor0 = game.dungeonLevel;
+    game.handleHeroMove(0, -1);             // step onto it
+    expect(game.gorgothSummoned).toBe(true);   // no escape — the duel continues
+    expect(game.dungeonLevel).toBe(floor0);    // no floor transition
   });
 
   it('nudges the player toward the win condition once when the stack is high', () => {

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "luchta",
+    "char": "smith_luchta",
+    "name": "Luchta the Carpenter",
+    "partKey": "shaft",
+    "partName": "the Spear-Shaft",
+    "tagline": "Wright of the Tuatha Dé Danann — his hands shaped every haft that ever flew true.",
+    "flavor": "Wood shavings curl from his plane as he works, untouched by the dark around him. \"A shaft without a wielder is just kindling,\" he says, and presses the finished haft into your hands. \"Lugh's spear will need one, before the end.\""
+  },
+  {
+    "id": "credne",
+    "char": "smith_credne",
+    "name": "Credne the Brazier",
+    "partKey": "bolts",
+    "partName": "the Spear-Bolts",
+    "tagline": "Bronze-worker of the Tuatha Dé Danann — every rivet and fitting passes through her fire first.",
+    "flavor": "She sets down her tongs and studies you, then the bolts glowing on her anvil. \"These held Lugh's spear together once,\" she says. \"They'll do it again, if you carry them true.\""
+  },
+  {
+    "id": "goibniu",
+    "char": "smith_goibniu",
+    "name": "Goibniu the Smith",
+    "partKey": "head",
+    "partName": "the Spear-Head",
+    "tagline": "Master smith of the Tuatha Dé Danann — no blade he forges ever misses, no wound he tends ever festers.",
+    "flavor": "The forge roars behind him, hot enough to reforge a legend. \"The head is the easy part,\" he says. \"Give me what Luchta and Credne have already given you, and I'll finish what the old gods started.\""
+  }
+]

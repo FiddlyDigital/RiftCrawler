@@ -213,11 +213,7 @@ export class Game {
   public won = false;
   /** One-time nudge toward the win condition. */
   private gorgothHintShown = false;
-  /** Carries over between summons (escape & retry). */
-  private gorgothHp = Balance.CONFIG.gorgoth.maxHp;
   private gorgothHalfTriggered = false;
-  /** Once true, line clears chip the causeway (his stored HP). */
-  public gorgothEverSummoned = false;
 
   public readonly cb: GameCallbacks;
 
@@ -1211,23 +1207,6 @@ export class Game {
       // deleting him (which would soft-lock the run: no boss, no blocks).
       for (const m of this.monsters.filter(x => x.hp <= 0)) CombatSystem.killMonster(m, this);
 
-      // The Causeway Crumbles: once Bres has shown himself, every row you
-      // demolish is a span of his half-built bridge — his stored HP takes the
-      // hit, but it only chips him down to a floor (a fraction of max HP):
-      // you must still face him in person to finish it.
-      if (this.gorgothEverSummoned && !this.gorgothSummoned) {
-        const chip = Balance.CONFIG.gorgoth.causewayDamagePerRowPerFloor * rowsCleared * this.dungeonLevel;
-        const before = this.gorgothHp;
-        const chipFloor = Math.ceil(Balance.CONFIG.gorgoth.maxHp * Balance.CONFIG.gorgoth.causewayChipFloorPct);
-        if (this.gorgothHp > chipFloor) this.gorgothHp = Math.max(chipFloor, this.gorgothHp - chip);
-        if (this.gorgothHp < before) {
-          this.cb.log(`The causeway shudders — Bres feels it! (−${before - this.gorgothHp})`, 'log-boss', 'sprite_boss_gorgoth');
-          // Stone shards rain from the unfinished bridge at the top of the board
-          this.cb.onParticleBurst?.(Math.floor(GameConfig.COLS / 2), 1, 8, '#b9a27e');
-          this.cb.onImpactGlow?.(Math.floor(GameConfig.COLS / 2), 0, '185,162,126', 12);
-        }
-      }
-
       if (!this.noLineHeal) {
         const lineHeal = this.player.heal(10);
         if (lineHeal > 0) {
@@ -1730,16 +1709,12 @@ export class Game {
       if (this.map[sx]?.[sy] === Tile.STAIRS) break;
     }
 
-    if (this.map[this.player.x]![this.player.y] === Tile.STAIRS) {
-      // Fleeing down a ladder escapes a summoned Gorgoth — the next floor plays
-      // as normal. His remaining HP is banked, so you can retreat, grow
-      // stronger, and re-summon him to keep whittling him down.
-      if (this.gorgothSummoned) {
-        const boss = this.monsters.find(m => m.isGorgoth);
-        if (boss) this.gorgothHp = Math.max(1, boss.hp);
-        this.gorgothSummoned = false;
-        this.cb.log('You slip down the ladder — Bres\'s wounds will still be there when you face him again.', 'log-perk', 'tile_stairs');
-      }
+    // Bres sweeps every stairs tile away the instant he's summoned (see
+    // summonGorgoth), so this can't fire mid-duel in practice — the extra
+    // guard is defense-in-depth against a soft-lock (descending would wipe
+    // his monster entry via resetDungeonState() while gorgothSummoned stayed
+    // true, stopping tetrominoes forever with no boss left to fight).
+    if (this.map[this.player.x]![this.player.y] === Tile.STAIRS && !this.gorgothSummoned) {
       this.dungeonLevel++;
       this.floorsDescended++;
       if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
@@ -2204,19 +2179,31 @@ export class Game {
   public summonGorgoth(): void {
     if (this.gorgothSummoned) return;
     this.gorgothSummoned = true;
-    if (!this.gorgothEverSummoned) this.storyBeats.push('called Bres the Beautiful forth to battle');
-    this.gorgothEverSummoned = true;
+    this.storyBeats.push('called Bres the Beautiful forth to battle');
 
     // The board the player built stays exactly as it is — no arena reset; only
     // the tetromino supply stops.
     this.blockMatrix = [];
     this.heldType = null;
 
+    // The causeway is complete — there's no more "descend and try again
+    // later." Every remaining stairs tile becomes plain floor, beaming away
+    // like any other departing tile-feature (NPCs, altars, the tattoo artist).
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        if (this.map[x]![y] === Tile.STAIRS) {
+          this.map[x]![y] = Tile.FLOOR;
+          this.colors[x]![y] = this.blockColor;
+          this.cb.onBeam?.(x, '109,63,122');
+        }
+      }
+    }
+
     // Gorgoth looms in at the very top-centre and grinds his way down to the
     // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
     // so descending floors only ever helps you.
     const gx = Math.floor(GameConfig.COLS / 2);
-    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', this.gorgothHp, Balance.CONFIG.gorgoth.maxHp, Balance.CONFIG.gorgoth.atk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
+    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', Balance.CONFIG.gorgoth.maxHp, Balance.CONFIG.gorgoth.maxHp, Balance.CONFIG.gorgoth.atk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
     boss.combatLevel = Balance.CONFIG.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
