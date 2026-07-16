@@ -454,7 +454,7 @@ export interface GameCallbacks {
   /** A boss/NPC/biome/patron was encountered for the first time — the host persists it to the lore codex. */
   onCodexDiscover?: (kind: CodexKind, id: string) => void;
   onLevelUp?: (choices: BoonDef[], onChoice: (index: number) => void) => void;
-  onOpenShop?: (stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, close: () => void) => void;
+  onOpenShop?: (stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, close: () => void, titleOverride?: string, subtitleOverride?: string) => void;
   onOpenTattooArtist?: (choices: BrandDef[], onChoice: (index: number) => void, reroll?: RerollCfg<BrandDef>) => void;
   onAction: () => void;
   onAudio?: (event: AudioEvent, data?: number) => void;

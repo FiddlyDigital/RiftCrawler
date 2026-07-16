@@ -512,13 +512,13 @@ class GameApp {
         }, reroll);
       },
 
-      onOpenShop: (stock, gold, buy, close) => {
+      onOpenShop: (stock, gold, buy, close, titleOverride, subtitleOverride) => {
         this.stopTick();
         audio.playShop();
         this.ui.showShop(stock, gold, buy, () => {
           close();
           this.startTick();
-        });
+        }, titleOverride, subtitleOverride);
       },
 
       onBossWarning: (boss, onDone) => {

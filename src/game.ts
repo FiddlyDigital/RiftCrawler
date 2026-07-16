@@ -171,6 +171,10 @@ export class Game {
   public spearPartsHeld = new Set<'shaft' | 'bolts' | 'head'>();
   /** Whether Goibniu has reforged the complete Spear of Lugh this run. */
   public spearForged = false;
+  /** Whether the one-time real-Tetris (4-line clear) reward has already been granted this run. */
+  private tetrisRewardGranted = false;
+  /** Set the instant a real Tetris is cleared; opened at the next safe (unpaused) moment. */
+  private pendingTetrisReward = false;
   public comboCount = 0;
   private lastLineClearMs = 0;
   private tattooTiles: Array<{ x: number; y: number }> = [];
@@ -654,6 +658,7 @@ export class Game {
     this.checkLineClears();
     this.cb.onAudio?.('blockLand');
     this.maybeHintGorgoth();
+    this.maybeOpenTetrisReward();
     this.spawnBlock();
   }
 
@@ -1314,6 +1319,17 @@ export class Game {
       } else if (this.comboCount === 0) {
         this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold. (Cursed — no heal)`, 'log-tetris');
       }
+
+      // A real Tetris (all 4 lines at once) is rare enough to reward once
+      // per run with a one-off, unusually generous trader. Deferred rather
+      // than opened immediately — a Tetris's huge XP payout can level the
+      // player up in this very call, and that boon-choice modal must not be
+      // stacked under/over this one.
+      if (rowsCleared === 4 && !this.tetrisRewardGranted && this.cb.onOpenShop) {
+        this.tetrisRewardGranted = true;
+        this.pendingTetrisReward = true;
+        this.cb.log('A PERFECT CLEAR! The Otherworld takes notice, and sends a trader through the rift...', 'log-combo', 'fx_arcane');
+      }
     }
   }
 
@@ -1657,6 +1673,57 @@ export class Game {
     };
     this.cb.log('A red-capped peddler unfolds his stall...', 'log-perk', 'tile_merchant');
     this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
+  }
+
+  /** Opens the pending Tetris-clear reward once it's actually safe to (no other modal — e.g. a level-up from the same clear's XP — already has the game paused). */
+  private maybeOpenTetrisReward(): void {
+    if (!this.pendingTetrisReward || this.paused || !this.cb.onOpenShop) return;
+    this.pendingTetrisReward = false;
+    this.openTetrisReward();
+  }
+
+  /**
+   * A one-off, unusually generous trader — granted once per run, the first
+   * time the player clears a real Tetris (all 4 lines at once). Flat, cheap
+   * prices regardless of depth, plus one exclusive free item not sold
+   * anywhere else.
+   */
+  private openTetrisReward(): void {
+    if (!this.cb.onOpenShop) return;
+    this.paused = true;
+    const flatCost = 15;
+    const stock: ShopItem[] = [
+      { id: 'heal',  icon: 'sprite_potion',           name: 'Hearth Broth',       desc: 'Restore to full HP',                     cost: flatCost, purchased: false },
+      { id: 'maxhp', icon: 'item_heart',              name: 'Bogwood Charm',      desc: '+10% Max HP',                            cost: flatCost, purchased: false },
+      { id: 'atk',   icon: 'sprite_equip_iron_sword', name: 'Ogham-Etched Edge',  desc: '+10% ATK',                               cost: flatCost, purchased: false },
+      { id: 'ward',  icon: 'status_poison',           name: 'Deathward Sigil',    desc: 'Survive one killing blow (this floor)',  cost: flatCost, purchased: false },
+      { id: 'boon',  icon: 'fx_arcane',               name: 'Sídhe Blessing',     desc: 'A random Geis, free of charge',          cost: 0,        purchased: false },
+    ];
+    const buy = (id: string): { gold: number; ok: boolean } => {
+      const item = stock.find(s => s.id === id);
+      if (!item || item.purchased || this.gold < item.cost) return { gold: this.gold, ok: false };
+      this.gold -= item.cost;
+      item.purchased = true;
+      switch (id) {
+        case 'heal':  this.player.heal(this.player.maxHp); break;
+        case 'maxhp': this.player.maxHp *= 1.10; this.player.hp = Math.min(this.player.hp * 1.10, this.player.maxHp); break;
+        case 'atk':   this.player.atk *= 1.10; break;
+        case 'ward':  this.player.deathwardCharges += 1; break;
+        case 'boon': {
+          const pool = Boon.BY_TIER[2];
+          const reward = pool[Math.floor(Math.random() * pool.length)]!;
+          this.player.addBoon(reward);
+          break;
+        }
+      }
+      this.cb.log(`Bought ${item.name}${item.cost > 0 ? ` for ${item.cost}g` : ''}.`, 'log-perk', item.icon);
+      this.pushUI();
+      return { gold: this.gold, ok: true };
+    };
+    this.cb.onOpenShop(
+      stock, this.gold, buy, () => { this.paused = false; this.pushUI(); },
+      'THE OTHERWORLD PEDDLER', 'A stranger from beyond the rift, drawn by a perfect clear. "Take your due, and be quick about it."',
+    );
   }
 
   /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). `onClosed` fires once a boon is chosen. */

@@ -383,8 +383,11 @@ export class UIManager {
   }
 
   /** Shows the wandering peddler's shop modal. */
-  public showShop(stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void): void {
-    this.shopModal.showShop(stock, gold, buy, onClose);
+  public showShop(
+    stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void,
+    titleOverride?: string, subtitleOverride?: string,
+  ): void {
+    this.shopModal.showShop(stock, gold, buy, onClose, titleOverride, subtitleOverride);
   }
 
   /** Shows the tattoo-artist brand-choice modal, with an optional gold reroll. */

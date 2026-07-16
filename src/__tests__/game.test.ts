@@ -1477,6 +1477,74 @@ describe("Lugh's Spear questline (the three legendary smiths)", () => {
   });
 });
 
+describe('Tetris reward (4-line clear bonus trader)', () => {
+  function clearFourLines(game: Game): void {
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 10; x++) game.map[x]![y] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+  }
+  function maybeOpen(game: Game): void {
+    (game as unknown as { maybeOpenTetrisReward(): void }).maybeOpenTetrisReward();
+  }
+
+  it('clearing exactly 4 lines at once opens a one-off shop (once it is safe to), once per run', () => {
+    const onOpenShop = vi.fn();
+    const cb = { ...makeCallbacks(), onOpenShop };
+    const game = new Game(cb);
+    clearFourLines(game);
+    expect(onOpenShop).not.toHaveBeenCalled(); // deferred, not immediate
+    game.paused = false; // a Tetris's XP burst may itself have leveled the player up — assume that modal is resolved
+    maybeOpen(game);
+    expect(onOpenShop).toHaveBeenCalledTimes(1);
+    const [stock, , , , title] = onOpenShop.mock.calls[0]!;
+    expect(stock.some((i: { id: string }) => i.id === 'boon')).toBe(true);
+    expect(title).toBe('THE OTHERWORLD PEDDLER');
+
+    // Doesn't fire again on a second Tetris the same run.
+    clearFourLines(game);
+    game.paused = false;
+    maybeOpen(game);
+    expect(onOpenShop).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not open the special trader on a 1-3 line clear', () => {
+    const onOpenShop = vi.fn();
+    const cb = { ...makeCallbacks(), onOpenShop };
+    const game = new Game(cb);
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    maybeOpen(game);
+    expect(onOpenShop).not.toHaveBeenCalled();
+  });
+
+  it('waits if another modal (e.g. a level-up from the same clear) already has the game paused', () => {
+    const onOpenShop = vi.fn();
+    const cb = { ...makeCallbacks(), onOpenShop };
+    const game = new Game(cb);
+    clearFourLines(game);
+    game.paused = true; // simulate a level-up boon-choice modal still open
+    maybeOpen(game);
+    expect(onOpenShop).not.toHaveBeenCalled();
+    game.paused = false; // modal closes
+    maybeOpen(game);
+    expect(onOpenShop).toHaveBeenCalledTimes(1);
+  });
+
+  it('the free Sídhe Blessing grants a tier-2 boon at no gold cost', () => {
+    const onOpenShop = vi.fn();
+    const cb = { ...makeCallbacks(), onOpenShop };
+    const game = new Game(cb);
+    const boonsBefore = game.player.boons.length;
+    clearFourLines(game);
+    game.paused = false;
+    maybeOpen(game);
+    const [, gold, buy] = onOpenShop.mock.calls[0]!;
+    const result = buy('boon');
+    expect(result.ok).toBe(true);
+    expect(result.gold).toBe(gold); // free — no gold deducted
+    expect(game.player.boons.length).toBe(boonsBefore + 1);
+  });
+});
+
 // ── Hazards (previously untested) ─────────────────────────────────────────────
 
 describe('Hazards', () => {
