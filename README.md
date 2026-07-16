@@ -22,7 +22,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
     - [`bosses.json`](#bossesjson)
     - [`classes.json`, `biomes.json`, `patrons.json`](#classesjson-biomesjson-patronsjson)
     - [`boons.json`, `brands.json`, `modifiers.json` — the effect system](#boonsjson-brandsjson-modifiersjson--the-effect-system)
-    - [`npcs.json`, `floor-events.json`](#npcsjson-floor-eventsjson)
+    - [`npcs.json`, `floor-events.json`, `smiths.json`](#npcsjson-floor-eventsjson-smithsjson)
     - [Support files](#support-files)
     - [Data validation](#data-validation)
   - [Adding \& tuning content](#adding--tuning-content)
@@ -61,6 +61,8 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 | **Boss floors** | `src/game.ts` | Every 5th floor is boss-eligible, but the boss no longer spawns on the first piece you drop — it waits until the built floor covers **at least half the field** overall (not just one tall column), so reaching the stairs early just carries the fight into the next floor instead of skipping it. |
 | **Floor events** | `src/data/floor-events.json` | A narrative choice-modal every few descents (skip boss floors) — standing stones, wandering peddlers, etc., each with data-driven option handlers. |
 | **Lore codex** | `src/storage.ts`, `<codex-modal>` | Cross-run discovery log for bosses/NPCs/biomes/patrons, persisted in `localStorage`. |
+| **Lugh's Spear questline** | `src/data/smiths.json`, `src/game.ts` | Every 3rd floor (skipping boss floors) hints "You hear the clang of an anvil..." and embeds one of three legendary smiths (Luchta, Credne, Goibniu) as a guaranteed encounter on the 100th block dropped that floor. Each grants one spear part; Goibniu's third meeting reforges it, replacing the player's ranged ability with a bolt that pierces every monster straight up their own Tetris column. |
+| **Tetris reward** | `src/game.ts` | Clearing all 4 lines at once grants a one-time-per-run bonus trader (flat cheap prices plus one exclusive free boon) — deferred to the next safe moment so it can't stack with a same-clear level-up's boon-choice modal. |
 | **Combat legibility** | `renderer.ts`, `game.ts` | Tap any tile to inspect it (incl. your hit-chance vs a monster). Monsters that can strike next turn are telegraphed. |
 | **Gorgoth endgame** | `src/game.ts`, `monsterAI.ts` | Fixed stats (1450 HP, ATK 54, D20 — see `balance.json`'s `gorgoth` block). Descends one tile every ~2 turns, phasing through terrain. No retreat once summoned — stairs vanish from the board the moment he appears. |
 
@@ -228,11 +230,13 @@ Fields: `id`, `emoji`, `name`, `desc`, `effects: EffectSpec[]` (may target `play
 - `void_prism` is intentionally a no-op in JSON (recomputed in `Player.addBoon`).
 To add a new special: put a one-liner in `BOON_SPECIALS` / `MODIFIER_SPECIALS` and reference its key from JSON.
 
-### `npcs.json`, `floor-events.json`
+### `npcs.json`, `floor-events.json`, `smiths.json`
 
 **`npcs.json`** — wandering NPC encounters. `kind: 'flavor'` NPCs cycle through `lines[]` with a `returnLine` on repeat meetings; other kinds intro via `introLine` and may grant something. Discovered NPCs are tracked in the lore codex by `id`.
 
 **`floor-events.json`** — the narrative floor-event modal, offered every few descents (skip boss floors). Each event has `id`, `emoji`, `title`, `flavor`, and `options[]` (`label`, `desc`, `handler` — a named function in `game.ts`'s handler table — plus optional `params`).
+
+**`smiths.json`** — the three legendary smiths of Lugh's Spear questline, in encounter order (Luchta → Credne → Goibniu). Fields: `id`, `char` (sprite-map key), `name`, `partKey` (`shaft` | `bolts` | `head`), `partName`, `tagline`, `flavor`. Encountered via `game.ts`'s `triggerSmithEncounter`, reusing the floor-event modal rather than a dedicated component; Goibniu's third meeting is a `special`-style reforge handled directly in `game.ts` rather than in JSON, since it swaps `player.rangedAbility` at runtime.
 
 ### Support files
 - **`shapes.json`** — the 9 piece shapes in the random draw pool: the 7 standard tetrominoes plus two extra non-standard shapes (`Q`, `H`), each `{ matrix, color }` keyed by letter.
