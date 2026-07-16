@@ -1435,6 +1435,33 @@ describe("Lugh's Spear questline (the three legendary smiths)", () => {
     expect(g.blockMatrix.flat().includes(Cell.SMITH)).toBe(true);
   });
 
+  it('fires the mid-floor anvil warning toast once blocksSpawnedThisFloor reaches the warning threshold, and only once', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const g = game as unknown as {
+      pendingSmithFloor: boolean; blocksSpawnedThisFloor: number; spawnBlock(): void;
+    };
+    g.pendingSmithFloor = true;
+    // spawnBlock() increments blocksSpawnedThisFloor before checking the
+    // threshold, so start one below the value that should trip it.
+    g.blocksSpawnedThisFloor = Balance.CONFIG.smiths.warningThreshold - 2;
+    g.spawnBlock();
+    expect(cb.onToast).not.toHaveBeenCalledWith('The sound of anvils is getting stronger!', expect.any(String));
+
+    g.blocksSpawnedThisFloor = Balance.CONFIG.smiths.warningThreshold - 1;
+    g.spawnBlock();
+    expect(cb.onToast).toHaveBeenCalledWith('The sound of anvils is getting stronger!', expect.any(String));
+    const callCount = (cb.onToast as ReturnType<typeof vi.fn>).mock.calls.filter(
+      c => c[0] === 'The sound of anvils is getting stronger!',
+    ).length;
+
+    g.spawnBlock(); // still above threshold, but already shown this floor
+    const callCountAfter = (cb.onToast as ReturnType<typeof vi.fn>).mock.calls.filter(
+      c => c[0] === 'The sound of anvils is getting stronger!',
+    ).length;
+    expect(callCountAfter).toBe(callCount);
+  });
+
   it('meeting all three smiths in order grants every part and Goibniu reforges the spear', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };
@@ -1487,9 +1514,16 @@ describe('Ambient floor-entry toasts', () => {
     expect(cb.onToast).toHaveBeenCalledWith('You sense dark forces lie in ambush!', expect.any(String));
   });
 
+  it('the starting floor-1 biome fires its own entry toast (never reached via updateBiome)', () => {
+    const cb = makeCallbacks();
+    new Game(cb);
+    expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('Entering'), expect.any(String));
+  });
+
   it('updateBiome only toasts when the biome actually changes', () => {
     const cb = makeCallbacks();
     const game = new Game(cb);
+    (cb.onToast as ReturnType<typeof vi.fn>).mockClear(); // constructor already fired the floor-1 toast
     (game as unknown as { updateBiome(): void }).updateBiome(); // still floor 1, same biome
     expect(cb.onToast).not.toHaveBeenCalled();
     game.dungeonLevel = 5; // crosses into the next biome (minFloor 5)

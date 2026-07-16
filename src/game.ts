@@ -163,6 +163,8 @@ export class Game {
   /** Set on a smith-eligible floor entry; the smith rider doesn't inject until {@link blocksSpawnedThisFloor} passes the configured threshold. */
   private pendingSmithFloor = false;
   private blocksSpawnedThisFloor = 0;
+  /** Whether the "anvils are getting stronger" mid-floor warning has already fired this floor. */
+  private smithWarningShown = false;
   /** Same rider-preview pattern as {@link pendingNpcId}, for the falling piece's `Cell.SMITH` cell. */
   public pendingSmithId: string | null = null;
   /** How many of the three legendary smiths have been met this run (capped at 3, once the spear is forged). */
@@ -255,7 +257,12 @@ export class Game {
     this.updateVisibility();
     this.pushUI();
     // The starting biome is never "entered" via updateBiome() (that only fires
-    // on a floor transition), so it needs its own codex discovery here.
+    // on a floor transition), so it needs its own codex discovery + ambient
+    // heads-up here, mirroring updateBiome()'s biome-change treatment.
+    const startBiome = Biome.forFloor(this.dungeonLevel);
+    const startIcon = Game.BIOME_ICON[startBiome.id] ?? 'tile_stone_a';
+    this.cb.log(`${startBiome.name} — ${startBiome.desc}`, 'log-tetris', startIcon);
+    this.cb.onToast?.(`Entering ${startBiome.name}...`, startIcon);
     this.cb.onCodexDiscover?.('biome', this.biomeId);
   }
 
@@ -344,6 +351,11 @@ export class Game {
     this.currentBlessed = blessed;
     this.pendingNpcId = null;
     this.pendingSmithId = null;
+
+    if (this.pendingSmithFloor && !this.smithWarningShown && this.blocksSpawnedThisFloor >= Balance.CONFIG.smiths.warningThreshold) {
+      this.smithWarningShown = true;
+      this.cb.onToast?.('The sound of anvils is getting stronger!', 'fx_impact');
+    }
 
     let stairsInjected = false;
     let bossInjected = false;
@@ -1397,6 +1409,7 @@ export class Game {
     this.npcTiles = [];
     this.npcTilesSpawnedThisFloor = 0;
     this.blocksSpawnedThisFloor = 0;
+    this.smithWarningShown = false;
     // Ghost haunting roll — a fallen character close to your current level
     // may drift up from a previous run's save.
     this.activeGhost = null;

@@ -221,10 +221,11 @@
     "smiths": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["floorInterval", "pieceThreshold"],
+      "required": ["floorInterval", "pieceThreshold", "warningThreshold"],
       "properties": {
         "floorInterval": { "type": "number" },
-        "pieceThreshold": { "type": "number" }
+        "pieceThreshold": { "type": "number" },
+        "warningThreshold": { "type": "number" }
       }
     },
     "spearOfLugh": {
