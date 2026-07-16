@@ -48,5 +48,23 @@
     "name": "A Fomorian Tinker",
     "kind": "trade",
     "introLine": "Otherworld power for Otherworld power, wanderer. Hand me one of your Geasa, and I'll press something rarer into your palm."
+  },
+  {
+    "id": "seanchai",
+    "char": "npc_seanchai",
+    "name": "The Seanchaí of the Mound",
+    "kind": "flavor",
+    "lines": [
+      "Sit a while. Before Bres turned his back on Ériu, he was our king — a beautiful, miserly king who taxed the smoke of our fires. The land itself sickened under him.",
+      "Lugh came to Tara with every craft in his hands, and the doorkeeper laughed — 'we have one of each already.' 'But have you one who is all of them?' said Lugh. The door opened.",
+      "Three brothers forged for the gods: Goibniu the smith, Luchta the wright, Credne the brazier. No blade they made ever missed, and no wound it gave ever healed.",
+      "The Fomorians were not always monsters, you know. The sea remembers them as neighbours — hungry ones, but neighbours. It was Bres who taught them to take.",
+      "This mound is older than the war above it. The Sídhe dug deep when the light left — deeper than Bres will ever build.",
+      "They say the causeway he raises is made of everything Ériu lost — every stolen harvest, every cold hearth. Break it, and it all comes home.",
+      "At the second battle of Mag Tuired, it was not strength that won — it was every craft turned to one purpose. Remember that, when the stone falls faster.",
+      "When you meet him at last, look at his face. Bres means 'beautiful'. Ruin always is, from far enough away."
+    ],
+    "returnLine": "Back from the dark, and still in one piece. Sit — the fire has kept your place.",
+    "waystationOnly": true
   }
 ]

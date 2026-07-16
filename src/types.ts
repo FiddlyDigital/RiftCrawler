@@ -254,6 +254,8 @@ export interface NpcDef {
   introLine?: string;
   /** Shown instead of a random {@link lines} pick on a repeat encounter within the same run (`kind: 'flavor'` only). */
   returnLine?: string;
+  /** True for NPCs who live only in the waystation sídhe mound — excluded from random wandering-encounter rolls. */
+  waystationOnly?: boolean;
 }
 
 /** One of the three legendary Tuatha Dé Danann smiths, each carrying one part of Lugh's Spear. */

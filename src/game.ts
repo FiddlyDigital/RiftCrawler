@@ -154,6 +154,15 @@ export class Game {
   /** Gravity % adjustment from the active omen (negative = faster), summed with `biomeGravityPct` at both tick-rate call sites. */
   public omenGravityPct = 0;
 
+  // Waystation state — a safe sídhe-mound rest floor after each slain boss
+  /** Set when a boss dies this floor; the next descent surfaces into a waystation instead of a normal floor. */
+  public bossSlainThisFloor = false;
+  /** Whether the current floor is a waystation — no falling stone, no monsters, just the mound's residents. */
+  public inWaystation = false;
+
+  /** Whether the Tetris layer is currently frozen (the Gorgoth duel, or a waystation rest floor). */
+  private get tetrisSuspended(): boolean { return this.gorgothSummoned || this.inWaystation; }
+
   // Bealtaine Fires ritual state (the 'bealtaine' special omen)
   /** Braziers standing on the floor this level — walk into an unlit one to light it. */
   public brazierTiles: { x: number; y: number; lit: boolean }[] = [];
@@ -316,9 +325,9 @@ export class Game {
 
   /** Recomputes visibility/explored state around the player (or reveals the whole arena during the Gorgoth duel). */
   private updateVisibility(): void {
-    // During the Gorgoth duel the whole arena stays lit (revealed at summon) so
-    // the player can watch him descend — don't re-fog to the vision radius.
-    if (this.gorgothSummoned) return;
+    // During the Gorgoth duel (and inside a waystation) the whole arena stays
+    // lit — revealed on entry, so don't re-fog to the vision radius.
+    if (this.tetrisSuspended) return;
     const onSmoke = this.hazards.some(h => h.type === 'smoke' && h.x === this.player.x && h.y === this.player.y);
     const fogPenalty = this.activeOmen?.num('visionPenalty', 0) ?? 0;
     const r = onSmoke ? 1 : Math.max(1, this.player.visionRadius - fogPenalty);
@@ -762,7 +771,7 @@ export class Game {
   // One-time teaching nudge: when the stack climbs near the ceiling, tell the
   // player that topping out summons Gorgoth — the win condition.
   private maybeHintGorgoth(): void {
-    if (this.gorgothHintShown || this.gorgothSummoned) return;
+    if (this.gorgothHintShown || this.tetrisSuspended) return;
     if (this.stackTopRow() <= 5) {
       this.gorgothHintShown = true;
       this.cb.log('The stack climbs high — let it top out to summon BRES THE BEAUTIFUL and win the Rift!', 'log-boss', 'ui_warning');
@@ -1043,6 +1052,54 @@ export class Game {
   // once the player has built enough of the floor (see spawnBlock). This
   // just announces the floor; the actual encounter is triggered on bump,
   // in triggerSmithEncounter below.
+
+  /**
+   * Turns the just-entered floor into a waystation: a safe sídhe-mound rest
+   * stop after every slain boss. The Tetris layer is suspended (see
+   * {@link tetrisSuspended}) and the mound offers a seanchaí (lore), a
+   * hearth-fire (full heal), the Fear Dearg's stall (shop), and the stairs on.
+   */
+  private enterWaystation(): void {
+    this.inWaystation = true;
+    this.blockMatrix = [];  // no falling stone inside the mound
+    // resetDungeonState may have rolled a dungeon room, monsters, or a ghost
+    // haunting for what it thought was a normal floor — the mound is home
+    // ground, so sweep all of that away and rebuild from bare rock.
+    this.map = this.emptyMap();
+    this.colors = this.emptyColors();
+    this.monsters = [];
+    this.hazards = [];
+    this.specialTiles = [];
+    this.npcTiles = [];
+    this.altarTiles = [];
+    this.tattooTiles = [];
+    this.activeGhost = null;
+    // A broad flat resting ledge in place of the usual narrow start platform.
+    for (let x = 1; x < GameConfig.COLS - 1; x++) {
+      for (const y of [23, 24]) {
+        this.map[x]![y] = Tile.FLOOR;
+        this.colors[x]![y] = '#2c2a40';
+      }
+    }
+    this.player.x = 2; this.player.y = 23;
+    this.npcTiles.push({ x: 4, y: 23, npcId: 'seanchai' });
+    this.npcTiles.push({ x: 5, y: 23, npcId: '__campfire__' });
+    this.npcTiles.push({ x: 6, y: 23, npcId: '__peddler__' });
+    this.map[8]![23] = Tile.STAIRS;
+    this.colors[8]![23] = '#6d3f7a';
+    // The mound is home ground — no fog here (updateVisibility early-returns
+    // while the Tetris layer is suspended, so set the full reveal directly).
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        this.visibility[x]![y] = true;
+        this.explored[x]![y] = true;
+      }
+    }
+    this.cb.log('You surface into a sídhe mound — a hush, a hearth, and friendly faces. The stairs will keep.', 'log-success', 'special_sacred');
+    this.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');
+    this.storyBeats.push('rested in a sídhe mound');
+    this.pushUI();
+  }
 
   /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
   private maybeRollOmen(isBossFloor: boolean): void {
@@ -1453,6 +1510,14 @@ export class Game {
     this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
+    this.inWaystation = false;  // defense-in-depth: a collapse can't start inside the mound, but never carry the suspension out
+    // A slain boss earns a waystation in place of a normal floor — no pacts,
+    // events, omens, or smiths there; those resume on the next real floor.
+    if (this.bossSlainThisFloor) {
+      this.bossSlainThisFloor = false;
+      this.enterWaystation();
+      return;
+    }
     this.maybeOfferPact();
     // Omen first, smith second — if both toast, the more actionable smith
     // hint wins the banner while both keep their log lines.
@@ -1569,7 +1634,7 @@ export class Game {
     StatusEffectSystem.applyAuraStun(this);
     HazardSystem.processHazards(this);
     this.processSpecialTiles();
-    if (!this.gorgothSummoned) this.moveGravity();  // no falling blocks during the Gorgoth duel
+    if (!this.tetrisSuspended) this.moveGravity();  // no falling blocks during the Gorgoth duel or a waystation
     MonsterAiSystem.processMonsterTurns(this);
     this.checkCloseCall();
     this.tickRangedCooldown();
@@ -1986,6 +2051,22 @@ export class Game {
     if (npcTile) {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
+      // Waystation residents: the hearth-fire heals in full, once; the Fear
+      // Dearg's stall opens the regular peddler shop.
+      if (npcTile.npcId === '__campfire__') {
+        const healed = this.player.heal(this.player.maxHp);
+        this.cb.onParticle(nx, ny, healed > 0 ? `+${healed} HP` : 'warm', '#ff8c32', 14, 'tile_brazier');
+        this.cb.onParticleBurst?.(nx, ny, 8, '#ff8c32');
+        this.cb.log('You rest by the hearth-fire of the mound. Warmth returns to your bones — fully healed.', 'log-success', 'tile_brazier');
+        this.cb.onBeam?.(nx, '255,140,50');
+        this.advanceTurn();
+        return;
+      }
+      if (npcTile.npcId === '__peddler__') {
+        this.cb.onBeam?.(nx, '198,58,50');
+        this.openPeddler();
+        return;
+      }
       const isGhost = npcTile.npcId === '__ghost__';
       const isSmith = npcTile.npcId.startsWith('__smith_');
       const departOnClose = (): void => {
@@ -2035,6 +2116,16 @@ export class Game {
       this.updateBiome();
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
       this.resetDungeonState();
+      // Leaving a waystation: resetDungeonState already spawned the next
+      // floor's first piece — just lift the suspension.
+      this.inWaystation = false;
+      // A slain boss earns a waystation in place of a normal floor — no pacts,
+      // events, shops, omens, or smiths there; those resume next real floor.
+      if (this.bossSlainThisFloor) {
+        this.bossSlainThisFloor = false;
+        this.enterWaystation();
+        return;
+      }
       // An Draoi's pact ceremony fires on the first descent, before any other
       // floor modal (floor 2 collides with neither shop, floor events, nor
       // bosses — but the guard is on state, not floor number, so it also
@@ -2473,7 +2564,7 @@ export class Game {
 
   /** Holds the current piece for later (swapping with any already-held piece), once per lock. */
   public handleBlockHold(): void {
-    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     if (!this.canHold) {
       this.cb.log('Already held this piece — lock it first.', 'log-neutral');
       return;
@@ -2605,33 +2696,33 @@ export class Game {
 
   /** Shifts the falling piece one column left, if unobstructed. */
   public handleBlockLeft(): void {
-    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   /** Shifts the falling piece one column right, if unobstructed. */
   public handleBlockRight(): void {
-    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   /** Rotates the falling piece 90°, if the rotated shape doesn't collide. */
   public handleBlockRotate(): void {
-    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     const rotated = GameMath.rotateMatrix(this.blockMatrix);
     if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); this.advanceTurn(); }
   }
 
   /** Drops the falling piece one row, locking it in place if it can't descend further. */
   public handleBlockSoftDrop(): void {
-    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) { this.blockY++; this.advanceTurn(); }
     else { this.lockBlock(); this.advanceTurn(); }
   }
 
   /** Instantly drops the falling piece to the floor and locks it, with an afterimage trail along its travel path. */
   public handleBlockDrop(): void {
-    if (this.player.hp <= 0 || this.paused || this.gorgothSummoned) return;
+    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     const startY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
     // Afterimage streaks along the travel path — one per occupied column,

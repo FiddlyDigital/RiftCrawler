@@ -19,7 +19,8 @@
         "items": { "type": "string", "minLength": 1 }
       },
       "introLine": { "type": "string", "minLength": 1 },
-      "returnLine": { "type": "string", "minLength": 1 }
+      "returnLine": { "type": "string", "minLength": 1 },
+      "waystationOnly": { "type": "boolean" }
     }
   }
 }

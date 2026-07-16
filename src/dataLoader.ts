@@ -577,6 +577,7 @@ export class Npc implements NpcDef {
   readonly lines?: string[];
   readonly introLine?: string;
   readonly returnLine?: string;
+  readonly waystationOnly?: boolean;
 
   /** @throws {TypeError} If `raw` is missing a non-empty `id`. */
   constructor(raw: NpcDef) {
@@ -590,14 +591,16 @@ export class Npc implements NpcDef {
     this.lines = raw.lines;
     this.introLine = raw.introLine;
     this.returnLine = raw.returnLine;
+    this.waystationOnly = raw.waystationOnly;
   }
 
   /** Every NPC archetype loaded from `data/npcs.json`. */
   static readonly ALL: Npc[] = (npcsData as NpcDef[]).map(raw => new Npc(raw));
 
-  /** Picks a uniformly random NPC archetype. */
+  /** Picks a uniformly random wandering NPC archetype (waystation residents excluded). */
   static random(): Npc {
-    return Npc.ALL[Math.floor(Math.random() * Npc.ALL.length)]!;
+    const pool = Npc.ALL.filter(n => !n.waystationOnly);
+    return pool[Math.floor(Math.random() * pool.length)]!;
   }
 }
 

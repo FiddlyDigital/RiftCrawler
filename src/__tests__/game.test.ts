@@ -7,7 +7,7 @@ import { CombatSystem } from '../systems/combat';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { HazardSystem } from '../systems/hazards';
 import { StatusEffectSystem } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon, Omen, OMENS } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon, Omen, OMENS, Npc } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -1728,6 +1728,99 @@ describe('Bealtaine Fires (brazier ritual omen)', () => {
     expect(game.brazierTiles).toHaveLength(0);
     expect(game.brazierLitCount).toBe(0);
     expect(game.activeOmen).toBeNull();
+  });
+});
+
+describe('Waystations (sídhe-mound rest floors)', () => {
+  function slayABoss(game: Game): void {
+    const boss = new Monster(0, 23, 'sprite_boss_wraith', 'Test Boss', 1, 1, 1, 10, true);
+    game.monsters.push(boss);
+    boss.hp = 0;
+    CombatSystem.killMonster(boss, game);
+  }
+
+  function descend(game: Game): void {
+    // Place stairs next to the hero and step onto them.
+    const sx = game.player.x + 1, sy = game.player.y;
+    game.map[sx]![sy] = Tile.STAIRS;
+    game.handleHeroMove(1, 0);
+  }
+
+  it('killing a boss flags the floor; the next descent enters a waystation', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    slayABoss(game);
+    expect(game.bossSlainThisFloor).toBe(true);
+    descend(game);
+    expect(game.inWaystation).toBe(true);
+    expect(game.bossSlainThisFloor).toBe(false);
+    expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('sídhe mound'), expect.any(String));
+    // The mound's residents are placed: seanchaí, hearth-fire, peddler stall.
+    const ids = game.npcTiles.map(n => n.npcId);
+    expect(ids).toContain('seanchai');
+    expect(ids).toContain('__campfire__');
+    expect(ids).toContain('__peddler__');
+    // Exit stairs pre-placed, no monsters, and the whole floor is revealed.
+    expect(game.map[8]![23]).toBe(Tile.STAIRS);
+    expect(game.monsters).toHaveLength(0);
+    expect(game.visibility[0]![0]).toBe(true);
+  });
+
+  it('the Tetris layer is suspended in a waystation: no gravity, no block input', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    slayABoss(game);
+    descend(game);
+    expect(game.inWaystation).toBe(true);
+    // Block inputs are inert.
+    const beforeX = (game as unknown as { blockX: number }).blockX;
+    game.handleBlockLeft();
+    game.handleBlockRight();
+    game.handleBlockRotate();
+    game.handleBlockDrop();
+    expect((game as unknown as { blockX: number }).blockX).toBe(beforeX);
+    expect((game as unknown as { blockMatrix: number[][] }).blockMatrix).toHaveLength(0);
+    // autoTick runs without a falling piece and without crashing.
+    game.paused = false;
+    game.autoTick();
+    expect((game as unknown as { blockMatrix: number[][] }).blockMatrix).toHaveLength(0);
+  });
+
+  it('the hearth-fire fully heals once and is consumed', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    slayABoss(game);
+    descend(game);
+    game.player.hp = 5;
+    // Walk the hero adjacent to the campfire tile (5, 23) and bump it.
+    game.player.x = 4; game.player.y = 23;
+    // The seanchaí sits at (4,23) — hero placement overlaps; move him aside for the test.
+    game.npcTiles = game.npcTiles.filter(n => n.npcId !== 'seanchai');
+    game.handleHeroMove(1, 0);
+    expect(game.player.hp).toBe(game.player.maxHp);
+    expect(game.npcTiles.some(n => n.npcId === '__campfire__')).toBe(false);
+  });
+
+  it('leaving the waystation restarts the Tetris layer and resumes normal floors', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    slayABoss(game);
+    descend(game);
+    expect(game.inWaystation).toBe(true);
+    const floorBefore = game.dungeonLevel;
+    // Step to the exit stairs at (8,23): teleport adjacent and move onto them.
+    game.player.x = 7; game.player.y = 23;
+    game.npcTiles = [];  // clear residents from the path for the test
+    game.handleHeroMove(1, 0);
+    expect(game.dungeonLevel).toBe(floorBefore + 1);
+    expect(game.inWaystation).toBe(false);
+    expect((game as unknown as { blockMatrix: number[][] }).blockMatrix.length).toBeGreaterThan(0);
+  });
+
+  it('the seanchaí never appears as a random wandering NPC', () => {
+    for (let i = 0; i < 200; i++) {
+      expect(Npc.random().id).not.toBe('seanchai');
+    }
   });
 });
 
