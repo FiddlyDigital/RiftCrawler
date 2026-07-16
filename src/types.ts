@@ -400,6 +400,19 @@ export interface UIState {
   biomeName: string;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
+  /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */
+  floorProgress: {
+    /** Tetrominoes spawned this floor. */
+    pieces: number;
+    /** Piece count that triggers the smith encounter, or null when no smith is due this floor. */
+    smithTarget: number | null;
+    /** Whole-board built-floor fraction, 0-100. */
+    fillPct: number;
+    /** Fill % that triggers the boss, or null when no boss is pending this floor. */
+    bossFillTarget: number | null;
+    /** Pieces placed since the last stairs cell and the count that force-injects the next one — null while a stairs tile is already somewhere on the board (the countdown would be misleading). */
+    stairsPity: { placed: number; target: number } | null;
+  };
 }
 
 /** Named sound-effect/haptic trigger passed through {@link GameCallbacks.onAudio}. */

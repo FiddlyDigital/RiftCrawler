@@ -160,6 +160,8 @@ export class Game {
   private floorsDescended = 0;
   private blocksPlacedSinceStairs = 0;
   private pendingBossFloor = false;
+  /** Whole-board fill fraction a pending boss waits for before riding in (see spawnBlock); also drives the HUD dial's boss marker. */
+  private static readonly BOSS_FILL_FRACTION = 0.5;
   /** Set on a smith-eligible floor entry; the smith rider doesn't inject until {@link blocksSpawnedThisFloor} passes the configured threshold. */
   private pendingSmithFloor = false;
   private blocksSpawnedThisFloor = 0;
@@ -371,7 +373,7 @@ export class Game {
     // skips it, the fight just waits for the player to build up first. This
     // is deliberately the *whole-board* fill fraction, not the tallest single
     // column, so one narrow spike from careless hard-drops can't trigger it.
-    const bossReady = this.pendingBossFloor && this.filledFraction() >= 0.5;
+    const bossReady = this.pendingBossFloor && this.filledFraction() >= Game.BOSS_FILL_FRACTION;
     // A pending smith holds off until the player has actually built out the
     // floor — a guaranteed slot on a specific piece, not a random chance.
     const smithReady = this.pendingSmithFloor && this.blocksSpawnedThisFloor >= Balance.CONFIG.smiths.pieceThreshold;
@@ -683,6 +685,16 @@ export class Game {
       }
     }
     return stackTop;
+  }
+
+  /** Whether any stairs tile is currently on the board (locked terrain, not the falling piece). */
+  private stairsOnBoard(): boolean {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        if (this.map[x]![y] === Tile.STAIRS) return true;
+      }
+    }
+    return false;
   }
 
   /** Fraction (0-1) of the whole field's cells currently built as floor — overall fullness, not just the single tallest column. */
@@ -2758,6 +2770,15 @@ export class Game {
           }
         : null,
       characterSheet: this.buildCharacterSheet(),
+      floorProgress: {
+        pieces: this.blocksSpawnedThisFloor,
+        smithTarget: this.pendingSmithFloor ? Balance.CONFIG.smiths.pieceThreshold : null,
+        fillPct: Math.round(this.filledFraction() * 100),
+        bossFillTarget: this.pendingBossFloor ? Math.round(Game.BOSS_FILL_FRACTION * 100) : null,
+        stairsPity: this.stairsOnBoard()
+          ? null
+          : { placed: this.blocksPlacedSinceStairs, target: Balance.CONFIG.spawnRates.stairsForcedAfterBlocks },
+      },
     });
   }
 }

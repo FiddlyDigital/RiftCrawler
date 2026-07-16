@@ -147,6 +147,13 @@ body {
 }
 .hud-floor { text-align: center; font-family: var(--font-pixel); font-size: 11px; }
 .hud-gold  { text-align: center; font-family: var(--font-pixel); font-size: 11px; }
+/* Floor-milestone dial: one line per pending threshold (smith pieces, boss
+   fill %, stairs pity), hidden entirely when nothing is pending. */
+.hud-floor-progress { display: none; flex-direction: column; gap: 2px; text-align: center; font-family: var(--font-pixel); font-size: 10px; }
+.hud-floor-progress.active { display: flex; }
+.hud-floor-progress .fp-smith { color: #d9a441; }
+.hud-floor-progress .fp-boss  { color: #e57373; }
+.hud-floor-progress .fp-stairs { color: #9fa8da; }
 .hud-next-preview { display: flex; align-items: center; justify-content: center; }
 
 /* ── Input-mode visibility helpers ──────────────────────────────────────────

@@ -73,6 +73,8 @@ export class UIManager {
       hudFloor:         document.getElementById('hud-floor-num')!,
       hudGold:          document.getElementById('hud-gold-num')!,
       hudNextPreview:   document.getElementById('hud-next-preview')!,
+      hudFloorProgress: document.getElementById('hud-floor-progress')!,
+      statFloorProgress: document.getElementById('stat-floor-progress')!,
       gold:             document.getElementById('stat-gold')!,
       bestScore:        document.getElementById('best-score')!,
       xpBar:            document.getElementById('xp-bar')!,
@@ -162,6 +164,28 @@ export class UIManager {
     const heldBox = this.els['heldPreview']!;
     heldBox.innerHTML = state.heldType ? SpriteService.shapePreviewHTML(SHAPES[state.heldType]) : '—';
     heldBox.style.opacity = state.canHold ? '1' : '0.35';
+
+    // Floor-milestone dial — one segment per pending threshold, so the player
+    // can see exactly what more Tetris buys on this floor.
+    const fp = state.floorProgress;
+    const fpSegments: string[] = [];
+    const fpSidebar: string[] = [];
+    if (fp.smithTarget !== null) {
+      fpSegments.push(`<span class="fp-smith">${SpriteService.iconHTML('smith_goibniu', 10)}${Math.min(fp.pieces, fp.smithTarget)}/${fp.smithTarget}</span>`);
+      fpSidebar.push(`Smith at ${fp.smithTarget} blocks (${Math.min(fp.pieces, fp.smithTarget)})`);
+    }
+    if (fp.bossFillTarget !== null) {
+      fpSegments.push(`<span class="fp-boss">${SpriteService.iconHTML('ui_warning', 10)}${Math.min(fp.fillPct, fp.bossFillTarget)}/${fp.bossFillTarget}%</span>`);
+      fpSidebar.push(`Boss at ${fp.bossFillTarget}% built (${fp.fillPct}%)`);
+    }
+    if (fp.stairsPity && fp.stairsPity.placed > 0) {
+      fpSegments.push(`<span class="fp-stairs">${SpriteService.iconHTML('tile_stairs_up', 10)}${Math.min(fp.stairsPity.placed, fp.stairsPity.target)}/${fp.stairsPity.target}</span>`);
+      fpSidebar.push(`Stairs within ${Math.max(0, fp.stairsPity.target - fp.stairsPity.placed)} blocks`);
+    }
+    const hudFp = this.els['hudFloorProgress']!;
+    hudFp.classList.toggle('active', fpSegments.length > 0);
+    hudFp.innerHTML = fpSegments.join('');
+    this.els['statFloorProgress']!.innerHTML = fpSidebar.join('<br>');
 
     // Cursed / blessed piece badge
     const psBadge = this.els['pieceStateBadge']!;
