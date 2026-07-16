@@ -22,7 +22,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
     - [`bosses.json`](#bossesjson)
     - [`classes.json`, `biomes.json`, `patrons.json`](#classesjson-biomesjson-patronsjson)
     - [`boons.json`, `brands.json`, `modifiers.json` — the effect system](#boonsjson-brandsjson-modifiersjson--the-effect-system)
-    - [`npcs.json`, `floor-events.json`, `smiths.json`](#npcsjson-floor-eventsjson-smithsjson)
+    - [`npcs.json`, `floor-events.json`, `smiths.json`, `omens.json`](#npcsjson-floor-eventsjson-smithsjson-omensjson)
     - [Support files](#support-files)
     - [Data validation](#data-validation)
   - [Adding \& tuning content](#adding--tuning-content)
@@ -63,6 +63,10 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 | **Lore codex** | `src/storage.ts`, `<codex-modal>` | Cross-run discovery log for bosses/NPCs/biomes/patrons, persisted in `localStorage`. |
 | **Lugh's Spear questline** | `src/data/smiths.json`, `src/game.ts` | Every 3rd floor (skipping boss floors) toasts "You hear the clang of an anvil..." on entry, "The sound of anvils is getting stronger!" at 10 tetrominoes placed, and embeds one of three legendary smiths (Luchta, Credne, Goibniu) as a guaranteed encounter on the 20th tetromino dropped that floor (`balance.json`'s `smiths` block). Each grants one spear part; Goibniu's third meeting reforges it, replacing the player's ranged ability with a bolt that pierces every monster straight up their own Tetris column. |
 | **Tetris reward** | `src/game.ts` | Clearing all 4 lines at once grants a one-time-per-run bonus trader (flat cheap prices plus one exclusive free boon) — deferred to the next safe moment so it can't stack with a same-clear level-up's boon-choice modal. |
+| **Floor progress dial** | `src/ui.ts`, `#hud-strip` | The HUD shows one compact segment per pending milestone — smith piece count, boss fill %, stairs pity countdown (hidden while a stairs tile is on the board) — so "keep stacking or descend?" is an informed choice. |
+| **Floor omens** | `src/data/omens.json`, `src/game.ts` | ~60% of non-boss floors past floor 1 roll a per-floor modifier, announced by toast and shown as a sidebar badge: the Rising Bog (low rows turn swamp), Féth Fíada (vision −2), Cluricaun's Hoard (2× line-clear gold), the Unquiet Cairn (more monsters, skeleton-heavy), Fomorian Weight (gravity +20%), Wild Rift-Surge (2.5× cursed/blessed pieces), and the Night of Bealtaine ritual below. All param-driven — adding an omen is a JSON edit. |
+| **Night of Bealtaine** | `src/game.ts` | A ritual omen: every 5th piece carries a brazier; walk into an unlit one to light it. Line clears destroy braziers (protect their rows!) but lit progress banks and replacements keep coming. Light all three → a free tier-III Geis choice. |
+| **Waystations** | `src/game.ts` | After every slain boss, the next descent surfaces into a safe sídhe mound: no falling stone, no monsters, no fog — just a seanchaí telling the myth behind the run, a hearth-fire (one full heal), the Fear Dearg's stall, and the stairs onward. |
 | **Combat legibility** | `renderer.ts`, `game.ts` | Tap any tile to inspect it (incl. your hit-chance vs a monster). Monsters that can strike next turn are telegraphed. |
 | **Gorgoth endgame** | `src/game.ts`, `monsterAI.ts` | Fixed stats (1450 HP, ATK 54, D20 — see `balance.json`'s `gorgoth` block). Descends one tile every ~2 turns, phasing through terrain. No retreat once summoned — stairs vanish from the board the moment he appears. |
 
@@ -230,13 +234,15 @@ Fields: `id`, `emoji`, `name`, `desc`, `effects: EffectSpec[]` (may target `play
 - `void_prism` is intentionally a no-op in JSON (recomputed in `Player.addBoon`).
 To add a new special: put a one-liner in `BOON_SPECIALS` / `MODIFIER_SPECIALS` and reference its key from JSON.
 
-### `npcs.json`, `floor-events.json`, `smiths.json`
+### `npcs.json`, `floor-events.json`, `smiths.json`, `omens.json`
 
-**`npcs.json`** — wandering NPC encounters. `kind: 'flavor'` NPCs cycle through `lines[]` with a `returnLine` on repeat meetings; other kinds intro via `introLine` and may grant something. Discovered NPCs are tracked in the lore codex by `id`.
+**`npcs.json`** — wandering NPC encounters. `kind: 'flavor'` NPCs cycle through `lines[]` with a `returnLine` on repeat meetings; other kinds intro via `introLine` and may grant something. Discovered NPCs are tracked in the lore codex by `id`. `waystationOnly: true` marks residents of the sídhe-mound waystation (the seanchaí), excluded from random wandering rolls.
 
 **`floor-events.json`** — the narrative floor-event modal, offered every few descents (skip boss floors). Each event has `id`, `emoji`, `title`, `flavor`, and `options[]` (`label`, `desc`, `handler` — a named function in `game.ts`'s handler table — plus optional `params`).
 
 **`smiths.json`** — the three legendary smiths of Lugh's Spear questline, in encounter order (Luchta → Credne → Goibniu). Fields: `id`, `char` (sprite-map key), `name`, `partKey` (`shaft` | `bolts` | `head`), `partName`, `tagline`, `flavor`. Encountered via `game.ts`'s `triggerSmithEncounter`, reusing the floor-event modal rather than a dedicated component; Goibniu's third meeting is a `special`-style reforge handled directly in `game.ts` rather than in JSON, since it swaps `player.rangedAbility` at runtime.
+
+**`omens.json`** — per-floor modifiers rolled on floor entry (chance in `balance.json`'s `omens.rollChance`). Fields: `id`, `icon`, `name`, `toastText`, `logText`, `weight` (relative roll weight), `params` (numeric tunables read by that omen's effect hook in `game.ts`, e.g. `goldMult`, `visionPenalty`, `gravityPct`), and optional `special` — the escape hatch for scripted ritual omens (`"bealtaine"` drives the brazier ritual). Pure stat omens need no code: their hooks read whatever params are present, so a new one is usually just a JSON entry.
 
 ### Support files
 - **`shapes.json`** — the 9 piece shapes in the random draw pool: the 7 standard tetrominoes plus two extra non-standard shapes (`Q`, `H`), each `{ matrix, color }` keyed by letter.
