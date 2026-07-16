@@ -7,7 +7,7 @@ import { CombatSystem } from '../systems/combat';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { HazardSystem } from '../systems/hazards';
 import { StatusEffectSystem } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, Boon } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -1394,6 +1394,86 @@ describe('Wandering NPC encounters', () => {
     expect(event.title).toBe('A Fomorian Tinker');
     expect(event.options.length).toBeGreaterThan(0);
     expect(game.npcTiles).toHaveLength(0);  // tile still consumed on bump
+  });
+});
+
+describe("Lugh's Spear questline (the three legendary smiths)", () => {
+  it('a smith-eligible floor (every 3rd, non-boss) sets pendingSmithFloor and logs the anvil hint', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    (game as unknown as { maybeAnnounceSmithFloor(isBossFloor: boolean): void }).maybeAnnounceSmithFloor(false);
+    expect((game as unknown as { pendingSmithFloor: boolean }).pendingSmithFloor).toBe(false); // floor 1 isn't a multiple of 3
+    game.dungeonLevel = 3;
+    (game as unknown as { maybeAnnounceSmithFloor(isBossFloor: boolean): void }).maybeAnnounceSmithFloor(false);
+    expect((game as unknown as { pendingSmithFloor: boolean }).pendingSmithFloor).toBe(true);
+    expect(cb.logs.some(l => l.includes('clang of an anvil'))).toBe(true);
+  });
+
+  it('does not announce on a boss floor even if it is also a multiple of 3', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.dungeonLevel = 15; // multiple of both 3 (smiths) and 5 (bosses)
+    (game as unknown as { maybeAnnounceSmithFloor(isBossFloor: boolean): void }).maybeAnnounceSmithFloor(true);
+    expect((game as unknown as { pendingSmithFloor: boolean }).pendingSmithFloor).toBe(false);
+  });
+
+  it('the smith rider injects only once blocksSpawnedThisFloor reaches the configured threshold', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const g = game as unknown as {
+      pendingSmithFloor: boolean; blocksSpawnedThisFloor: number;
+      spawnBlock(): void; blockMatrix: number[][];
+    };
+    g.pendingSmithFloor = true;
+    g.blocksSpawnedThisFloor = 0;
+    g.spawnBlock();
+    expect(g.blockMatrix.flat().includes(Cell.SMITH)).toBe(false);
+
+    g.blocksSpawnedThisFloor = Balance.CONFIG.smiths.pieceThreshold;
+    g.spawnBlock();
+    expect(g.blockMatrix.flat().includes(Cell.SMITH)).toBe(true);
+  });
+
+  it('meeting all three smiths in order grants every part and Goibniu reforges the spear', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    const g = game as unknown as {
+      spearPartsHeld: Set<string>; smithsMetCount: number; spearForged: boolean;
+      triggerSmithEncounter(smith: unknown, onClosed?: () => void): void;
+    };
+
+    for (const smith of SMITHS) {
+      onFloorEvent.mockClear();
+      g.triggerSmithEncounter(smith);
+      expect(onFloorEvent).toHaveBeenCalledTimes(1);
+      const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+      expect(event.title).toBe(smith.name);
+      onChoice(0); // the only option: take the part / let him reforge
+    }
+
+    expect([...g.spearPartsHeld].sort()).toEqual(['bolts', 'head', 'shaft']);
+    expect(g.smithsMetCount).toBe(3);
+    expect(g.spearForged).toBe(true);
+    expect(game.player.rangedAbility?.abilityType).toBe('spear_bolt');
+  });
+
+  it('the Spear of Lugh damages every monster in the hero column above, and none elsewhere', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.player.rangedAbility = {
+      name: 'Spear of Lugh', emoji: 'item_spear_of_lugh', abilityType: 'spear_bolt',
+      range: 0, damageMult: 3, cooldownMax: 8,
+    };
+    game.player.atk = 10;
+    const inColumn = new Monster(game.player.x, game.player.y - 2, 'sprite_berserker_orc', 'In column', 100, 100, 1, 5);
+    const offColumn = new Monster(game.player.x + 1, game.player.y - 2, 'sprite_berserker_orc', 'Off column', 100, 100, 1, 5);
+    const below = new Monster(game.player.x, game.player.y + 1, 'sprite_berserker_orc', 'Below', 100, 100, 1, 5);
+    game.monsters = [inColumn, offColumn, below];
+    game.handleRangedAttack();
+    expect(inColumn.hp).toBe(70); // 100 - (10 * 3)
+    expect(offColumn.hp).toBe(100);
+    expect(below.hp).toBe(100);
   });
 });
 

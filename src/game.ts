@@ -1,7 +1,7 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, EffectResolver, type ClassDef, type PatronDef } from './content';
+import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, EffectResolver, type ClassDef, type PatronDef } from './content';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -160,6 +160,17 @@ export class Game {
   private floorsDescended = 0;
   private blocksPlacedSinceStairs = 0;
   private pendingBossFloor = false;
+  /** Set on a smith-eligible floor entry; the smith rider doesn't inject until {@link blocksSpawnedThisFloor} passes the configured threshold. */
+  private pendingSmithFloor = false;
+  private blocksSpawnedThisFloor = 0;
+  /** Same rider-preview pattern as {@link pendingNpcId}, for the falling piece's `Cell.SMITH` cell. */
+  public pendingSmithId: string | null = null;
+  /** How many of the three legendary smiths have been met this run (capped at 3, once the spear is forged). */
+  public smithsMetCount = 0;
+  /** Which Lugh's-Spear parts have been collected this run. */
+  public spearPartsHeld = new Set<'shaft' | 'bolts' | 'head'>();
+  /** Whether Goibniu has reforged the complete Spear of Lugh this run. */
+  public spearForged = false;
   public comboCount = 0;
   private lastLineClearMs = 0;
   private tattooTiles: Array<{ x: number; y: number }> = [];
@@ -322,14 +333,17 @@ export class Game {
     const shape = SHAPES[this.currentType];
     this.blockColor = shape.color;
     this.blocksPlacedSinceStairs++;
+    this.blocksSpawnedThisFloor++;
 
     const { cursed, blessed } = this.rollPieceCurseState(Math.random());
     this.currentCursed  = cursed;
     this.currentBlessed = blessed;
     this.pendingNpcId = null;
+    this.pendingSmithId = null;
 
     let stairsInjected = false;
     let bossInjected = false;
+    let smithInjected = false;
     let merchantInjected = false;
     let altarInjected = false;
     let npcInjected = false;
@@ -342,6 +356,9 @@ export class Game {
     // is deliberately the *whole-board* fill fraction, not the tallest single
     // column, so one narrow spike from careless hard-drops can't trigger it.
     const bossReady = this.pendingBossFloor && this.filledFraction() >= 0.5;
+    // A pending smith holds off until the player has actually built out the
+    // floor — a guaranteed slot on a specific piece, not a random chance.
+    const smithReady = this.pendingSmithFloor && this.blocksSpawnedThisFloor >= Balance.CONFIG.smiths.pieceThreshold;
 
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
@@ -352,6 +369,14 @@ export class Game {
           bossInjected = true;
           this.pendingBossFloor = false;
           return Cell.BOSS;
+        }
+
+        // Smith cell — once per smith floor, one guaranteed slot
+        if (smithReady && !smithInjected) {
+          smithInjected = true;
+          this.pendingSmithFloor = false;
+          this.pendingSmithId = this.nextSmith()?.id ?? null;
+          return Cell.SMITH;
         }
 
         // Stairs
@@ -544,6 +569,15 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#101820';
           this.npcTiles.push({ x: tx, y: ty, npcId: '__ghost__' });
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.SMITH) {
+          // Reuse the smith rolled at spawn so the locked encounter matches
+          // the portrait already shown in the falling-piece preview.
+          const smith = (this.pendingSmithId && SMITHS.find(s => s.id === this.pendingSmithId)) || this.nextSmith();
+          this.pendingSmithId = null;
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#2a1c10';
+          if (smith) this.npcTiles.push({ x: tx, y: ty, npcId: `__smith_${smith.id}__` });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -923,6 +957,67 @@ export class Game {
     });
   }
 
+  // ── Lugh's Spear questline ───────────────────────────────────────────────
+  // Every few floors (skipping boss floors), one of the three legendary
+  // smiths waits somewhere on that floor — embedded as a guaranteed rider
+  // once the player has built enough of the floor (see spawnBlock). This
+  // just announces the floor; the actual encounter is triggered on bump,
+  // in triggerSmithEncounter below.
+
+  /** Sets {@link pendingSmithFloor} and gives the player an ambient heads-up, on a smith-eligible floor entry. */
+  private maybeAnnounceSmithFloor(isBossFloor: boolean): void {
+    if (isBossFloor || this.pendingSmithFloor || this.smithsMetCount >= SMITHS.length) return;
+    if (this.dungeonLevel % Balance.CONFIG.smiths.floorInterval !== 0) return;
+    this.pendingSmithFloor = true;
+    this.cb.log('You hear the clang of an anvil in the distance...', 'log-perk', 'fx_impact');
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#d9a441');
+  }
+
+  /** The next smith due to appear this run (Luchta → Credne → Goibniu), or `null` once all three have been met. */
+  private nextSmith(): Smith | null {
+    return (SMITHS as Smith[])[this.smithsMetCount] ?? null;
+  }
+
+  /** Grants the smith's part, and — on the third meeting (Goibniu) — reforges the complete Spear of Lugh. */
+  private triggerSmithEncounter(smith: Smith, onClosed?: () => void): void {
+    const isReforge = smith.partKey === 'head' && this.spearPartsHeld.has('shaft') && this.spearPartsHeld.has('bolts');
+    const event: FloorEventDef = {
+      id: smith.id, emoji: smith.char, title: smith.name,
+      flavor: isReforge
+        ? `${smith.flavor} He takes the shaft and the bolts from your hands without asking, and sets to work.`
+        : smith.flavor,
+      options: [
+        {
+          label: isReforge ? 'Let him reforge the spear' : `Take ${smith.partName}`,
+          desc: isReforge ? 'Shaft, bolts, and head, made whole again.' : 'A piece of Lugh\'s Spear, freely given.',
+          apply: (game: Game): string => {
+            game.spearPartsHeld.add(smith.partKey);
+            game.smithsMetCount++;
+            game.storyBeats.push(`received ${smith.partName} from ${smith.name}`);
+            if (isReforge) {
+              game.spearForged = true;
+              game.player.rangedAbility = {
+                name: 'Spear of Lugh', emoji: 'item_spear_of_lugh', abilityType: 'spear_bolt',
+                range: 0, damageMult: Balance.CONFIG.spearOfLugh.dmgMult, cooldownMax: Balance.CONFIG.spearOfLugh.cooldownMax,
+              };
+              game.storyBeats.push('saw Lugh\'s Spear reforged whole');
+              return `Goibniu's forge roars once more — shaft, bolts, and head become one. The Spear of Lugh is whole again, and it answers to you now.`;
+            }
+            return `${smith.name} gives you ${smith.partName}.`;
+          },
+        },
+      ],
+    };
+    this.paused = true;
+    this.cb.onFloorEvent?.(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', smith.char);
+      this.paused = false;
+      this.cb.onAction();
+      onClosed?.();
+    });
+  }
+
   // ── An Draoi's pact ceremony ───────────────────────────────────────────────
   // Fires once, on the first descent as An Draoi: the three deities call, and
   // one must be answered — the pact IS the class, so there is no decline.
@@ -1237,11 +1332,13 @@ export class Game {
   private transitionToNextFloor(): void {
     this.dungeonLevel++;
     this.floorsDescended++;
-    if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
+    const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
+    if (isBossFloor) this.pendingBossFloor = true;
     this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
     this.maybeOfferPact();
+    this.maybeAnnounceSmithFloor(isBossFloor);
   }
 
   /** Icon shown alongside a biome's flavor line on first entry — keyed by id since `BiomeDef` has no icon field of its own. */
@@ -1274,6 +1371,7 @@ export class Game {
     this.altarTiles = [];
     this.npcTiles = [];
     this.npcTilesSpawnedThisFloor = 0;
+    this.blocksSpawnedThisFloor = 0;
     // Ghost haunting roll — a fallen character close to your current level
     // may drift up from a previous run's save.
     this.activeGhost = null;
@@ -1684,9 +1782,19 @@ export class Game {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
       const isGhost = npcTile.npcId === '__ghost__';
-      const departOnClose = (): void => { this.cb.onBeam?.(nx, isGhost ? '176,196,222' : '89,159,124'); };
+      const isSmith = npcTile.npcId.startsWith('__smith_');
+      const departOnClose = (): void => {
+        this.cb.onBeam?.(nx, isGhost ? '176,196,222' : isSmith ? '184,115,51' : '89,159,124');
+      };
       if (isGhost) {
         this.triggerGhostEncounter(departOnClose);
+        return;
+      }
+      if (isSmith) {
+        const smithId = npcTile.npcId.slice('__smith_'.length, -2);
+        const smith = SMITHS.find(s => s.id === smithId);
+        if (smith) this.triggerSmithEncounter(smith, departOnClose);
+        else departOnClose();
         return;
       }
       const npc = NPCS.find(n => n.id === npcTile.npcId);
@@ -1746,6 +1854,7 @@ export class Game {
           && this.cb.onOpenShop) {
         this.openPeddler();
       }
+      this.maybeAnnounceSmithFloor(isBossFloor);
     } else {
       this.advanceTurn();
     }
@@ -1849,6 +1958,7 @@ export class Game {
       case 'drain':         this.activateDrain(ability, hpPaid);  break;
       case 'blight':        this.activateBlight(ability, hpPaid); break;
       case 'blink':         this.activateBlink(ability);          break;
+      case 'spear_bolt':    this.activateSpearBolt(ability);      break;
       default:              this.activateBolt(ability);          break;
     }
   }
@@ -2098,6 +2208,27 @@ export class Game {
     this.cb.log(`Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills × ${perKillDmg}, min floor×${perFloorMinDmg}).`, 'log-combo', 'fx_impact');
     this.cb.onParticle(this.player.x, this.player.y, 'BOOM!', '#ff6d00', 18, 'fx_impact');
     this.killsThisFloor = 0;
+    this.player.rangedCooldown = ability.cooldownMax;
+    this.advanceTurn();
+  }
+
+  // Spear of Lugh (Lugh's Spear questline, reforged by Goibniu): pierces
+  // straight up the hero's own Tetris column, skewering every monster
+  // standing on a built tile above them — a direct answer to a lane packed
+  // with enemies, rather than another flat-damage nuke.
+  private activateSpearBolt(ability: import('./types').RangedAbility): void {
+    const dmg = Math.max(1, Math.round(this.player.atk * this.abilityNum(ability, 'dmgMult', 3)));
+    const targets = this.monsters.filter(m => m.x === this.player.x && m.y < this.player.y);
+    this.emitProjectileTrail(this.player.x, 0, ability.emoji);
+    for (const m of targets) {
+      m.hp -= dmg;
+      this.cb.onParticle(m.x, m.y, `-${dmg}`, '#ffd54f', 16, 'fx_arcane');
+    }
+    const killed = targets.filter(m => m.hp <= 0);
+    this.monsters = this.monsters.filter(m => m.hp > 0);
+    for (const m of killed) CombatSystem.killMonster(m, this);
+    this.cb.log(`${ability.name}! ${targets.length} foe(s) skewered for ${dmg} in the column above.`, 'log-combo', ability.emoji);
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 10, '#ffd54f', 'fx_arcane');
     this.player.rangedCooldown = ability.cooldownMax;
     this.advanceTurn();
   }

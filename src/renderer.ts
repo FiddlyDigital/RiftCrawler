@@ -2,7 +2,7 @@ import { GameConfig } from './config';
 import { Colors } from './colors';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
-import { Biome, NPCS } from './content';
+import { Biome, NPCS, SMITHS } from './content';
 import { MONSTERS } from './dataLoader';
 import { SpriteService } from './sprites';
 import type { Game } from './game';
@@ -412,7 +412,7 @@ export class Renderer {
         // falling piece and the trail it leaves behind read as one material.
         this.drawSprite((tx + ty) % 2 === 0 ? 'tile_stone_a' : 'tile_stone_b', tx * TS, ty * TS, TS, TS);
         ctx.globalAlpha = 0.6;
-        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : cell === Cell.NPC ? '#182418' : game.blockColor;
+        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : cell === Cell.NPC || cell === Cell.SMITH ? '#182418' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         ctx.globalAlpha = 1.0;
         if (cell === Cell.BOSS) {
@@ -427,11 +427,13 @@ export class Renderer {
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
         ctx.lineWidth = 1;
 
-        // The Cell.NPC placeholder resolves to whichever archetype was rolled
-        // at spawn, so the falling preview already shows the same portrait
-        // it will lock in as, rather than a generic sidhe icon that swaps.
+        // The Cell.NPC/Cell.SMITH placeholders resolve to whichever archetype
+        // was rolled at spawn, so the falling preview already shows the same
+        // portrait it will lock in as, rather than a generic icon that swaps.
         const spriteKey = cell === Cell.NPC
           ? (game.pendingNpcId && NPCS.find(n => n.id === game.pendingNpcId)?.char) || CELL_SPRITE[cell]
+          : cell === Cell.SMITH
+          ? (game.pendingSmithId && SMITHS.find(s => s.id === game.pendingSmithId)?.char) || CELL_SPRITE[cell]
           : CELL_SPRITE[cell];
         if (spriteKey) {
           const inset = 2;
@@ -567,10 +569,16 @@ export class Renderer {
           this.drawSprite('tile_altar', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         } else if (npcHere) {
           const isGhost = npcHere.npcId === '__ghost__';
-          const char = isGhost ? 'sprite_boss_wraith' : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
+          const smithId = npcHere.npcId.startsWith('__smith_') ? npcHere.npcId.slice('__smith_'.length, -2) : null;
+          const char = isGhost
+            ? 'sprite_boss_wraith'
+            : smithId
+            ? (SMITHS.find(s => s.id === smithId)?.char ?? 'smith_goibniu')
+            : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
+          const rgb = isGhost ? '176,196,222' : smithId ? '184,115,51' : '89,159,124';
           const inset = TS * 0.1;
           if (isGhost) ctx.globalAlpha *= 0.75;  // translucent — it isn't quite here
-          if (visible) this.drawLivingSprite(char, x, y, isGhost ? '176,196,222' : '89,159,124', x * 7 + y * 13, inset);
+          if (visible) this.drawLivingSprite(char, x, y, rgb, x * 7 + y * 13, inset);
           else this.drawSprite(char, x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         }
         ctx.globalAlpha = 1.0;
@@ -869,6 +877,7 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.ALTAR]:          'tile_altar',
   [Cell.NPC]:            'npc_sidhe',
   [Cell.GHOST]:          'sprite_boss_wraith',
+  [Cell.SMITH]:          'smith_goibniu',
   [Cell.TRAP_SPIKE]:     'trap_spike',
   [Cell.TRAP_SMOKE]:     'trap_smoke',
   [Cell.TRAP_TELEPORT]:  'trap_teleport',
