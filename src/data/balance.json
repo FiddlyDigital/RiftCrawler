@@ -133,8 +133,8 @@
   },
   "smiths": {
     "floorInterval": 3,
-    "pieceThreshold": 50,
-    "warningThreshold": 25
+    "pieceThreshold": 32,
+    "warningThreshold": 16
   },
   "spearOfLugh": {
     "dmgMult": 3,
