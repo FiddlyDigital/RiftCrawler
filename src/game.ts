@@ -154,6 +154,14 @@ export class Game {
   /** Gravity % adjustment from the active omen (negative = faster), summed with `biomeGravityPct` at both tick-rate call sites. */
   public omenGravityPct = 0;
 
+  // Bealtaine Fires ritual state (the 'bealtaine' special omen)
+  /** Braziers standing on the floor this level — walk into an unlit one to light it. */
+  public brazierTiles: { x: number; y: number; lit: boolean }[] = [];
+  /** Need-fires lit this floor — banked progress, kept even if a lit brazier's row later clears. */
+  public brazierLitCount = 0;
+  /** Set once the ritual reward has been granted, stopping further brazier riders. */
+  private ritualComplete = false;
+
   // Run stats
   public monstersKilled = 0;
   public bossesKilled = 0;
@@ -385,6 +393,13 @@ export class Game {
     // A pending smith holds off until the player has actually built out the
     // floor — a guaranteed slot on a specific piece, not a random chance.
     const smithReady = this.pendingSmithFloor && this.blocksSpawnedThisFloor >= Balance.CONFIG.smiths.pieceThreshold;
+    // Bealtaine ritual: a brazier rides in every Nth piece until enough are
+    // lit — unlit braziers lost to line clears are replaced by later riders.
+    const ritual = this.activeOmen?.special === 'bealtaine' ? this.activeOmen : null;
+    const brazierDue = ritual !== null && !this.ritualComplete
+      && this.brazierLitCount + this.brazierTiles.filter(b => !b.lit).length < ritual.num('braziersRequired', 3)
+      && this.blocksSpawnedThisFloor % ritual.num('brazierPieceInterval', 5) === 0;
+    let brazierInjected = false;
 
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
@@ -403,6 +418,12 @@ export class Game {
           this.pendingSmithFloor = false;
           this.pendingSmithId = this.nextSmith()?.id ?? null;
           return Cell.SMITH;
+        }
+
+        // Bealtaine need-fire — one guaranteed slot on its due piece
+        if (brazierDue && !brazierInjected) {
+          brazierInjected = true;
+          return Cell.BRAZIER;
         }
 
         // Stairs
@@ -607,6 +628,12 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#2a1c10';
           if (smith) this.npcTiles.push({ x: tx, y: ty, npcId: `__smith_${smith.id}__` });
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.BRAZIER) {
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#2a1a10';
+          this.brazierTiles.push({ x: tx, y: ty, lit: false });
+          this.cb.log('A cold need-fire settles into the stone. Walk to it to light it.', 'log-tetris', 'tile_brazier');
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -1293,6 +1320,11 @@ export class Game {
       this.npcTiles = this.npcTiles
         .filter(n => n.y !== y)
         .map(n => n.y < y ? { ...n, y: n.y + 1 } : n);
+      // Unlit braziers lost here are replaced by later riders; lit ones are
+      // already banked in brazierLitCount, so clearing them costs nothing.
+      this.brazierTiles = this.brazierTiles
+        .filter(b => b.y !== y)
+        .map(b => b.y < y ? { ...b, y: b.y + 1 } : b);
       this.hazards = this.hazards
         .filter(h => h.y !== y)
         .map(h => h.y < y ? { ...h, y: h.y + 1 } : h);
@@ -1462,8 +1494,15 @@ export class Game {
     this.npcTilesSpawnedThisFloor = 0;
     this.blocksSpawnedThisFloor = 0;
     this.smithWarningShown = false;
+    // A Bealtaine floor left with fires unlit — the ritual quietly lapses.
+    if (this.activeOmen?.special === 'bealtaine' && !this.ritualComplete && this.brazierLitCount > 0) {
+      this.cb.log('The need-fires gutter out below, unlit and unanswered. The Sídhe withdraw.', 'log-neutral', 'tile_brazier');
+    }
     this.activeOmen = null;
     this.omenGravityPct = 0;
+    this.brazierTiles = [];
+    this.brazierLitCount = 0;
+    this.ritualComplete = false;
     // Ghost haunting roll — a fallen character close to your current level
     // may drift up from a previous run's save.
     this.activeGhost = null;
@@ -1890,6 +1929,29 @@ export class Game {
 
     if (!this.isValidMove(nx, ny)) {
       this.cb.log('Cannot cross the deep abyss void!', 'log-neutral');
+      return;
+    }
+
+    // Bealtaine need-fire — walk into an unlit brazier to light it
+    const brazier = this.brazierTiles.find(b => b.x === nx && b.y === ny && !b.lit);
+    if (brazier) {
+      this.player.x = nx; this.player.y = ny;
+      brazier.lit = true;
+      this.brazierLitCount++;
+      const needed = this.activeOmen?.num('braziersRequired', 3) ?? 3;
+      this.cb.onRingPulse?.(nx, ny, '255,140,50');
+      this.cb.onParticleBurst?.(nx, ny, 8, '#ff8c32', 'tile_brazier');
+      this.cb.onAudio?.('npcEncounter');
+      if (this.brazierLitCount >= needed && !this.ritualComplete) {
+        this.ritualComplete = true;
+        this.cb.log('The need-fires blaze as one — the Sídhe are appeased!', 'log-perk', 'tile_brazier');
+        this.cb.onToast?.('The need-fires blaze — the Sídhe grant a Geis!', 'tile_brazier');
+        this.storyBeats.push('lit the fires of Bealtaine');
+        this.openAltar(3);
+        return;
+      }
+      this.cb.log(`Need-fire lit! (${this.brazierLitCount}/${needed})`, 'log-perk', 'tile_brazier');
+      this.advanceTurn();
       return;
     }
 

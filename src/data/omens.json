@@ -52,5 +52,15 @@
     "logText": "The rift runs wild. Far more falling stone comes cursed — or blessed.",
     "weight": 2,
     "params": { "curseBlessMult": 2.5 }
+  },
+  {
+    "id": "bealtaine_fires",
+    "icon": "tile_brazier",
+    "name": "Night of Bealtaine",
+    "toastText": "Night of Bealtaine — light every need-fire the stone brings you!",
+    "logText": "It is Bealtaine in the deep. Braziers will ride the falling stone — light all three and the Sídhe will grant a Geis.",
+    "weight": 2,
+    "params": { "brazierPieceInterval": 5, "braziersRequired": 3 },
+    "special": "bealtaine"
   }
 ]

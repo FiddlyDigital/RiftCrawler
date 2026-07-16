@@ -552,12 +552,19 @@ export class Renderer {
         const isMerchant = this.isMerchantTile(game, x, y);
         const altar = this.getAltarAt(game, x, y);
         const npcHere = game.npcTiles.find(n => n.x === x && n.y === y);
-        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere) continue;
+        const brazier = game.brazierTiles.find(b => b.x === x && b.y === y);
+        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere && !brazier) continue;
 
         ctx.globalAlpha = visible ? 1.0 : 0.5;
         if (type === Tile.STAIRS) {
           if (visible) this.drawPulseGlow(x, y, '168,132,184');
           this.drawSprite('tile_stairs', x * TS, y * TS, TS, TS);
+        } else if (brazier) {
+          // Lit need-fires burn with a fire-colored pulse; unlit ones sit dim.
+          if (brazier.lit && visible) this.drawPulseGlow(x, y, '255,140,50');
+          const inset = TS * 0.12;
+          if (!brazier.lit) ctx.globalAlpha *= 0.8;
+          this.drawSprite('tile_brazier', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         } else if (isMerchant) {
           if (visible) this.drawLivingSprite('tile_merchant', x, y, '217,164,65', x * 7 + y * 13);
           else this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
@@ -878,6 +885,7 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.NPC]:            'npc_sidhe',
   [Cell.GHOST]:          'sprite_boss_wraith',
   [Cell.SMITH]:          'smith_goibniu',
+  [Cell.BRAZIER]:        'tile_brazier',
   [Cell.TRAP_SPIKE]:     'trap_spike',
   [Cell.TRAP_SMOKE]:     'trap_smoke',
   [Cell.TRAP_TELEPORT]:  'trap_teleport',

@@ -1630,6 +1630,107 @@ describe('Floor omens (per-floor modifiers)', () => {
   });
 });
 
+describe('Bealtaine Fires (brazier ritual omen)', () => {
+  const bealtaine = (): Omen => new Omen(OMENS.find(o => o.id === 'bealtaine_fires')!);
+
+  function armRitual(game: Game): Omen {
+    const omen = bealtaine();
+    game.activeOmen = omen;
+    return omen;
+  }
+
+  it('injects a brazier rider on interval pieces, and only while more fires are still needed', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const omen = armRitual(game);
+    const interval = omen.num('brazierPieceInterval', 5);
+    const g = game as unknown as { blocksSpawnedThisFloor: number; spawnBlock(): void; blockMatrix: number[][] };
+
+    g.blocksSpawnedThisFloor = interval - 1; // spawnBlock increments first -> lands on the interval
+    g.spawnBlock();
+    expect(g.blockMatrix.flat().includes(Cell.BRAZIER)).toBe(true);
+
+    g.blocksSpawnedThisFloor = interval; // off-interval piece -> no rider
+    g.spawnBlock();
+    expect(g.blockMatrix.flat().includes(Cell.BRAZIER)).toBe(false);
+
+    // With required braziers already standing (unlit), no more riders come.
+    const required = omen.num('braziersRequired', 3);
+    for (let i = 0; i < required; i++) game.brazierTiles.push({ x: i, y: 20, lit: false });
+    g.blocksSpawnedThisFloor = interval * 2 - 1;
+    g.spawnBlock();
+    expect(g.blockMatrix.flat().includes(Cell.BRAZIER)).toBe(false);
+  });
+
+  it('locking a brazier cell plants an unlit brazier tile on the floor', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    armRitual(game);
+    const g = game as unknown as { blockMatrix: number[][]; blockX: number; blockY: number; lockBlock(): void };
+    g.blockMatrix = [[Cell.BRAZIER]] as number[][];
+    g.blockX = 4; g.blockY = 20;
+    g.lockBlock();
+    expect(game.brazierTiles.some(b => b.x === 4 && b.y === 20 && !b.lit)).toBe(true);
+    expect(game.map[4]![20]).toBe(Tile.FLOOR);
+  });
+
+  it('bumping unlit braziers lights them; the final fire completes the ritual and opens a tier-3 Geis choice', () => {
+    const onOpenAltar = vi.fn();
+    const cb = { ...makeCallbacks(), onOpenAltar };
+    const game = new Game(cb);
+    const omen = armRitual(game);
+    const required = omen.num('braziersRequired', 3);
+
+    // Stand the hero on solid ground with braziers adjacent, one at a time.
+    for (let i = 0; i < required; i++) {
+      const bx = game.player.x + 1, by = game.player.y;
+      game.map[bx]![by] = Tile.FLOOR;
+      game.brazierTiles.push({ x: bx, y: by, lit: false });
+      game.handleHeroMove(1, 0);
+      expect(game.brazierLitCount).toBe(i + 1);
+      if (i < required - 1) {
+        // step back off the (now lit) brazier tile for the next round
+        game.map[game.player.x - 1]![game.player.y] = Tile.FLOOR;
+        game.handleHeroMove(-1, 0);
+      }
+    }
+    expect(onOpenAltar).toHaveBeenCalledTimes(1);
+    expect(onOpenAltar.mock.calls[0]![0]).toBe(3); // tier-3 Geis
+    expect(cb.logs.some(l => l.includes('need-fires blaze'))).toBe(true);
+  });
+
+  it('a cleared row removes its braziers but keeps banked lit progress, and replacements become due again', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const omen = armRitual(game);
+    game.brazierLitCount = 1;
+    game.brazierTiles.push({ x: 0, y: 5, lit: false });
+    for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
+    (game as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(game.brazierTiles).toHaveLength(0);
+    expect(game.brazierLitCount).toBe(1);
+
+    // The lost unlit brazier makes a rider due again on the next interval piece.
+    const interval = omen.num('brazierPieceInterval', 5);
+    const g = game as unknown as { blocksSpawnedThisFloor: number; spawnBlock(): void; blockMatrix: number[][] };
+    g.blocksSpawnedThisFloor = interval - 1;
+    g.spawnBlock();
+    expect(g.blockMatrix.flat().includes(Cell.BRAZIER)).toBe(true);
+  });
+
+  it('descending resets all ritual state', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    armRitual(game);
+    game.brazierTiles.push({ x: 2, y: 20, lit: true });
+    game.brazierLitCount = 2;
+    game.resetDungeonState();
+    expect(game.brazierTiles).toHaveLength(0);
+    expect(game.brazierLitCount).toBe(0);
+    expect(game.activeOmen).toBeNull();
+  });
+});
+
 describe('Tetris reward (4-line clear bonus trader)', () => {
   function clearFourLines(game: Game): void {
     for (let y = 0; y < 4; y++) for (let x = 0; x < 10; x++) game.map[x]![y] = Tile.FLOOR;
