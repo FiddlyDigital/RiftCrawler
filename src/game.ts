@@ -1,7 +1,7 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, EffectResolver, type ClassDef, type PatronDef } from './content';
+import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, Omen, EffectResolver, type ClassDef, type PatronDef } from './content';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -148,6 +148,11 @@ export class Game {
   public biomeId = 'stone';
   public biomeMonsterHpMult = 1.0;
   public biomeGravityPct = 0;
+
+  // Omen state — a per-floor modifier rolled on floor entry (see maybeRollOmen)
+  public activeOmen: Omen | null = null;
+  /** Gravity % adjustment from the active omen (negative = faster), summed with `biomeGravityPct` at both tick-rate call sites. */
+  public omenGravityPct = 0;
 
   // Run stats
   public monstersKilled = 0;
@@ -307,7 +312,8 @@ export class Game {
     // the player can watch him descend — don't re-fog to the vision radius.
     if (this.gorgothSummoned) return;
     const onSmoke = this.hazards.some(h => h.type === 'smoke' && h.x === this.player.x && h.y === this.player.y);
-    const r = onSmoke ? 1 : this.player.visionRadius;
+    const fogPenalty = this.activeOmen?.num('visionPenalty', 0) ?? 0;
+    const r = onSmoke ? 1 : Math.max(1, this.player.visionRadius - fogPenalty);
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) {
         const dist = Math.hypot(x - this.player.x, y - this.player.y);
@@ -334,9 +340,11 @@ export class Game {
 
   // cursed/blessed are mutually exclusive independent shares of one roll
   // (e.g. 8% cursed, 4% blessed, 88% normal) — see Balance.CONFIG.spawnRates.
+  // The Wild Rift-Surge omen scales both shares up together.
   private rollPieceCurseState(roll: number): { cursed: boolean; blessed: boolean } {
-    const cursed = roll < Balance.CONFIG.spawnRates.cursedPieceChance;
-    const blessed = !cursed && roll < Balance.CONFIG.spawnRates.cursedPieceChance + Balance.CONFIG.spawnRates.blessedPieceChance;
+    const mult = this.activeOmen?.num('curseBlessMult', 1) ?? 1;
+    const cursed = roll < Balance.CONFIG.spawnRates.cursedPieceChance * mult;
+    const blessed = !cursed && roll < (Balance.CONFIG.spawnRates.cursedPieceChance + Balance.CONFIG.spawnRates.blessedPieceChance) * mult;
     return { cursed, blessed };
   }
 
@@ -448,11 +456,14 @@ export class Game {
           Balance.CONFIG.spawnRates.monsterChanceCap,
           Balance.CONFIG.spawnRates.monsterBaseChance + this.dungeonLevel * Balance.CONFIG.spawnRates.monsterChancePerDungeonLevel,
         );
-        const monsterChance = this.haunted ? baseMonsterChance * Balance.CONFIG.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
+        const hauntedChance = this.haunted ? baseMonsterChance * Balance.CONFIG.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
+        const monsterChance = hauntedChance * (this.activeOmen?.num('monsterChanceMult', 1) ?? 1);
         if (Math.random() < monsterChance) {
           if (monsterInjected) return Cell.FLOOR;  // cap: one monster per block
           monsterInjected = true;
-          const key = Balance.weightedPick(Balance.CONFIG.spawnRates.monsterWeights, Math.random()) ?? 'plague_bat';
+          let key = Balance.weightedPick(Balance.CONFIG.spawnRates.monsterWeights, Math.random()) ?? 'plague_bat';
+          // Unquiet Cairn omen: the dead crowd out the living spawn table.
+          if (Math.random() < (this.activeOmen?.num('skeletonBias', 0) ?? 0)) key = 'skeleton';
           return MONSTERS[key]!.cellState;
         }
         return Cell.FLOOR;
@@ -664,6 +675,19 @@ export class Game {
         this.specialTiles.push({ x: fc.x, y: fc.y, type: 'sacred' });
         this.cb.log('A blessed rift — holy ground consecrated!', 'log-perk', 'special_sacred');
         this.cb.onParticle(fc.x, fc.y, 'BLESSED!', '#ffb74d', undefined, 'special_sacred');
+      }
+    }
+
+    // Rising Bog omen: floor laid in the lowest rows sinks into fen.
+    const swampRows = this.activeOmen?.num('swampRows', 0) ?? 0;
+    if (swampRows > 0) {
+      for (const fc of lockedFloorCells) {
+        if (fc.y >= GameConfig.ROWS - swampRows
+            && !this.specialTiles.some(t => t.x === fc.x && t.y === fc.y)
+            && !this.hazards.some(h => h.x === fc.x && h.y === fc.y)
+            && !this.tattooTiles.some(t => t.x === fc.x && t.y === fc.y)) {
+          this.specialTiles.push({ x: fc.x, y: fc.y, type: 'swamp' });
+        }
       }
     }
 
@@ -993,6 +1017,19 @@ export class Game {
   // just announces the floor; the actual encounter is triggered on bump,
   // in triggerSmithEncounter below.
 
+  /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
+  private maybeRollOmen(isBossFloor: boolean): void {
+    if (isBossFloor || this.dungeonLevel <= 1) return;
+    if (Math.random() >= Balance.CONFIG.omens.rollChance) return;
+    const omen = Omen.random();
+    this.activeOmen = omen;
+    this.omenGravityPct = omen.num('gravityPct', 0);
+    this.cb.log(omen.logText, 'log-tetris', omen.icon);
+    this.cb.onToast?.(omen.toastText, omen.icon);
+    // Gravity-affecting omens need the host's tick timer re-armed right away.
+    if (this.omenGravityPct !== 0) this.cb.onAction();
+  }
+
   /** Sets {@link pendingSmithFloor} and gives the player an ambient heads-up, on a smith-eligible floor entry. */
   private maybeAnnounceSmithFloor(isBossFloor: boolean): void {
     if (isBossFloor || this.pendingSmithFloor || this.smithsMetCount >= SMITHS.length) return;
@@ -1275,7 +1312,7 @@ export class Game {
       this.lastLineClearMs = now;
       if (this.comboCount > this.biggestCombo) this.biggestCombo = this.comboCount;
 
-      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel));
+      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel) * (this.activeOmen?.num('goldMult', 1) ?? 1));
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
         goldAdded = Math.floor(goldAdded * mult);
@@ -1385,6 +1422,9 @@ export class Game {
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
     this.maybeOfferPact();
+    // Omen first, smith second — if both toast, the more actionable smith
+    // hint wins the banner while both keep their log lines.
+    this.maybeRollOmen(isBossFloor);
     this.maybeAnnounceSmithFloor(isBossFloor);
   }
 
@@ -1422,6 +1462,8 @@ export class Game {
     this.npcTilesSpawnedThisFloor = 0;
     this.blocksSpawnedThisFloor = 0;
     this.smithWarningShown = false;
+    this.activeOmen = null;
+    this.omenGravityPct = 0;
     // Ghost haunting roll — a fallen character close to your current level
     // may drift up from a previous run's save.
     this.activeGhost = null;
@@ -1955,6 +1997,7 @@ export class Game {
           && this.cb.onOpenShop) {
         this.openPeddler();
       }
+      this.maybeRollOmen(isBossFloor);
       this.maybeAnnounceSmithFloor(isBossFloor);
     } else {
       this.advanceTurn();
@@ -2727,7 +2770,7 @@ export class Game {
       floor: this.dungeonLevel,
       totalXpEarned: this.player.totalXpEarned,
       gold: this.gold,
-      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct),
+      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct),
       nextType: this.nextType,
       heldType: this.heldType,
       canHold: this.canHold,
@@ -2755,6 +2798,7 @@ export class Game {
           }
         : null,
       biomeName: biome.name,
+      activeOmen: this.activeOmen ? { icon: this.activeOmen.icon, name: this.activeOmen.name } : null,
       rangedAbility: this.player.rangedAbility
         ? {
             name:        this.player.rangedAbility.name,

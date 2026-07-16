@@ -8,7 +8,7 @@
   "required": [
     "player", "progression", "economy", "brands", "ammo", "altars",
     "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts", "narrative",
-    "smiths", "spearOfLugh"
+    "smiths", "omens", "spearOfLugh"
   ],
   "properties": {
     "player": {
@@ -226,6 +226,14 @@
         "floorInterval": { "type": "number" },
         "pieceThreshold": { "type": "number" },
         "warningThreshold": { "type": "number" }
+      }
+    },
+    "omens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rollChance"],
+      "properties": {
+        "rollChance": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "spearOfLugh": {

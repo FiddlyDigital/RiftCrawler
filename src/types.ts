@@ -256,6 +256,26 @@ export interface NpcDef {
 }
 
 /** One of the three legendary Tuatha Dé Danann smiths, each carrying one part of Lugh's Spear. */
+/** A per-floor modifier ("omen") loaded from `data/omens.json`, rolled on floor entry. */
+export interface OmenDef {
+  /** Stable identifier. */
+  id: string;
+  /** Sprite-map key for toasts/log lines. */
+  icon: string;
+  /** Display name. */
+  name: string;
+  /** Short announcement shown in the toast banner on floor entry. */
+  toastText: string;
+  /** Longer explanation pushed to the game log on floor entry. */
+  logText: string;
+  /** Relative roll weight against the other omens. */
+  weight: number;
+  /** Numeric tunables consumed by this omen's effect hook in `game.ts`. */
+  params: Record<string, number>;
+  /** Handler key for scripted ritual omens (e.g. `'bealtaine'`) — absent for pure stat omens. */
+  special?: string;
+}
+
 export interface SmithDef {
   /** Stable identifier. */
   id: string;
@@ -398,6 +418,8 @@ export interface UIState {
   activeModifier: { emoji: string; name: string } | null;
   activeClass: { emoji: string; name: string } | null;
   biomeName: string;
+  /** The floor's active omen (per-floor modifier), for the sidebar badge — null on a plain floor. */
+  activeOmen: { icon: string; name: string } | null;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
   /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */

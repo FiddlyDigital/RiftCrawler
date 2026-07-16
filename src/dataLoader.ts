@@ -10,7 +10,8 @@ import floorEventsData    from './data/floor-events.json';
 import npcsData           from './data/npcs.json';
 import patronsData        from './data/patrons.json';
 import smithsData          from './data/smiths.json';
-import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef } from './types';
+import omensData           from './data/omens.json';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef, type OmenDef } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
@@ -628,6 +629,55 @@ export class Smith implements SmithDef {
   static readonly ALL: Smith[] = (smithsData as SmithDef[]).map(raw => new Smith(raw));
 }
 
+/** A per-floor modifier ("omen") loaded from `data/omens.json`. */
+export class Omen implements OmenDef {
+  readonly id: string;
+  readonly icon: string;
+  readonly name: string;
+  readonly toastText: string;
+  readonly logText: string;
+  readonly weight: number;
+  readonly params: Record<string, number>;
+  readonly special?: string;
+
+  /** @throws {TypeError} If `raw` is missing a non-empty `id`. */
+  constructor(raw: OmenDef) {
+    if (!raw || typeof raw.id !== 'string' || raw.id.length === 0) {
+      throw new TypeError('Omen: raw omen data must include a non-empty "id"');
+    }
+    this.id = raw.id;
+    this.icon = raw.icon;
+    this.name = raw.name;
+    this.toastText = raw.toastText;
+    this.logText = raw.logText;
+    this.weight = raw.weight;
+    this.params = raw.params;
+    if (raw.special !== undefined) this.special = raw.special;
+  }
+
+  /** A numeric tunable from `params`, or `fallback` when absent. */
+  num(key: string, fallback: number): number {
+    const v = this.params[key];
+    return typeof v === 'number' ? v : fallback;
+  }
+
+  /** A weighted random pick across every omen. */
+  static random(): Omen {
+    const total = Omen.ALL.reduce((sum, o) => sum + o.weight, 0);
+    let roll = Math.random() * total;
+    for (const o of Omen.ALL) {
+      roll -= o.weight;
+      if (roll <= 0) return o;
+    }
+    return Omen.ALL[Omen.ALL.length - 1]!;
+  }
+
+  /** Every omen loaded from `data/omens.json`. */
+  // JSON literal inference gives each entry's params an exact optional-key
+  // type that clashes with Record<string, number>; hop through unknown.
+  static readonly ALL: Omen[] = (omensData as unknown as OmenDef[]).map(raw => new Omen(raw));
+}
+
 /** A deity pact for An Draoi, loaded from `data/patrons.json`. */
 export class Patron implements PatronDef {
   readonly id: string;
@@ -818,3 +868,4 @@ export const FLOOR_EVENTS: FloorEventDef[] = FloorEvent.ALL;
 export const NPCS: NpcDef[] = Npc.ALL;
 export const PATRONS: PatronDef[] = Patron.ALL;
 export const SMITHS: SmithDef[] = Smith.ALL;
+export const OMENS: OmenDef[] = Omen.ALL;

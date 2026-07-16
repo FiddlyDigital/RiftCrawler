@@ -1,0 +1,56 @@
+[
+  {
+    "id": "flooded",
+    "icon": "special_swamp",
+    "name": "The Rising Bog",
+    "toastText": "The Rising Bog — the deep floods, foul water pools below...",
+    "logText": "Bog-water seeps up from the deep. Floor laid in the lowest rows becomes fen.",
+    "weight": 3,
+    "params": { "swampRows": 3 }
+  },
+  {
+    "id": "sidhe_fog",
+    "icon": "trap_smoke",
+    "name": "Féth Fíada",
+    "toastText": "Féth Fíada — the fairy mist closes in around you...",
+    "logText": "The druid-mist of the Sídhe swallows the dark. You cannot see as far.",
+    "weight": 3,
+    "params": { "visionPenalty": 2 }
+  },
+  {
+    "id": "rich_vein",
+    "icon": "item_coins",
+    "name": "Cluricaun's Hoard",
+    "toastText": "Cluricaun's Hoard — gold glints in every seam of the stone!",
+    "logText": "A cluricaun's hoard laces this floor. Line clears pay double gold.",
+    "weight": 2,
+    "params": { "goldMult": 2 }
+  },
+  {
+    "id": "restless_dead",
+    "icon": "sprite_skeleton",
+    "name": "The Unquiet Cairn",
+    "toastText": "The Unquiet Cairn — the buried dead stir beneath the stone...",
+    "logText": "This cairn's dead do not rest. More monsters ride the falling stone, and the bones walk.",
+    "weight": 3,
+    "params": { "monsterChanceMult": 1.5, "skeletonBias": 0.6 }
+  },
+  {
+    "id": "heavy_air",
+    "icon": "fx_impact",
+    "name": "Fomorian Weight",
+    "toastText": "Fomorian Weight — the air itself presses down. Stone falls faster!",
+    "logText": "A Fomorian curse hangs heavy here. Blocks fall 20% faster.",
+    "weight": 3,
+    "params": { "gravityPct": -20 }
+  },
+  {
+    "id": "wild_magic",
+    "icon": "fx_arcane",
+    "name": "Wild Rift-Surge",
+    "toastText": "Wild Rift-Surge — the Otherworld bleeds through the stone...",
+    "logText": "The rift runs wild. Far more falling stone comes cursed — or blessed.",
+    "weight": 2,
+    "params": { "curseBlessMult": 2.5 }
+  }
+]

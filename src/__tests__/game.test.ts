@@ -7,7 +7,7 @@ import { CombatSystem } from '../systems/combat';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { HazardSystem } from '../systems/hazards';
 import { StatusEffectSystem } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon, Omen, OMENS } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -1529,6 +1529,104 @@ describe('Ambient floor-entry toasts', () => {
     game.dungeonLevel = 5; // crosses into the next biome (minFloor 5)
     (game as unknown as { updateBiome(): void }).updateBiome();
     expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('Entering'), expect.any(String));
+  });
+});
+
+describe('Floor omens (per-floor modifiers)', () => {
+  const asOmen = (g: Game): { maybeRollOmen(isBossFloor: boolean): void } =>
+    g as unknown as { maybeRollOmen(isBossFloor: boolean): void };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('never rolls on boss floors or floor 1, and respects the roll chance', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    vi.spyOn(Math, 'random').mockReturnValue(0); // would always pass the chance gate
+    asOmen(game).maybeRollOmen(true); // boss floor
+    expect(game.activeOmen).toBeNull();
+    game.dungeonLevel = 1;
+    asOmen(game).maybeRollOmen(false); // floor 1
+    expect(game.activeOmen).toBeNull();
+    vi.restoreAllMocks();
+    vi.spyOn(Math, 'random').mockReturnValue(0.99); // fails the chance gate
+    game.dungeonLevel = 4;
+    asOmen(game).maybeRollOmen(false);
+    expect(game.activeOmen).toBeNull();
+  });
+
+  it('rolling an omen announces it via toast + log and populates UIState', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.dungeonLevel = 4;
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    asOmen(game).maybeRollOmen(false);
+    expect(game.activeOmen).not.toBeNull();
+    expect(cb.onToast).toHaveBeenCalledWith(game.activeOmen!.toastText, game.activeOmen!.icon);
+    expect(cb.logs).toContain(game.activeOmen!.logText);
+  });
+
+  it('sidhe_fog shrinks the vision radius while active', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.activeOmen = new Omen(OMENS.find(o => o.id === 'sidhe_fog')!);
+    (game as unknown as { updateVisibility(): void }).updateVisibility();
+    const r = game.activeOmen.num('visionPenalty', 0);
+    const justOutside = game.player.visionRadius - r + 1;
+    const px = game.player.x, py = game.player.y;
+    const yProbe = py - justOutside;
+    if (yProbe >= 0) expect(game.visibility[px]![yProbe]).toBe(false);
+  });
+
+  it('rich_vein doubles line-clear gold', () => {
+    const cbA = makeCallbacks();
+    const plain = new Game(cbA);
+    for (let x = 0; x < 10; x++) plain.map[x]![5] = Tile.FLOOR;
+    (plain as unknown as { checkLineClears(): void }).checkLineClears();
+    const plainGold = plain.gold;
+
+    const cbB = makeCallbacks();
+    const rich = new Game(cbB);
+    rich.activeOmen = new Omen(OMENS.find(o => o.id === 'rich_vein')!);
+    for (let x = 0; x < 10; x++) rich.map[x]![5] = Tile.FLOOR;
+    (rich as unknown as { checkLineClears(): void }).checkLineClears();
+    expect(rich.gold).toBe(plainGold * 2);
+  });
+
+  it('heavy_air feeds omenGravityPct into the UIState gravity rate', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const updateUI = cb.updateUI as ReturnType<typeof vi.fn>;
+    updateUI.mockClear();
+    (game as unknown as { pushUI(): void }).pushUI();
+    const plainRate = updateUI.mock.calls[updateUI.mock.calls.length - 1]![0].gravityRate;
+
+    game.activeOmen = new Omen(OMENS.find(o => o.id === 'heavy_air')!);
+    game.omenGravityPct = game.activeOmen.num('gravityPct', 0);
+    (game as unknown as { pushUI(): void }).pushUI();
+    const heavyRate = updateUI.mock.calls[updateUI.mock.calls.length - 1]![0].gravityRate;
+    expect(heavyRate).toBeLessThan(plainRate);
+  });
+
+  it('wild_magic scales the cursed/blessed piece shares together', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const roll = (Balance.CONFIG.spawnRates.cursedPieceChance + Balance.CONFIG.spawnRates.blessedPieceChance) * 1.5;
+    const g = game as unknown as { rollPieceCurseState(r: number): { cursed: boolean; blessed: boolean } };
+    const before = g.rollPieceCurseState(roll);
+    expect(before.cursed || before.blessed).toBe(false); // outside the normal shares
+    game.activeOmen = new Omen(OMENS.find(o => o.id === 'wild_magic')!);
+    const after = g.rollPieceCurseState(roll);
+    expect(after.cursed || after.blessed).toBe(true); // inside the scaled shares
+  });
+
+  it('descending clears the active omen and its gravity adjustment', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.activeOmen = new Omen(OMENS.find(o => o.id === 'heavy_air')!);
+    game.omenGravityPct = -20;
+    game.resetDungeonState();
+    expect(game.activeOmen).toBeNull();
+    expect(game.omenGravityPct).toBe(0);
   });
 });
 

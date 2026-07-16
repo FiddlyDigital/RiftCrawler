@@ -75,6 +75,7 @@ export class UIManager {
       hudNextPreview:   document.getElementById('hud-next-preview')!,
       hudFloorProgress: document.getElementById('hud-floor-progress')!,
       statFloorProgress: document.getElementById('stat-floor-progress')!,
+      omenBadge:        document.getElementById('omen-badge')!,
       gold:             document.getElementById('stat-gold')!,
       bestScore:        document.getElementById('best-score')!,
       xpBar:            document.getElementById('xp-bar')!,
@@ -236,6 +237,14 @@ export class UIManager {
       this.els['biomeName']!.textContent = state.biomeName;
     } else {
       this.els['biomeName']!.style.display = 'none';
+    }
+
+    // Omen badge — this floor's active modifier, if any
+    if (state.activeOmen) {
+      this.els['omenBadge']!.style.display = '';
+      this.els['omenBadge']!.innerHTML = `${SpriteService.iconHTML(state.activeOmen.icon, 12)}${HtmlUtils.escapeHtml(state.activeOmen.name)}`;
+    } else {
+      this.els['omenBadge']!.style.display = 'none';
     }
 
     // Ranged ability badge + button state

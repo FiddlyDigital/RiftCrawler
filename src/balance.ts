@@ -79,6 +79,7 @@ export interface BalanceConfig {
   ghosts: { encounterChance: number; levelTolerance: number; maxStored: number };
   narrative: { closeCallHpFraction: number };
   smiths: { floorInterval: number; pieceThreshold: number; warningThreshold: number };
+  omens: { rollChance: number };
   spearOfLugh: { dmgMult: number; cooldownMax: number };
 }
 

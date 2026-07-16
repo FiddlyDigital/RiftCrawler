@@ -136,6 +136,9 @@
     "pieceThreshold": 20,
     "warningThreshold": 10
   },
+  "omens": {
+    "rollChance": 0.6
+  },
   "spearOfLugh": {
     "dmgMult": 3,
     "cooldownMax": 8

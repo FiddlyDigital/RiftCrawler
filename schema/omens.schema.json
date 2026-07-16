@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/omens.schema.json",
+  "title": "Omens",
+  "description": "Per-floor modifiers ('omens') rolled on floor entry. Mirrors OmenDef in src/types.ts. Most are pure stat tweaks read from params; a `special` key marks scripted rituals handled in game.ts (e.g. the Bealtaine brazier ritual).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "icon", "name", "toastText", "logText", "weight", "params"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "icon": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "toastText": { "type": "string", "minLength": 1 },
+      "logText": { "type": "string", "minLength": 1 },
+      "weight": { "type": "number", "exclusiveMinimum": 0 },
+      "params": {
+        "type": "object",
+        "additionalProperties": { "type": "number" }
+      },
+      "special": { "type": "string", "enum": ["bealtaine"] }
+    }
+  }
+}

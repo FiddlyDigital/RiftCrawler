@@ -224,7 +224,7 @@ class GameApp {
   private getTickMs(): number {
     return GameMath.tickMsForLevel(
       this.game.dungeonLevel,
-      this.game.player.tickSlowPercent + this.game.biomeGravityPct + (this.game.timeDilationTurns > 0 ? this.game.timeDilationSlowPct : 0),
+      this.game.player.tickSlowPercent + this.game.biomeGravityPct + this.game.omenGravityPct + (this.game.timeDilationTurns > 0 ? this.game.timeDilationSlowPct : 0),
     );
   }
 
