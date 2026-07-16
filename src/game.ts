@@ -1345,12 +1345,18 @@ export class Game {
 
   // ── Floor transitions ────────────────────────────────────────────────────
 
+  /** Ambient heads-up on entering a boss-eligible floor — mirrors {@link maybeAnnounceSmithFloor}. The boss itself doesn't spawn until the floor is built up (see `instantiateRider`'s `Cell.BOSS` case). */
+  private announceBossFloor(): void {
+    this.pendingBossFloor = true;
+    this.cb.onToast?.('You sense dark forces lie in ambush!', 'ui_warning');
+  }
+
   /** Advances the dungeon level counter and rebuilds the floor (used when the stack's top row itself scrolls off the bottom). */
   private transitionToNextFloor(): void {
     this.dungeonLevel++;
     this.floorsDescended++;
     const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
-    if (isBossFloor) this.pendingBossFloor = true;
+    if (isBossFloor) this.announceBossFloor();
     this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
@@ -1367,7 +1373,9 @@ export class Game {
   private updateBiome(): void {
     const biome = Biome.forFloor(this.dungeonLevel);
     if (biome.id !== this.biomeId) {
-      this.cb.log(`${biome.name} — ${biome.desc}`, 'log-tetris', Game.BIOME_ICON[biome.id] ?? 'tile_stone_a');
+      const icon = Game.BIOME_ICON[biome.id] ?? 'tile_stone_a';
+      this.cb.log(`${biome.name} — ${biome.desc}`, 'log-tetris', icon);
+      this.cb.onToast?.(`Entering ${biome.name}...`, icon);
       this.storyBeats.push(`delved into ${biome.name}`);
       this.cb.onCodexDiscover?.('biome', biome.id);
     }
@@ -1893,7 +1901,7 @@ export class Game {
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS && !this.gorgothSummoned) {
       this.dungeonLevel++;
       this.floorsDescended++;
-      if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.pendingBossFloor = true;
+      if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.announceBossFloor();
       this.cb.onAudio?.('descend');
       this.updateBiome();
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');

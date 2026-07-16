@@ -79,6 +79,7 @@ function makeCallbacks(): GameCallbacks & { logs: string[] } {
     onBossWarning: (_boss, onDone) => onDone(),  // resolve the cinematic immediately in tests
     onAction: vi.fn(),
     onBeam: vi.fn(),
+    onToast: vi.fn(),
   };
 }
 
@@ -1474,6 +1475,26 @@ describe("Lugh's Spear questline (the three legendary smiths)", () => {
     expect(inColumn.hp).toBe(70); // 100 - (10 * 3)
     expect(offColumn.hp).toBe(100);
     expect(below.hp).toBe(100);
+  });
+});
+
+describe('Ambient floor-entry toasts', () => {
+  it('announceBossFloor sets pendingBossFloor and fires the ambush toast', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    (game as unknown as { announceBossFloor(): void }).announceBossFloor();
+    expect((game as unknown as { pendingBossFloor: boolean }).pendingBossFloor).toBe(true);
+    expect(cb.onToast).toHaveBeenCalledWith('You sense dark forces lie in ambush!', expect.any(String));
+  });
+
+  it('updateBiome only toasts when the biome actually changes', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    (game as unknown as { updateBiome(): void }).updateBiome(); // still floor 1, same biome
+    expect(cb.onToast).not.toHaveBeenCalled();
+    game.dungeonLevel = 5; // crosses into the next biome (minFloor 5)
+    (game as unknown as { updateBiome(): void }).updateBiome();
+    expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('Entering'), expect.any(String));
   });
 });
 
