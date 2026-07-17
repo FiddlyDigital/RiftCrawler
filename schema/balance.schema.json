@@ -256,6 +256,16 @@
         "stashRecoveryPct": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
+    "rescues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rollChance", "pieceThreshold", "portionAtk"],
+      "properties": {
+        "rollChance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "pieceThreshold": { "type": "number" },
+        "portionAtk": { "type": "number" }
+      }
+    },
     "spearOfLugh": {
       "type": "object",
       "additionalProperties": false,

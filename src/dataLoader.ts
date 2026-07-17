@@ -10,8 +10,9 @@ import floorEventsData    from './data/floor-events.json';
 import npcsData           from './data/npcs.json';
 import patronsData        from './data/patrons.json';
 import smithsData          from './data/smiths.json';
+import rescuesData         from './data/rescues.json';
 import omensData           from './data/omens.json';
-import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef, type OmenDef } from './types';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef, type RescueDef, type OmenDef } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
@@ -632,6 +633,34 @@ export class Smith implements SmithDef {
   static readonly ALL: Smith[] = (smithsData as SmithDef[]).map(raw => new Smith(raw));
 }
 
+/** A captive figure held under elite guard in the falling stone; once freed, a waystation resident. Loaded from `data/rescues.json`. */
+export class Rescue implements RescueDef {
+  readonly id: string;
+  readonly char: string;
+  readonly name: string;
+  readonly service: 'wright' | 'seer' | 'cook';
+  readonly captiveLine: string;
+  readonly thanksLine: string;
+  readonly serviceFlavor: string;
+
+  /** @throws {TypeError} If `raw` is missing a non-empty `id`. */
+  constructor(raw: RescueDef) {
+    if (!raw || typeof raw.id !== 'string' || raw.id.length === 0) {
+      throw new TypeError('Rescue: raw rescue data must include a non-empty "id"');
+    }
+    this.id = raw.id;
+    this.char = raw.char;
+    this.name = raw.name;
+    this.service = raw.service;
+    this.captiveLine = raw.captiveLine;
+    this.thanksLine = raw.thanksLine;
+    this.serviceFlavor = raw.serviceFlavor;
+  }
+
+  /** All rescuable figures loaded from `data/rescues.json`. */
+  static readonly ALL: Rescue[] = (rescuesData as RescueDef[]).map(raw => new Rescue(raw));
+}
+
 /** A per-floor modifier ("omen") loaded from `data/omens.json`. */
 export class Omen implements OmenDef {
   readonly id: string;
@@ -871,4 +900,5 @@ export const FLOOR_EVENTS: FloorEventDef[] = FloorEvent.ALL;
 export const NPCS: NpcDef[] = Npc.ALL;
 export const PATRONS: PatronDef[] = Patron.ALL;
 export const SMITHS: SmithDef[] = Smith.ALL;
+export const RESCUES: RescueDef[] = Rescue.ALL;
 export const OMENS: OmenDef[] = Omen.ALL;

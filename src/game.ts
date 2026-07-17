@@ -1,7 +1,7 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, Omen, EffectResolver, type ClassDef, type PatronDef } from './content';
+import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, RESCUES, Omen, EffectResolver, type ClassDef, type PatronDef, type RescueDef } from './content';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -182,6 +182,19 @@ export class Game {
   } as const;
   /** A floor event rolled on an interval descent but embodied as a waiting stranger in the mound — held until met, across floors if need be. */
   public pendingFloorEvent: FloorEvent | null = null;
+
+  // Rescue state — captives riding the falling stone under elite guard; once
+  // freed they join the mound as residents (see openRescueService).
+  /** Everyone freed so far this run — each id becomes a mound resident. */
+  public rescuedIds = new Set<string>();
+  /** The captive rolled for this floor's rescue piece (null once landed or when no rescue rolled). Public for the falling-piece preview. */
+  public pendingRescueId: string | null = null;
+  /** The captors' monster archetype, rolled with the rescue piece. Public for the falling-piece preview. */
+  public pendingGuardKey: string | null = null;
+  /** The live captor monsters — the captive can't be freed until every one is dead. */
+  private rescueGuards: Monster[] = [];
+  /** ATK granted by Bricriu's Champion's Portion, reverted on the next descent. */
+  private portionAtkBonus = 0;
 
   /** Whether An Draoi's deity pact is still unsworn — the emissary waits in the mound until it is. */
   private get pactPending(): boolean {
@@ -444,6 +457,14 @@ export class Game {
       && this.brazierLitCount + this.brazierTiles.filter(b => !b.lit).length < ritual.num('braziersRequired', 3)
       && this.blocksSpawnedThisFloor % ritual.num('brazierPieceInterval', 5) === 0;
     let brazierInjected = false;
+    // A pending rescue rides one piece whole: the captive in the first cell,
+    // their Fomorian captors filling the next two — freed only if the guards
+    // die before a line clear swallows the captive.
+    const rescueReady = this.pendingRescueId !== null
+      && !this.npcTiles.some(n => n.npcId.startsWith('__rescue_'))
+      && this.blocksSpawnedThisFloor >= Balance.CONFIG.rescues.pieceThreshold;
+    let rescueInjected = false;
+    let guardsInjected = 0;
 
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
@@ -462,6 +483,17 @@ export class Game {
           this.pendingSmithFloor = false;
           this.pendingSmithId = this.nextSmith()?.id ?? null;
           return Cell.SMITH;
+        }
+
+        // Captive + captors — one whole piece, once per rescue floor
+        if (rescueReady && !rescueInjected) {
+          rescueInjected = true;
+          this.pendingGuardKey = this.rollGuardKey();
+          return Cell.RESCUE;
+        }
+        if (rescueInjected && guardsInjected < 2) {
+          guardsInjected++;
+          return Cell.ELITE_GUARD;
         }
 
         // Bealtaine need-fire — one guaranteed slot on its due piece
@@ -673,6 +705,25 @@ export class Game {
           this.colors[tx]![ty] = '#2a1c10';
           if (smith) this.npcTiles.push({ x: tx, y: ty, npcId: `__smith_${smith.id}__` });
           lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.RESCUE) {
+          const rescue = RESCUES.find(r => r.id === this.pendingRescueId);
+          this.pendingRescueId = null;
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#2e2210';
+          if (rescue) {
+            this.npcTiles.push({ x: tx, y: ty, npcId: `__rescue_${rescue.id}__` });
+            this.cb.log(`${rescue.name} is held captive in the stone — the Fomorian guards must die first.`, 'log-boss', rescue.char);
+          }
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.ELITE_GUARD) {
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#301414';
+          const guardKey = this.pendingGuardKey ?? 'skeleton';
+          const guardBase = MONSTERS[guardKey]?.name ?? 'Captor';
+          this.spawnMonster(guardKey, tx, ty, true, guardBase.startsWith('Fomorian') ? guardBase : `Fomorian ${guardBase}`);
+          const guard = this.monsters[this.monsters.length - 1];
+          if (guard && guard.x === tx && guard.y === ty) this.rescueGuards.push(guard);
+          lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.BRAZIER) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#2a1a10';
@@ -838,15 +889,15 @@ export class Game {
   // ── Monster spawning helper ───────────────────────────────────────────────
 
   /** Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the resulting `Monster` at `(tx, ty)`. */
-  private spawnMonster(key: string, tx: number, ty: number): void {
+  private spawnMonster(key: string, tx: number, ty: number, forceElite = false, nameOverride?: string): void {
     const def = MONSTERS[key];
     if (!def) return;
-    const isElite = Math.random() < Balance.CONFIG.eliteMonsters.spawnChance;
+    const isElite = forceElite || Math.random() < Balance.CONFIG.eliteMonsters.spawnChance;
     const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
     const atk = isElite ? Math.floor(baseAtk * Balance.CONFIG.eliteMonsters.atkMult) : baseAtk;
-    const name = isElite ? `Elite ${def.name}` : def.name;
+    const name = nameOverride ?? (isElite ? `Elite ${def.name}` : def.name);
     const m = new Monster(
       tx, ty, def.char, name, hp, hp, atk, def.xpReward,
       false,
@@ -1163,6 +1214,10 @@ export class Game {
     if (!this.player.brandsCapped && Math.random() < Balance.CONFIG.waystation.tattooistChance) {
       this.tattooTiles.push({ x: M.tattooist.x, y: M.tattooist.y });
     }
+    // Everyone freed from Fomorian captivity settles along the north wall.
+    RESCUES.filter(r => this.rescuedIds.has(r.id)).forEach((r, i) => {
+      this.npcTiles.push({ x: 3 + i * 2, y: M.y0, npcId: `__rescue_${r.id}__` });
+    });
     this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
     this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
@@ -1178,6 +1233,80 @@ export class Game {
     this.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');
     this.storyBeats.push('rested in a sídhe mound');
     this.pushUI();
+  }
+
+  /**
+   * A rescued resident's mound service, keyed by their `service` field:
+   * the Gobán Saor shapes your next piece to order, Fedelm reads the floors
+   * ahead, and Bricriu serves the Champion's Portion (+ATK until the next
+   * descent, one helping per floor).
+   */
+  private openRescueService(rescue: RescueDef): void {
+    if (!this.cb.onFloorEvent) { this.advanceTurn(); return; }
+    let event: FloorEventDef;
+    if (rescue.service === 'wright') {
+      const shapes: ShapeKey[] = ['I', 'O', 'T', 'L', 'J', 'S', 'Z'];
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: rescue.serviceFlavor,
+        options: [
+          ...shapes.map(k => ({
+            label: `The ${k}-stone`,
+            desc: `Your next falling stone will be the ${k} shape.`,
+            apply: (game: Game): string => {
+              game.nextType = k;
+              game.pushUI();
+              return `The Gobán Saor taps the plan twice. "One ${k}-stone, cut true." It will be your next piece.`;
+            },
+          })),
+          { label: 'No need', desc: '', apply: (): string => 'He shrugs and goes back to squaring a block that was already square.' },
+        ],
+      };
+    } else if (rescue.service === 'seer') {
+      const interval = Balance.CONFIG.floors.bossFloorInterval;
+      const nextBossFloor = (Math.floor(this.dungeonLevel / interval) + 1) * interval;
+      const boss = this.previewBossForFloor(nextBossFloor);
+      const smithsLeft = this.smithsMetCount < SMITHS.length && !this.spearForged;
+      const smithLine = smithsLeft
+        ? ` The anvils still ring below — ${SMITHS.length - this.smithsMetCount} smith${SMITHS.length - this.smithsMetCount === 1 ? '' : 's'} yet to find.`
+        : '';
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: `${rescue.serviceFlavor} "I see crimson at floor ${nextBossFloor} — ${boss.name} waits there, and knows you are coming.${smithLine}"`,
+        options: [{ label: 'Thank her', desc: '', apply: (): string => 'The flame gutters out. Fedelm is already looking at something else — something further down.' }],
+      };
+    } else {
+      const fed = this.portionAtkBonus > 0;
+      const atk = Balance.CONFIG.rescues.portionAtk;
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: fed
+          ? 'Bricriu spreads his hands over an empty table. "The Champion\'s Portion is one portion. That is the entire point of it, hero."'
+          : rescue.serviceFlavor,
+        options: fed
+          ? [{ label: 'Leave the table', desc: '', apply: (): string => 'You leave the table before he starts a feud about it.' }]
+          : [
+              {
+                label: "Eat the Champion's Portion",
+                desc: `+${atk} ATK until your next descent.`,
+                apply: (game: Game): string => {
+                  game.portionAtkBonus = atk;
+                  game.player.atk += atk;
+                  game.pushUI();
+                  return `You eat the hero's cut while Bricriu watches everyone else not eating it. +${atk} ATK until the next descent.`;
+                },
+              },
+              { label: 'Decline politely', desc: '', apply: (): string => '"Extraordinary," Bricriu says, delighted. "A hero with manners. The portion keeps."' },
+            ],
+      };
+    }
+    this.paused = true;
+    this.cb.onFloorEvent(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', rescue.char);
+      this.paused = false;
+      this.cb.onAction();
+    });
   }
 
   /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
@@ -1206,6 +1335,12 @@ export class Game {
   /** The next smith due to appear this run (Luchta → Credne → Goibniu), or `null` once all three have been met. */
   private nextSmith(): Smith | null {
     return (SMITHS as Smith[])[this.smithsMetCount] ?? null;
+  }
+
+  /** The captors' monster archetype for a rescue piece — nastier stock the deeper you are. */
+  private rollGuardKey(): string {
+    const pool = this.dungeonLevel >= 6 ? ['berserker_orc', 'skeleton'] : ['skeleton', 'goblin_archer'];
+    return pool[Math.floor(Math.random() * pool.length)]!;
   }
 
   /** Grants the smith's part, and — on the third meeting (Goibniu) — reforges the complete Spear of Lugh. */
@@ -1453,6 +1588,13 @@ export class Game {
       this.altarTiles = this.altarTiles
         .filter(a => a.y !== y)
         .map(a => a.y < y ? { ...a, y: a.y + 1 } : a);
+      // A captive on the cleared row is swallowed by the stone — not freed,
+      // so they may ride down again on a later floor.
+      const lostCaptive = this.npcTiles.find(n => n.y === y && n.npcId.startsWith('__rescue_'));
+      if (lostCaptive) {
+        const lost = RESCUES.find(r => `__rescue_${r.id}__` === lostCaptive.npcId);
+        if (lost) this.cb.log(`The stone closes over ${lost.name}. Somewhere below, the Fomorians drag them deeper.`, 'log-neutral', lost.char);
+      }
       this.npcTiles = this.npcTiles
         .filter(n => n.y !== y)
         .map(n => n.y < y ? { ...n, y: n.y + 1 } : n);
@@ -1630,6 +1772,16 @@ export class Game {
     this.npcTilesSpawnedThisFloor = 0;
     this.blocksSpawnedThisFloor = 0;
     this.smithWarningShown = false;
+    // A rescue that never landed (or was never freed) lapses with the floor —
+    // the captive may ride again later; their captors stayed behind either way.
+    this.pendingRescueId = null;
+    this.pendingGuardKey = null;
+    this.rescueGuards = [];
+    // Bricriu's Champion's Portion is a single meal — it ends at the descent.
+    if (this.portionAtkBonus > 0) {
+      this.player.atk -= this.portionAtkBonus;
+      this.portionAtkBonus = 0;
+    }
     // A Bealtaine floor left with fires unlit — the ritual quietly lapses.
     if (this.activeOmen?.special === 'bealtaine' && !this.ritualComplete && this.brazierLitCount > 0) {
       this.cb.log('The need-fires gutter out below, unlit and unanswered. The Sídhe withdraw.', 'log-neutral', 'tile_brazier');
@@ -2130,6 +2282,49 @@ export class Game {
         if (!this.maybeOfferPact()) this.advanceTurn();
         return;
       }
+      // A rescuable captive (on the floor) or rescued resident (in the mound).
+      if (npcTile.npcId.startsWith('__rescue_')) {
+        const rescueId = npcTile.npcId.slice('__rescue_'.length, -2);
+        const rescue = RESCUES.find(r => r.id === rescueId);
+        if (!rescue) { this.advanceTurn(); return; }
+        if (this.inWaystation) {
+          this.npcTiles.push(npcTile);  // residents stay
+          this.openRescueService(rescue);
+          return;
+        }
+        // Still guarded: no rescue until every captor is dead.
+        if (this.rescueGuards.some(g => g.hp > 0 && this.monsters.includes(g))) {
+          this.npcTiles.push(npcTile);
+          this.cb.log(rescue.captiveLine, 'log-neutral', rescue.char);
+          this.advanceTurn();
+          return;
+        }
+        // Freed — thanks, then away to the mounds.
+        const free = (): void => {
+          this.rescuedIds.add(rescue.id);
+          this.storyBeats.push(`freed ${rescue.name} from Fomorian captors`);
+          this.cb.onBeam?.(nx, '230,180,90');
+          this.cb.onAudio?.('bountyFulfilled');
+        };
+        if (!this.cb.onFloorEvent) { free(); this.advanceTurn(); return; }
+        const event: FloorEventDef = {
+          id: npcTile.npcId, emoji: rescue.char, title: rescue.name,
+          flavor: rescue.thanksLine,
+          options: [{
+            label: 'See them off', desc: 'They will wait for you in the sídhe mounds.',
+            apply: (): string => `${rescue.name} steps into a pillar of light and is gone — away to the mounds, where the deep cannot follow.`,
+          }],
+        };
+        this.paused = true;
+        this.cb.onFloorEvent(event, (index) => {
+          const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+          free();
+          this.cb.log(msg, 'log-perk', rescue.char);
+          this.paused = false;
+          this.cb.onAction();
+        });
+        return;
+      }
       // The ogham stone is a fixture — reading it never consumes it.
       if (npcTile.npcId === '__ogham_stone__') {
         this.npcTiles.push(npcTile);
@@ -2349,6 +2544,14 @@ export class Game {
       this.pendingFloorEvent = FloorEvent.random();
       this.cb.log('Someone has taken shelter in the sídhe mounds nearby, waiting to be found...', 'log-perk', 'npc_stranger');
       this.cb.onToast?.('A stranger shelters in the sídhe mounds, waiting...', 'npc_stranger');
+    }
+    // A captive may ride down this floor under Fomorian guard — free them and
+    // they join the mound as a resident (once per figure per run).
+    const rescuePool = RESCUES.filter(r => !this.rescuedIds.has(r.id));
+    if (!isBossFloor && rescuePool.length > 0 && Math.random() < Balance.CONFIG.rescues.rollChance) {
+      this.pendingRescueId = rescuePool[Math.floor(Math.random() * rescuePool.length)]!.id;
+      this.cb.log('Muffled cries carry up through the stone — someone is being dragged down in the rubble.', 'log-neutral', 'sprite_boss_wraith');
+      this.cb.onToast?.('Cries for help echo in the falling stone...', 'fx_impact');
     }
     this.maybeRollOmen(isBossFloor);
     this.maybeAnnounceSmithFloor(isBossFloor);

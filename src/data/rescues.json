@@ -1,0 +1,29 @@
+[
+  {
+    "id": "goban",
+    "char": "npc_goban",
+    "name": "Gobán Saor",
+    "service": "wright",
+    "captiveLine": "A broad-shouldered builder glares past you at his captors. \"I built halls for kings and they bind me with stone. Deal with these brutes and we'll talk.\"",
+    "thanksLine": "The Gobán Saor rolls his shoulders and picks up his hammer like it never left his hand. \"A debt's a debt. Find me in the mounds below — I'll shape the stone to your liking.\"",
+    "serviceFlavor": "The Gobán Saor sizes up the rift's falling stone with a builder's contempt. \"Bres sends rubble. Tell me what you need and I'll send you something with a shape to it.\""
+  },
+  {
+    "id": "fedelm",
+    "char": "npc_fedelm",
+    "name": "Fedelm the Seeress",
+    "service": "seer",
+    "captiveLine": "A woman sits perfectly still among her captors, eyes closed, a cold blue flame guttering at her fingertips. \"I saw you coming,\" she murmurs. \"I saw them falling. Get on with it.\"",
+    "thanksLine": "Fedelm opens her eyes at last. \"I see crimson on them, and none on you. Well cut. Look for me by the hearth — the future is easier to read out of the wind.\"",
+    "serviceFlavor": "Fedelm turns her cold flame over in her hands, and shapes appear in it."
+  },
+  {
+    "id": "bricriu",
+    "char": "npc_bricriu",
+    "name": "Bricriu of the Feast",
+    "service": "cook",
+    "captiveLine": "A man in a gold chain manages, somehow, to look put-upon rather than terrified. \"These gentlemen have no appreciation for hospitality. Remove them and my table is yours.\"",
+    "thanksLine": "Bricriu straightens his chain and bows just slightly too deep to be sincere. \"My savior. Come to my table in the mounds — the Champion's Portion is yours by right, and I never poison the guest of honor.\"",
+    "serviceFlavor": "Bricriu sweeps a hand over a table that wasn't there a moment ago — steam, fat, honey, and a cut of meat that is unmistakably the hero's."
+  }
+]

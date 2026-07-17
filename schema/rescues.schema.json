@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causeway-to-eriu.local/schema/rescues.schema.json",
+  "title": "Rescues",
+  "description": "Captive figures who ride down inside tetrominoes under elite guard; once freed, each joins the sídhe-mound waystation with a unique service. Mirrors RescueDef in src/types.ts.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "char", "name", "service", "captiveLine", "thanksLine", "serviceFlavor"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "char": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "service": { "type": "string", "enum": ["wright", "seer", "cook"] },
+      "captiveLine": { "type": "string", "minLength": 1 },
+      "thanksLine": { "type": "string", "minLength": 1 },
+      "serviceFlavor": { "type": "string", "minLength": 1 }
+    }
+  }
+}

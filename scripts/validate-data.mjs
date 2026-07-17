@@ -32,6 +32,7 @@ const FILES = [
   'npcs.json',
   'omens.json',
   'patrons.json',
+  'rescues.json',
   'shapes.json',
   'smiths.json',
   'sprite-map.json',

@@ -2042,6 +2042,104 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     }
   });
 
+  it('a rescue piece lands the captive with Fomorian captors; freeing requires every guard dead', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    const g = game as unknown as {
+      pendingRescueId: string | null; blocksSpawnedThisFloor: number;
+      spawnBlock(): void; lockBlock(): void; blockX: number; blockY: number;
+      rescueGuards: Monster[];
+    };
+    game.pendingRescueId = 'goban';
+    g.blocksSpawnedThisFloor = Balance.CONFIG.rescues.pieceThreshold;
+    g.spawnBlock();
+    const cells = (game as unknown as { blockMatrix: number[][] }).blockMatrix.flat();
+    expect(cells).toContain(Cell.RESCUE);
+    expect(cells.filter(c => c === Cell.ELITE_GUARD)).toHaveLength(2);
+    // Land it high on an empty column region and check what materialized.
+    g.blockX = 3; g.blockY = 18;
+    g.lockBlock();
+    const captive = game.npcTiles.find(n => n.npcId === '__rescue_goban__');
+    expect(captive).toBeDefined();
+    expect(game.pendingRescueId).toBeNull();
+    const guards = game.monsters.filter(m => m.name.startsWith('Fomorian '));
+    expect(guards).toHaveLength(2);
+    // Bump while guarded: refused, tile stays.
+    game.player.x = captive!.x; game.player.y = captive!.y - 1;
+    game.paused = false;
+    onFloorEvent.mockClear();
+    game.handleHeroMove(0, 1);
+    expect(onFloorEvent).not.toHaveBeenCalled();
+    expect(game.npcTiles.some(n => n.npcId === '__rescue_goban__')).toBe(true);
+    expect(game.rescuedIds.has('goban')).toBe(false);
+    // Kill the guards, bump again: thanks dialog, then rescued.
+    for (const guard of guards) { guard.hp = 0; CombatSystem.killMonster(guard, game); }
+    game.player.x = captive!.x; game.player.y = captive!.y - 1;
+    game.paused = false;
+    game.handleHeroMove(0, 1);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('__rescue_goban__');
+    onChoice(0);
+    expect(game.rescuedIds.has('goban')).toBe(true);
+  });
+
+  it('rescued figures settle in the mound; the Gobán Saor shapes your next piece to order', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    game.rescuedIds.add('goban');
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const resident = game.npcTiles.find(n => n.npcId === '__rescue_goban__');
+    expect(resident).toBeDefined();
+    // Bump him and commission a T-stone.
+    game.player.x = resident!.x - 1; game.player.y = resident!.y;
+    game.map[resident!.x - 1]![resident!.y] = Tile.FLOOR;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__rescue_goban__');
+    onFloorEvent.mockClear();
+    game.paused = false;
+    game.handleHeroMove(1, 0);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    const tIndex = event.options.findIndex((o: { label: string }) => o.label === 'The T-stone');
+    expect(tIndex).toBeGreaterThanOrEqual(0);
+    onChoice(tIndex);
+    expect(game.nextType).toBe('T');
+    // Resident persists after the service.
+    expect(game.npcTiles.some(n => n.npcId === '__rescue_goban__')).toBe(true);
+  });
+
+  it("Bricriu's Champion's Portion grants ATK until the next descent, one helping per floor", () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    game.rescuedIds.add('bricriu');
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const resident = game.npcTiles.find(n => n.npcId === '__rescue_bricriu__')!;
+    const atkBefore = game.player.atk;
+    const bump = (): void => {
+      game.player.x = resident.x - 1; game.player.y = resident.y;
+      game.map[resident.x - 1]![resident.y] = Tile.FLOOR;
+      game.npcTiles = game.npcTiles.filter(n => n.npcId === '__rescue_bricriu__');
+      onFloorEvent.mockClear();
+      game.paused = false;
+      game.handleHeroMove(1, 0);
+    };
+    bump();
+    let [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.options[0].label).toContain('Portion');
+    onChoice(0);
+    expect(game.player.atk).toBe(atkBefore + Balance.CONFIG.rescues.portionAtk);
+    // Second helping refused this floor.
+    bump();
+    [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.options.some((o: { label: string }) => o.label.includes('Portion'))).toBe(false);
+    onChoice(0);
+    expect(game.player.atk).toBe(atkBefore + Balance.CONFIG.rescues.portionAtk);
+    // The portion ends at the descent.
+    (game as unknown as { resetDungeonState(): void }).resetDungeonState();
+    expect(game.player.atk).toBe(atkBefore);
+  });
+
   it('non-Draoi classes never get a deity emissary in the mound', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };

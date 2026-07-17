@@ -149,6 +149,11 @@
     "tattooistChance": 0.4,
     "stashRecoveryPct": 0.5
   },
+  "rescues": {
+    "rollChance": 0.3,
+    "pieceThreshold": 6,
+    "portionAtk": 2
+  },
   "spearOfLugh": {
     "dmgMult": 3,
     "cooldownMax": 8

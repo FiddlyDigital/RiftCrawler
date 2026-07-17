@@ -2,8 +2,7 @@ import { GameConfig } from './config';
 import { Colors } from './colors';
 import { Tile, Cell } from './types';
 import { ParticlePool } from './entities';
-import { Biome, NPCS, SMITHS } from './content';
-import { MONSTERS } from './dataLoader';
+import { Biome, NPCS, SMITHS, RESCUES, MONSTERS } from './content';
 import { SpriteService } from './sprites';
 import type { Game } from './game';
 
@@ -424,7 +423,7 @@ export class Renderer {
         // falling piece and the trail it leaves behind read as one material.
         this.drawSprite((tx + ty) % 2 === 0 ? 'tile_stone_a' : 'tile_stone_b', tx * TS, ty * TS, TS, TS);
         ctx.globalAlpha = 0.6;
-        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : cell === Cell.NPC || cell === Cell.SMITH ? '#182418' : game.blockColor;
+        ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : cell === Cell.NPC || cell === Cell.SMITH ? '#182418' : cell === Cell.RESCUE ? '#2e2210' : cell === Cell.ELITE_GUARD ? '#301414' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         ctx.globalAlpha = 1.0;
         if (cell === Cell.BOSS) {
@@ -446,6 +445,10 @@ export class Renderer {
           ? (game.pendingNpcId && NPCS.find(n => n.id === game.pendingNpcId)?.char) || CELL_SPRITE[cell]
           : cell === Cell.SMITH
           ? (game.pendingSmithId && SMITHS.find(s => s.id === game.pendingSmithId)?.char) || CELL_SPRITE[cell]
+          : cell === Cell.RESCUE
+          ? (game.pendingRescueId && RESCUES.find(r => r.id === game.pendingRescueId)?.char) || CELL_SPRITE[cell]
+          : cell === Cell.ELITE_GUARD
+          ? (game.pendingGuardKey && MONSTERS[game.pendingGuardKey]?.char) || CELL_SPRITE[cell]
           : CELL_SPRITE[cell];
         if (spriteKey) {
           const inset = 2;
@@ -601,15 +604,19 @@ export class Renderer {
             '__stash__':       { char: 'item_gold_pouch',  rgb: '217,164,65' },
           };
           const sentinel = SENTINEL_SPRITES[npcHere.npcId];
+          const rescueId = npcHere.npcId.startsWith('__rescue_') ? npcHere.npcId.slice('__rescue_'.length, -2) : null;
           const char = isGhost
             ? 'sprite_boss_wraith'
             : smithId
             ? (SMITHS.find(s => s.id === smithId)?.char ?? 'smith_goibniu')
+            : rescueId
+            ? (RESCUES.find(r => r.id === rescueId)?.char ?? 'npc_sidhe')
             : sentinel
             ? sentinel.char
             : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
           const rgb = isGhost ? '176,196,222'
             : smithId ? '184,115,51'
+            : rescueId ? '230,180,90'
             : sentinel ? sentinel.rgb
             : '89,159,124';
           const inset = TS * 0.1;
@@ -915,6 +922,8 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.NPC]:            'npc_sidhe',
   [Cell.GHOST]:          'sprite_boss_wraith',
   [Cell.SMITH]:          'smith_goibniu',
+  [Cell.RESCUE]:         'npc_sidhe',
+  [Cell.ELITE_GUARD]:    'sprite_skel_01',
   [Cell.BRAZIER]:        'tile_brazier',
   [Cell.TRAP_SPIKE]:     'trap_spike',
   [Cell.TRAP_SMOKE]:     'trap_smoke',

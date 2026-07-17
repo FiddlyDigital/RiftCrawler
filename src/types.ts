@@ -94,6 +94,8 @@ export const Cell = {
   GHOST: 21,
   SMITH: 22,
   BRAZIER: 23,
+  RESCUE: 24,
+  ELITE_GUARD: 25,
 } as const;
 /** Value type of {@link Cell}. */
 export type CellValue = (typeof Cell)[keyof typeof Cell];
@@ -277,6 +279,24 @@ export interface OmenDef {
   params: Record<string, number>;
   /** Handler key for scripted ritual omens (e.g. `'bealtaine'`) — absent for pure stat omens. */
   special?: string;
+}
+
+/** A captive figure who rides down inside a tetromino under elite guard; once freed, joins the waystation with a unique service. Loaded from `data/rescues.json`. */
+export interface RescueDef {
+  /** Stable identifier. */
+  id: string;
+  /** Sprite-map key. */
+  char: string;
+  /** Display name. */
+  name: string;
+  /** Which mound service this figure provides once rescued. */
+  service: 'wright' | 'seer' | 'cook';
+  /** Line shown when bumped while their elite captors still live. */
+  captiveLine: string;
+  /** Dialog shown on the rescue itself, before they beam away to the mounds. */
+  thanksLine: string;
+  /** Dialog flavor for their service once resident in the mound. */
+  serviceFlavor: string;
 }
 
 export interface SmithDef {
