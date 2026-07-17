@@ -211,7 +211,7 @@ export class Renderer {
   // matches the smaller centered draw used for altar/NPC-style icons.
   // `twitch` adds a brief horizontal shiver every few seconds (monsters only)
   // so a crowd of idlers doesn't read as one synchronized metronome.
-  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0, twitch = false): void {
+  private drawLivingSprite(char: string, gx: number, gy: number, rgb: string, phase = 0, inset = 0, twitch = false, shadow = true): void {
     const TS = GameConfig.TILE_SIZE;
     const idleBob = Math.sin(performance.now() / 500 + phase) * 1.5;
     let jitterX = 0;
@@ -226,6 +226,18 @@ export class Renderer {
     glow.addColorStop(1, `rgba(${rgb},0)`);
     this.ctx.fillStyle = glow;
     this.ctx.fillRect(gx * TS - TS, gy * TS - TS, TS * 3, TS * 3);
+    if (shadow) {
+      // Grounding shadow at the tile's foot line. It stays put while the
+      // sprite bobs — shrinking and fading slightly as the sprite lifts —
+      // which is what sells the feet actually leaving the ground.
+      const lift = idleBob;  // -1.5 (high) .. +1.5 (low)
+      const rx = (TS / 2 - inset) * (0.72 + lift * 0.05);
+      const ry = Math.max(2.5, TS * 0.12 + lift * 0.4);
+      this.ctx.fillStyle = `rgba(0,0,0,${(0.45 + lift * 0.05).toFixed(3)})`;
+      this.ctx.beginPath();
+      this.ctx.ellipse(px + jitterX, gy * TS + TS - 2, rx, ry, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
     this.drawSprite(char, gx * TS + inset + jitterX, gy * TS + inset + idleBob, TS - 2 * inset, TS - 2 * inset);
   }
 
@@ -602,7 +614,8 @@ export class Renderer {
             : '89,159,124';
           const inset = TS * 0.1;
           if (isGhost) ctx.globalAlpha *= 0.75;  // translucent — it isn't quite here
-          if (visible) this.drawLivingSprite(char, x, y, rgb, x * 7 + y * 13, inset);
+          // ...and, for the same reason, the ghost casts no grounding shadow.
+          if (visible) this.drawLivingSprite(char, x, y, rgb, x * 7 + y * 13, inset, false, !isGhost);
           else this.drawSprite(char, x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         }
         ctx.globalAlpha = 1.0;
