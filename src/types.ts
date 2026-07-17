@@ -446,7 +446,8 @@ export type AudioEvent =
   | 'hit' | 'playerDamage' | 'kill'
   | 'lineClear' | 'descend' | 'poison' | 'bossWarn'
   | 'teleport' | 'comboMilestone'
-  | 'npcEncounter' | 'ghostEncounter' | 'bountyFulfilled' | 'pactSworn';
+  | 'npcEncounter' | 'ghostEncounter' | 'bountyFulfilled' | 'pactSworn'
+  | 'waystationEnter';
 
 /**
  * A fallen character from a previous run — may reappear as a wandering ghost

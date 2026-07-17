@@ -426,7 +426,8 @@ class GameApp {
         this.renderer.triggerShake(data && data >= 4 ? 5 : 3, data && data >= 4 ? 8 : 5);
         HapticsController.vibrate(data && data >= 4 ? 25 : 15);
         break;
-      case 'descend':         audio.playDescend();          break;
+      case 'descend':         audio.setAmbientMood('deep'); audio.playDescend(); break;
+      case 'waystationEnter': audio.setAmbientMood('hearth'); audio.playNpcGreeting(); break;
       case 'poison':          audio.playPoison();           break;
       case 'bossWarn':        audio.playBossWarn();         this.renderer.triggerShake(6, 18); HapticsController.vibrate([40, 60, 40, 60, 50]); break;
       case 'teleport':        audio.playTeleport();         break;

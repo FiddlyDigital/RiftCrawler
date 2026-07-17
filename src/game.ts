@@ -9,6 +9,7 @@ import { MonsterAiSystem } from './systems/monsterAI';
 import { SpriteService } from './sprites';
 import { Balance } from './balance';
 import { Colors } from './colors';
+import { StorageService } from './storage';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -175,6 +176,8 @@ export class Game {
     oghamStone: { x: 1, y: 12 },
     well:       { x: 5, y: 10 },
     aoife:      { x: 7, y: 13 },
+    tattooist:  { x: 3, y: 11 },
+    stash:      { x: 1, y: 15 },
     stairs:     { x: 8, y: 16 },
   } as const;
   /** A floor event rolled on an interval descent but embodied as a waiting stranger in the mound — held until met, across floors if need be. */
@@ -313,6 +316,13 @@ export class Game {
     this.cb.log(`${startBiome.name} — ${startBiome.desc}`, 'log-tetris', startIcon);
     this.cb.onToast?.(`Entering ${startBiome.name}...`, startIcon);
     this.cb.onCodexDiscover?.('biome', this.biomeId);
+    // The Sídhe keep what past characters left with them — minus their tithe.
+    const inherited = StorageService.claimStash();
+    if (inherited > 0) {
+      this.gold += inherited;
+      this.cb.log(`The Sídhe kept faith: ${inherited} gold, left for you by one who came before.`, 'log-perk', 'item_gold_pouch');
+      this.storyBeats.push('inherited gold the Sídhe kept');
+    }
   }
 
   // ── Grid helpers ─────────────────────────────────────────────────────────
@@ -1141,12 +1151,18 @@ export class Game {
     // a deity emissary, and any pending floor event as a waiting stranger.
     if (this.pactPending) this.npcTiles.push({ x: M.emissary.x, y: M.emissary.y, npcId: '__pact__' });
     if (this.pendingFloorEvent) this.npcTiles.push({ x: M.stranger.x, y: M.stranger.y, npcId: '__event__' });
-    // Fixtures of the hall: the ogham stone (lore codex) and the Well of
-    // Segais (gold for wisdom); Aoife takes a seat only while she has a
-    // vengeance contract to offer.
+    // Fixtures of the hall: the ogham stone (lore codex), the Well of
+    // Segais (gold for wisdom), and the Sídhe coffer (cross-run gold stash);
+    // Aoife takes a seat only while she has a vengeance contract to offer,
+    // and the Ogham-mark tattooist drifts through on some visits (never once
+    // the hero's five marks are spent).
     this.npcTiles.push({ x: M.oghamStone.x, y: M.oghamStone.y, npcId: '__ogham_stone__' });
     this.npcTiles.push({ x: M.well.x, y: M.well.y, npcId: '__well__' });
+    this.npcTiles.push({ x: M.stash.x, y: M.stash.y, npcId: '__stash__' });
     if (!this.activeBountyQuest) this.npcTiles.push({ x: M.aoife.x, y: M.aoife.y, npcId: 'aoife' });
+    if (!this.player.brandsCapped && Math.random() < Balance.CONFIG.waystation.tattooistChance) {
+      this.tattooTiles.push({ x: M.tattooist.x, y: M.tattooist.y });
+    }
     this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
     this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
@@ -1157,6 +1173,7 @@ export class Game {
         this.explored[x]![y] = true;
       }
     }
+    this.cb.onAudio?.('waystationEnter');
     this.cb.log('You surface into a sídhe mound — a hush, a hearth, and friendly faces. The stairs will keep.', 'log-success', 'special_sacred');
     this.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');
     this.storyBeats.push('rested in a sídhe mound');
@@ -2118,6 +2135,42 @@ export class Game {
         this.npcTiles.push(npcTile);
         this.cb.log('You trace the ogham strokes. Old names surface: everything the deep has shown you.', 'log-perk', 'tile_ogham_stone');
         this.cb.onOpenCodex?.();
+        return;
+      }
+      if (npcTile.npcId === '__stash__') {
+        const stashed = StorageService.loadStash();
+        const pct = Math.round(Balance.CONFIG.waystation.stashRecoveryPct * 100);
+        const stashEvent: FloorEventDef = {
+          id: '__stash__', emoji: 'item_gold_pouch', title: 'The Sídhe Coffer',
+          flavor: `A stone coffer, older than the mound around it. ${stashed > 0 ? `Inside, ${stashed} gold glints — left by those who came before.` : 'It sits empty, waiting for an offering.'} What is left with the Sídhe passes on when you fall — less their tithe.`,
+          options: [
+            {
+              label: this.gold > 0 ? `Leave your gold (${this.gold})` : 'Leave your gold',
+              desc: `Your next self inherits ${pct}% of everything in the coffer.`,
+              apply: (game: Game): string => {
+                if (game.gold <= 0) return 'Your purse is empty. The coffer keeps its silence.';
+                const left = game.gold;
+                const total = StorageService.addToStash(left);
+                game.gold = 0;
+                game.storyBeats.push('left gold in the keeping of the Sídhe');
+                return `You pour ${left} gold into the coffer — ${total} now waits in the Sídhe's keeping.`;
+              },
+            },
+            { label: 'Keep your purse', desc: '', apply: (): string => 'Gold spends better in living hands. You leave the coffer be.' },
+          ],
+        };
+        this.cb.onBeam?.(nx, '217,164,65');
+        if (!this.cb.onFloorEvent) { this.npcTiles.push(npcTile); this.advanceTurn(); return; }
+        this.paused = true;
+        this.cb.onFloorEvent(stashEvent, (index) => {
+          const msg = stashEvent.options[index]?.apply(this) ?? 'Nothing happened.';
+          this.cb.log(msg, 'log-perk', 'item_gold_pouch');
+          // The coffer is a fixture — it stays whether you gave or not.
+          this.npcTiles.push(npcTile);
+          this.paused = false;
+          this.pushUI();
+          this.cb.onAction();
+        });
         return;
       }
       if (npcTile.npcId === '__well__') {

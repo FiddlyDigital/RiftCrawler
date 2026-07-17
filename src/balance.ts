@@ -81,6 +81,7 @@ export interface BalanceConfig {
   smiths: { floorInterval: number; pieceThreshold: number; warningThreshold: number };
   omens: { rollChance: number };
   well: { baseCost: number; costPerFloor: number; baseXp: number; xpPerFloor: number };
+  waystation: { tattooistChance: number; stashRecoveryPct: number };
   spearOfLugh: { dmgMult: number; cooldownMax: number };
 }
 

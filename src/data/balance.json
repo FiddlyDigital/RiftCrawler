@@ -145,6 +145,10 @@
     "baseXp": 60,
     "xpPerFloor": 20
   },
+  "waystation": {
+    "tattooistChance": 0.4,
+    "stashRecoveryPct": 0.5
+  },
   "spearOfLugh": {
     "dmgMult": 3,
     "cooldownMax": 8

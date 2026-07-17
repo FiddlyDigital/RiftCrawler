@@ -216,6 +216,22 @@ export class AudioEngine {
     this.ambientOscs = [o1, o2, lfo];
   }
 
+  /**
+   * Retunes the running ambient bed between the deep's low drone and the
+   * warmer, higher hearth voicing of the sídhe mound (an octave up, glides
+   * over ~2s). A no-op when the ambient bed isn't playing.
+   * @throws {TypeError} If `mood` is not `'deep'` or `'hearth'`.
+   */
+  public setAmbientMood(mood: 'deep' | 'hearth'): void {
+    if (mood !== 'deep' && mood !== 'hearth') throw new TypeError('AudioService.setAmbientMood: "mood" must be "deep" or "hearth"');
+    const ctx = this.getCtx();
+    const [o1, o2] = this.ambientOscs;
+    if (!ctx || !o1 || !o2) return;
+    const [f1, f2] = mood === 'hearth' ? [110, 165] : [55, 82.5];
+    o1.frequency.linearRampToValueAtTime(f1, ctx.currentTime + 2.0);
+    o2.frequency.linearRampToValueAtTime(f2, ctx.currentTime + 2.0);
+  }
+
   /** Fades out and stops the ambient drone bed, if playing. */
   public stopAmbient(): void {
     const ctx = this.ctx;

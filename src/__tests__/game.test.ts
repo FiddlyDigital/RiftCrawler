@@ -1989,6 +1989,59 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(tale).toContain('lit the fires of Bealtaine');
   });
 
+  it('the Sídhe coffer banks gold across runs; a new character inherits the tithed remainder', () => {
+    vi.stubGlobal('localStorage', new MemoryStorage());
+    try {
+      const onFloorEvent = vi.fn();
+      const cb = { ...makeCallbacks(), onFloorEvent };
+      const game = new Game(cb);
+      enterMound(game, onFloorEvent);
+      game.gold = 100;
+      // The hero enters right beside the coffer — bump it and deposit.
+      game.player.x = Game.MOUND.stash.x + 1; game.player.y = Game.MOUND.stash.y;
+      game.npcTiles = game.npcTiles.filter(n => n.npcId === '__stash__');
+      onFloorEvent.mockClear();
+      game.paused = false;
+      game.handleHeroMove(-1, 0);
+      const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+      expect(event.id).toBe('__stash__');
+      onChoice(0);  // leave your gold
+      expect(game.gold).toBe(0);
+      expect(StorageService.loadStash()).toBe(100);
+      expect(game.npcTiles.some(n => n.npcId === '__stash__')).toBe(true);  // fixture persists
+      // The next character inherits the stash, less the Sídhe's tithe.
+      const heir = new Game(makeCallbacks());
+      expect(heir.gold).toBe(Math.floor(100 * Balance.CONFIG.waystation.stashRecoveryPct));
+      expect(StorageService.loadStash()).toBe(0);
+      // And the one after that inherits nothing.
+      expect(new Game(makeCallbacks()).gold).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the Ogham-mark tattooist visits the mound when the dice favor it — never once all marks are spent', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    const enter = (game as unknown as { enterWaystation(): void }).enterWaystation.bind(game);
+    const tattooAt = (): boolean => game.isTattooTile(Game.MOUND.tattooist.x, Game.MOUND.tattooist.y);
+    const rand = vi.spyOn(Math, 'random').mockReturnValue(0);  // roll always under the chance
+    try {
+      enter();
+      expect(tattooAt()).toBe(true);
+      rand.mockReturnValue(0.99);  // roll always over the chance
+      enter();
+      expect(tattooAt()).toBe(false);
+      rand.mockReturnValue(0);
+      vi.spyOn(game.player, 'brandsCapped', 'get').mockReturnValue(true);
+      enter();
+      expect(tattooAt()).toBe(false);  // nothing left to offer
+    } finally {
+      rand.mockRestore();
+    }
+  });
+
   it('non-Draoi classes never get a deity emissary in the mound', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };

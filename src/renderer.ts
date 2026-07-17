@@ -586,6 +586,7 @@ export class Renderer {
             '__event__':       { char: 'npc_stranger',     rgb: '89,159,124' },
             '__ogham_stone__': { char: 'tile_ogham_stone', rgb: '168,132,184' },
             '__well__':        { char: 'tile_well',        rgb: '80,200,255' },
+            '__stash__':       { char: 'item_gold_pouch',  rgb: '217,164,65' },
           };
           const sentinel = SENTINEL_SPRITES[npcHere.npcId];
           const char = isGhost

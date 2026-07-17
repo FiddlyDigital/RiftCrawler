@@ -247,6 +247,15 @@
         "xpPerFloor": { "type": "number" }
       }
     },
+    "waystation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tattooistChance", "stashRecoveryPct"],
+      "properties": {
+        "tattooistChance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "stashRecoveryPct": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
     "spearOfLugh": {
       "type": "object",
       "additionalProperties": false,

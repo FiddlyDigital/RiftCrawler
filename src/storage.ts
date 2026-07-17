@@ -10,6 +10,7 @@ const VOLUME_KEY = 'riftcrawler_volume';
 const GHOSTS_KEY = 'riftcrawler_ghosts_v1';
 const MOTION_KEY = 'riftcrawler_reduced_motion';
 const CODEX_KEY = 'riftcrawler_codex_v1';
+const STASH_KEY = 'riftcrawler_stash_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -165,6 +166,41 @@ export class StorageService {
       const raw = localStorage.getItem(MOTION_KEY);
       return raw === null ? null : raw === '1';
     } catch { return null; }
+  }
+
+  /** Gold left with the Sídhe by past characters, not yet claimed (0 if none). */
+  static loadStash(): number {
+    try {
+      const v = Number(localStorage.getItem(STASH_KEY) ?? 0);
+      return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    } catch { return 0; }
+  }
+
+  /**
+   * Adds gold to the cross-run stash.
+   * @param amount - Gold to deposit; must be a non-negative finite number.
+   * @returns The new stash total.
+   * @throws {TypeError} If `amount` is not a non-negative finite number.
+   */
+  static addToStash(amount: number): number {
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
+      throw new TypeError('StorageService.addToStash: "amount" must be a non-negative finite number');
+    }
+    const total = StorageService.loadStash() + Math.floor(amount);
+    try { localStorage.setItem(STASH_KEY, String(total)); } catch { /* quota */ }
+    return total;
+  }
+
+  /**
+   * Empties the stash and returns the inheritance: the stored gold scaled by
+   * `waystation.stashRecoveryPct` (the Sídhe keep their tithe). Called once
+   * per new run; a second call returns 0 until something is deposited again.
+   */
+  static claimStash(): number {
+    const total = StorageService.loadStash();
+    if (total <= 0) return 0;
+    try { localStorage.removeItem(STASH_KEY); } catch { /* quota */ }
+    return Math.floor(total * Balance.CONFIG.waystation.stashRecoveryPct);
   }
 
   /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */
