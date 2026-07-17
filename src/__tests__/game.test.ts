@@ -1851,6 +1851,79 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
       expect(Npc.random().id).not.toBe('seanchai');
     }
   });
+
+  it('interval descents roll a pending floor event instead of an immediate modal (and never auto-open the shop)', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    (game as unknown as { floorsDescended: number }).floorsDescended = Balance.CONFIG.floors.floorEventInterval - 1;
+    chooseAtStairs(game, onFloorEvent, 0);  // delve — lands on an interval descent
+    expect(game.pendingFloorEvent).not.toBeNull();
+    // Only the stairs-choice dialog fired — the event itself waits in the mound.
+    const nonStairsCalls = onFloorEvent.mock.calls.filter(c => c[0]?.id !== '__stairs_choice__');
+    expect(nonStairsCalls).toHaveLength(0);
+    expect(cb.onOpenShop).not.toHaveBeenCalled();
+    expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('stranger'), expect.any(String));
+  });
+
+  it('a pending floor event stands in the mound as a stranger; bumping them delivers it and clears the pending state', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    (game as unknown as { floorsDescended: number }).floorsDescended = Balance.CONFIG.floors.floorEventInterval - 1;
+    chooseAtStairs(game, onFloorEvent, 0);
+    const held = game.pendingFloorEvent!;
+    enterMound(game, onFloorEvent);
+    expect(game.npcTiles.some(n => n.npcId === '__event__')).toBe(true);
+    // Bump the stranger at (7,23).
+    game.player.x = 6; game.player.y = 23;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__event__');
+    onFloorEvent.mockClear();
+    game.paused = false;
+    game.handleHeroMove(1, 0);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe(held.id);
+    expect(game.pendingFloorEvent).toBeNull();
+    onChoice(0);
+    expect(game.paused).toBe(false);
+    // Claimed — the next mound visit has no stranger.
+    game.player.x = 7; game.player.y = 23;
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    expect(game.npcTiles.some(n => n.npcId === '__event__')).toBe(false);
+  });
+
+  it("An Draoi's unsworn pact stands in the mound as a deity emissary; bumping them opens the ceremony", () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    game.applyClass('draoi');
+    chooseAtStairs(game, onFloorEvent, 0);  // reach floor 2 (pact needs depth >= 2)
+    enterMound(game, onFloorEvent);
+    expect(game.npcTiles.some(n => n.npcId === '__pact__')).toBe(true);
+    // Bump the emissary at (3,23).
+    game.player.x = 2; game.player.y = 23;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__pact__');
+    onFloorEvent.mockClear();
+    game.paused = false;
+    game.handleHeroMove(1, 0);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('__pact__');
+    onChoice(0);
+    expect(game.activePatronId).not.toBeNull();
+    // Sworn — the next mound visit has no emissary.
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    expect(game.npcTiles.some(n => n.npcId === '__pact__')).toBe(false);
+  });
+
+  it('non-Draoi classes never get a deity emissary in the mound', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    game.applyClass('architect');
+    chooseAtStairs(game, onFloorEvent, 0);
+    enterMound(game, onFloorEvent);
+    expect(game.npcTiles.some(n => n.npcId === '__pact__')).toBe(false);
+  });
 });
 
 describe('Tetris reward (4-line clear bonus trader)', () => {

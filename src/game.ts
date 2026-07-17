@@ -157,6 +157,13 @@ export class Game {
   // Waystation state — the safe sídhe mound offered at every staircase
   /** Whether the hero is currently inside the waystation — no falling stone, no monsters, just the mound's residents. */
   public inWaystation = false;
+  /** A floor event rolled on an interval descent but embodied as a waiting stranger in the mound — held until met, across floors if need be. */
+  public pendingFloorEvent: FloorEvent | null = null;
+
+  /** Whether An Draoi's deity pact is still unsworn — the emissary waits in the mound until it is. */
+  private get pactPending(): boolean {
+    return this.activeClassId === 'draoi' && this.activePatronId === null && this.dungeonLevel >= 2;
+  }
 
   /** Whether the Tetris layer is currently frozen (the Gorgoth duel, or a waystation rest floor). */
   private get tetrisSuspended(): boolean { return this.gorgothSummoned || this.inWaystation; }
@@ -1090,6 +1097,10 @@ export class Game {
     this.npcTiles.push({ x: 4, y: 23, npcId: 'seanchai' });
     this.npcTiles.push({ x: 5, y: 23, npcId: '__campfire__' });
     this.npcTiles.push({ x: 6, y: 23, npcId: '__peddler__' });
+    // Between-floor choices stand here in person: An Draoi's unsworn pact as
+    // a deity emissary, and any pending floor event as a waiting stranger.
+    if (this.pactPending) this.npcTiles.push({ x: 3, y: 23, npcId: '__pact__' });
+    if (this.pendingFloorEvent) this.npcTiles.push({ x: 7, y: 23, npcId: '__event__' });
     this.map[8]![23] = Tile.STAIRS;
     this.colors[8]![23] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
@@ -1175,10 +1186,10 @@ export class Game {
   }
 
   // ── An Draoi's pact ceremony ───────────────────────────────────────────────
-  // Fires once, on the first descent as An Draoi: the three deities call, and
-  // one must be answered — the pact IS the class, so there is no decline.
-  // Returns true if the ceremony modal was opened (caller skips other floor
-  // modals for this descent).
+  // Triggered by bumping the deity emissary in the waystation (see
+  // pactPending / enterWaystation): the deities call, and one must be
+  // answered — the pact IS the class, so there is no decline. Returns true
+  // if the ceremony modal was opened.
 
   private maybeOfferPact(): boolean {
     if (this.activeClassId !== 'draoi' || this.activePatronId !== null) return false;
@@ -1516,7 +1527,6 @@ export class Game {
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
     this.inWaystation = false;  // defense-in-depth: a collapse can't start inside the mound, but never carry the suspension out
-    this.maybeOfferPact();
     // Omen first, smith second — if both toast, the more actionable smith
     // hint wins the banner while both keep their log lines.
     this.maybeRollOmen(isBossFloor);
@@ -2049,8 +2059,32 @@ export class Game {
     if (npcTile) {
       this.player.x = nx; this.player.y = ny;
       this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
-      // Waystation residents: the hearth-fire heals in full, once; the Fear
-      // Dearg's stall opens the regular peddler shop.
+      // Waystation residents: the deity emissary swears An Draoi's pact, the
+      // waiting stranger delivers the held floor event, the hearth-fire heals
+      // in full once, and the Fear Dearg's stall opens the regular peddler shop.
+      if (npcTile.npcId === '__pact__') {
+        this.cb.onBeam?.(nx, '141,111,212');
+        if (!this.maybeOfferPact()) this.advanceTurn();
+        return;
+      }
+      if (npcTile.npcId === '__event__') {
+        const event = this.pendingFloorEvent;
+        this.pendingFloorEvent = null;
+        this.cb.onBeam?.(nx, '89,159,124');
+        if (event && this.cb.onFloorEvent) {
+          this.paused = true;
+          this.cb.onFloorEvent(event, (index) => {
+            const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+            this.cb.log(msg, 'log-perk', event.emoji);
+            this.storyBeats.push(`answered the call of "${event.title}"`);
+            this.paused = false;
+            this.cb.onAction();
+          });
+        } else {
+          this.advanceTurn();
+        }
+        return;
+      }
       if (npcTile.npcId === '__campfire__') {
         const healed = this.player.heal(this.player.maxHp);
         this.cb.onParticle(nx, ny, healed > 0 ? `+${healed} HP` : 'warm', '#ff8c32', 14, 'tile_brazier');
@@ -2124,6 +2158,10 @@ export class Game {
    */
   private openStairsChoice(): void {
     if (!this.cb.onFloorEvent) { this.descendFloor(); return; }
+    // The rest option's pitch names whoever is actually waiting inside.
+    const waiting: string[] = [];
+    if (this.pactPending) waiting.push('an emissary of the gods');
+    if (this.pendingFloorEvent) waiting.push('a sheltering stranger');
     const event: FloorEventDef = {
       id: '__stairs_choice__', emoji: 'tile_stairs', title: 'The Way Down',
       flavor: 'The stair falls away into the dark. Beside it, a low door of piled stones breathes warm air — a sídhe mound, where the deep cannot follow.',
@@ -2135,7 +2173,7 @@ export class Game {
         },
         {
           label: 'Rest in the mound',
-          desc: 'A hearth, a storyteller, and the Fear Dearg\'s stall. The stair waits inside.',
+          desc: `A hearth, a storyteller, and the Fear Dearg's stall${waiting.length > 0 ? ` — and ${waiting.join(', and ')}` : ''}. The stair waits inside.`,
           apply: (): string => 'You duck through the low door into the warmth of the mound.',
         },
       ],
@@ -2149,7 +2187,7 @@ export class Game {
     });
   }
 
-  /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (pact, floor event, peddler, omen, smith). */
+  /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (omen, smith, pending-event roll). */
   private descendFloor(): void {
     this.inWaystation = false;
     this.dungeonLevel++;
@@ -2159,29 +2197,15 @@ export class Game {
     this.updateBiome();
     this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
     this.resetDungeonState();
-    // An Draoi's pact ceremony fires on the first descent, before any other
-    // floor modal (floor 2 collides with neither shop, floor events, nor
-    // bosses — but the guard is on state, not floor number, so it also
-    // covers collapse-descents skipping floors).
-    if (this.maybeOfferPact()) return;
-    // Floor event fires every N voluntary descents (skip boss floors); the
-    // wandering peddler takes the descents in between (offset so the two
-    // can never stack modals on the same floor).
+    // Between-floor choices are people now, not popups: on interval descents a
+    // floor event is rolled and embodied as a stranger waiting in the sídhe
+    // mound (held until met); the deity emissary and the Fear Dearg's stall
+    // likewise live in the mound. Nothing modal fires on the descent itself.
     const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
-    if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
-      const event = FloorEvent.random();
-      this.paused = true;
-      this.cb.onFloorEvent(event, (index) => {
-        const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-        this.cb.log(msg, 'log-perk', event.emoji);
-        this.storyBeats.push(`answered the call of "${event.title}"`);
-        this.paused = false;
-        this.cb.onAction();
-      });
-    } else if (!isBossFloor
-        && this.floorsDescended % Balance.CONFIG.economy.shop.descentModulo === Balance.CONFIG.economy.shop.descentRemainder
-        && this.cb.onOpenShop) {
-      this.openPeddler();
+    if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && !this.pendingFloorEvent) {
+      this.pendingFloorEvent = FloorEvent.random();
+      this.cb.log('Someone has taken shelter in the sídhe mounds nearby, waiting to be found...', 'log-perk', 'npc_stranger');
+      this.cb.onToast?.('A stranger shelters in the sídhe mounds, waiting...', 'npc_stranger');
     }
     this.maybeRollOmen(isBossFloor);
     this.maybeAnnounceSmithFloor(isBossFloor);

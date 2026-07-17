@@ -100,6 +100,8 @@
   "npc_tinker":          { "sheet": "rogues", "sx": 32,  "sy": 96,  "sw": 32, "sh": 32 },
   "npc_seanchai":        { "sheet": "rogues", "sx": 160, "sy": 0,   "sw": 32, "sh": 32 },
   "npc_fear_dearg":      { "sheet": "rogues", "sx": 32,  "sy": 160, "sw": 32, "sh": 32 },
+  "npc_emissary":        { "sheet": "rogues", "sx": 128, "sy": 96,  "sw": 32, "sh": 32 },
+  "npc_stranger":        { "sheet": "rogues", "sx": 0,   "sy": 160, "sw": 32, "sh": 32 },
 
   "smith_luchta":        { "sheet": "rogues", "sx": 64,  "sy": 160, "sw": 32, "sh": 32 },
   "smith_credne":        { "sheet": "rogues", "sx": 96,  "sy": 160, "sw": 32, "sh": 32 },

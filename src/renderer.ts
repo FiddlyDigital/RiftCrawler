@@ -579,6 +579,8 @@ export class Renderer {
           const smithId = npcHere.npcId.startsWith('__smith_') ? npcHere.npcId.slice('__smith_'.length, -2) : null;
           const isCampfire = npcHere.npcId === '__campfire__';
           const isPeddler = npcHere.npcId === '__peddler__';
+          const isEmissary = npcHere.npcId === '__pact__';
+          const isStranger = npcHere.npcId === '__event__';
           const char = isGhost
             ? 'sprite_boss_wraith'
             : smithId
@@ -587,8 +589,17 @@ export class Renderer {
             ? 'tile_brazier'
             : isPeddler
             ? 'npc_fear_dearg'
+            : isEmissary
+            ? 'npc_emissary'
+            : isStranger
+            ? 'npc_stranger'
             : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
-          const rgb = isGhost ? '176,196,222' : smithId ? '184,115,51' : isCampfire ? '255,140,50' : isPeddler ? '198,58,50' : '89,159,124';
+          const rgb = isGhost ? '176,196,222'
+            : smithId ? '184,115,51'
+            : isCampfire ? '255,140,50'
+            : isPeddler ? '198,58,50'
+            : isEmissary ? '141,111,212'
+            : '89,159,124';
           const inset = TS * 0.1;
           if (isGhost) ctx.globalAlpha *= 0.75;  // translucent — it isn't quite here
           if (visible) this.drawLivingSprite(char, x, y, rgb, x * 7 + y * 13, inset);
