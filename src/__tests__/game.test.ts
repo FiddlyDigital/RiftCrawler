@@ -1731,29 +1731,35 @@ describe('Bealtaine Fires (brazier ritual omen)', () => {
   });
 });
 
-describe('Waystations (sídhe-mound rest floors)', () => {
-  function slayABoss(game: Game): void {
-    const boss = new Monster(0, 23, 'sprite_boss_wraith', 'Test Boss', 1, 1, 1, 10, true);
-    game.monsters.push(boss);
-    boss.hp = 0;
-    CombatSystem.killMonster(boss, game);
-  }
-
-  function descend(game: Game): void {
-    // Place stairs next to the hero and step onto them.
+describe('Waystations (the sídhe mound offered at every staircase)', () => {
+  /** Steps onto adjacent stairs; without an onFloorEvent mock this descends directly. */
+  function stepOntoStairs(game: Game): void {
     const sx = game.player.x + 1, sy = game.player.y;
     game.map[sx]![sy] = Tile.STAIRS;
     game.handleHeroMove(1, 0);
   }
 
-  it('killing a boss flags the floor; the next descent enters a waystation', () => {
-    const cb = makeCallbacks();
+  /** Steps onto stairs with the choice dialog wired, then picks an option (0 = delve, 1 = rest). */
+  function chooseAtStairs(game: Game, onFloorEvent: ReturnType<typeof vi.fn>, index: number): void {
+    onFloorEvent.mockClear();
+    stepOntoStairs(game);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('__stairs_choice__');
+    onChoice(index);
+  }
+
+  function enterMound(game: Game, onFloorEvent: ReturnType<typeof vi.fn>): void {
+    chooseAtStairs(game, onFloorEvent, 1);
+  }
+
+  it('stairs open a delve-or-rest choice; resting enters the mound without consuming a floor number', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
-    slayABoss(game);
-    expect(game.bossSlainThisFloor).toBe(true);
-    descend(game);
+    const floorBefore = game.dungeonLevel;
+    enterMound(game, onFloorEvent);
     expect(game.inWaystation).toBe(true);
-    expect(game.bossSlainThisFloor).toBe(false);
+    expect(game.dungeonLevel).toBe(floorBefore);  // the mound sits between floors
     expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('sídhe mound'), expect.any(String));
     // The mound's residents are placed: seanchaí, hearth-fire, peddler stall.
     const ids = game.npcTiles.map(n => n.npcId);
@@ -1766,11 +1772,30 @@ describe('Waystations (sídhe-mound rest floors)', () => {
     expect(game.visibility[0]![0]).toBe(true);
   });
 
-  it('the Tetris layer is suspended in a waystation: no gravity, no block input', () => {
+  it('choosing to delve descends normally, exactly like the no-dialog fallback', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    const floorBefore = game.dungeonLevel;
+    chooseAtStairs(game, onFloorEvent, 0);
+    expect(game.dungeonLevel).toBe(floorBefore + 1);
+    expect(game.inWaystation).toBe(false);
+  });
+
+  it('without a dialog callback (headless), stairs descend directly', () => {
     const cb = makeCallbacks();
     const game = new Game(cb);
-    slayABoss(game);
-    descend(game);
+    const floorBefore = game.dungeonLevel;
+    stepOntoStairs(game);
+    expect(game.dungeonLevel).toBe(floorBefore + 1);
+    expect(game.inWaystation).toBe(false);
+  });
+
+  it('the Tetris layer is suspended in a waystation: no gravity, no block input', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    enterMound(game, onFloorEvent);
     expect(game.inWaystation).toBe(true);
     // Block inputs are inert.
     const beforeX = (game as unknown as { blockX: number }).blockX;
@@ -1787,10 +1812,10 @@ describe('Waystations (sídhe-mound rest floors)', () => {
   });
 
   it('the hearth-fire fully heals once and is consumed', () => {
-    const cb = makeCallbacks();
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
-    slayABoss(game);
-    descend(game);
+    enterMound(game, onFloorEvent);
     game.player.hp = 5;
     // Walk the hero adjacent to the campfire tile (5, 23) and bump it.
     game.player.x = 4; game.player.y = 23;
@@ -1801,13 +1826,13 @@ describe('Waystations (sídhe-mound rest floors)', () => {
     expect(game.npcTiles.some(n => n.npcId === '__campfire__')).toBe(false);
   });
 
-  it('leaving the waystation restarts the Tetris layer and resumes normal floors', () => {
-    const cb = makeCallbacks();
+  it('the mound exit stairs descend directly (no second choice dialog) and restart the Tetris layer', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
-    slayABoss(game);
-    descend(game);
-    expect(game.inWaystation).toBe(true);
+    enterMound(game, onFloorEvent);
     const floorBefore = game.dungeonLevel;
+    onFloorEvent.mockClear();
     // Step to the exit stairs at (8,23): teleport adjacent and move onto them.
     game.player.x = 7; game.player.y = 23;
     game.npcTiles = [];  // clear residents from the path for the test
@@ -1815,6 +1840,10 @@ describe('Waystations (sídhe-mound rest floors)', () => {
     expect(game.dungeonLevel).toBe(floorBefore + 1);
     expect(game.inWaystation).toBe(false);
     expect((game as unknown as { blockMatrix: number[][] }).blockMatrix.length).toBeGreaterThan(0);
+    // No stairs-choice dialog fired for the mound's own exit (a real floor
+    // event may legitimately fire for the newly entered floor, though).
+    const stairsChoiceCalls = onFloorEvent.mock.calls.filter(c => c[0]?.id === '__stairs_choice__');
+    expect(stairsChoiceCalls).toHaveLength(0);
   });
 
   it('the seanchaí never appears as a random wandering NPC', () => {

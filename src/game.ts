@@ -154,10 +154,8 @@ export class Game {
   /** Gravity % adjustment from the active omen (negative = faster), summed with `biomeGravityPct` at both tick-rate call sites. */
   public omenGravityPct = 0;
 
-  // Waystation state — a safe sídhe-mound rest floor after each slain boss
-  /** Set when a boss dies this floor; the next descent surfaces into a waystation instead of a normal floor. */
-  public bossSlainThisFloor = false;
-  /** Whether the current floor is a waystation — no falling stone, no monsters, just the mound's residents. */
+  // Waystation state — the safe sídhe mound offered at every staircase
+  /** Whether the hero is currently inside the waystation — no falling stone, no monsters, just the mound's residents. */
   public inWaystation = false;
 
   /** Whether the Tetris layer is currently frozen (the Gorgoth duel, or a waystation rest floor). */
@@ -1054,17 +1052,19 @@ export class Game {
   // in triggerSmithEncounter below.
 
   /**
-   * Turns the just-entered floor into a waystation: a safe sídhe-mound rest
-   * stop after every slain boss. The Tetris layer is suspended (see
-   * {@link tetrisSuspended}) and the mound offers a seanchaí (lore), a
-   * hearth-fire (full heal), the Fear Dearg's stall (shop), and the stairs on.
+   * Steps aside into the waystation: a safe sídhe-mound rest stop offered at
+   * every staircase (see {@link openStairsChoice}). The mound sits *between*
+   * floors — the level counter doesn't advance until its exit stairs are
+   * taken. The Tetris layer is suspended (see {@link tetrisSuspended}) and
+   * the mound offers a seanchaí (lore), a hearth-fire (full heal), the Fear
+   * Dearg's stall (shop), and the stairs on.
    */
   private enterWaystation(): void {
     this.inWaystation = true;
     this.blockMatrix = [];  // no falling stone inside the mound
-    // resetDungeonState may have rolled a dungeon room, monsters, or a ghost
-    // haunting for what it thought was a normal floor — the mound is home
-    // ground, so sweep all of that away and rebuild from bare rock.
+    // Entered mid-floor, so the interrupted floor's whole state — stack,
+    // monsters, hazards, tiles, ghost, omen, ritual — is swept away; the
+    // mound is home ground, rebuilt from bare rock.
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
     this.monsters = [];
@@ -1074,6 +1074,11 @@ export class Game {
     this.altarTiles = [];
     this.tattooTiles = [];
     this.activeGhost = null;
+    this.activeOmen = null;
+    this.omenGravityPct = 0;
+    this.brazierTiles = [];
+    this.brazierLitCount = 0;
+    this.ritualComplete = false;
     // A broad flat resting ledge in place of the usual narrow start platform.
     for (let x = 1; x < GameConfig.COLS - 1; x++) {
       for (const y of [23, 24]) {
@@ -1511,13 +1516,6 @@ export class Game {
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
     this.inWaystation = false;  // defense-in-depth: a collapse can't start inside the mound, but never carry the suspension out
-    // A slain boss earns a waystation in place of a normal floor — no pacts,
-    // events, omens, or smiths there; those resume on the next real floor.
-    if (this.bossSlainThisFloor) {
-      this.bossSlainThisFloor = false;
-      this.enterWaystation();
-      return;
-    }
     this.maybeOfferPact();
     // Omen first, smith second — if both toast, the more actionable smith
     // hint wins the banner while both keep their log lines.
@@ -2109,52 +2107,84 @@ export class Game {
     // his monster entry via resetDungeonState() while gorgothSummoned stayed
     // true, stopping tetrominoes forever with no boss left to fight).
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS && !this.gorgothSummoned) {
-      this.dungeonLevel++;
-      this.floorsDescended++;
-      if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.announceBossFloor();
-      this.cb.onAudio?.('descend');
-      this.updateBiome();
-      this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
-      this.resetDungeonState();
-      // Leaving a waystation: resetDungeonState already spawned the next
-      // floor's first piece — just lift the suspension.
-      this.inWaystation = false;
-      // A slain boss earns a waystation in place of a normal floor — no pacts,
-      // events, shops, omens, or smiths there; those resume next real floor.
-      if (this.bossSlainThisFloor) {
-        this.bossSlainThisFloor = false;
-        this.enterWaystation();
-        return;
-      }
-      // An Draoi's pact ceremony fires on the first descent, before any other
-      // floor modal (floor 2 collides with neither shop, floor events, nor
-      // bosses — but the guard is on state, not floor number, so it also
-      // covers collapse-descents skipping floors).
-      if (this.maybeOfferPact()) return;
-      // Floor event fires every N voluntary descents (skip boss floors); the
-      // wandering peddler takes the descents in between (offset so the two
-      // can never stack modals on the same floor).
-      const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
-      if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
-        const event = FloorEvent.random();
-        this.paused = true;
-        this.cb.onFloorEvent(event, (index) => {
-          const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-          this.cb.log(msg, 'log-perk', event.emoji);
-          this.storyBeats.push(`answered the call of "${event.title}"`);
-          this.paused = false;
-          this.cb.onAction();
-        });
-      } else if (!isBossFloor
-          && this.floorsDescended % Balance.CONFIG.economy.shop.descentModulo === Balance.CONFIG.economy.shop.descentRemainder
-          && this.cb.onOpenShop) {
-        this.openPeddler();
-      }
-      this.maybeRollOmen(isBossFloor);
-      this.maybeAnnounceSmithFloor(isBossFloor);
+      // The mound's own exit stairs go straight down — you already rested.
+      if (this.inWaystation) this.descendFloor();
+      else this.openStairsChoice();
     } else {
       this.advanceTurn();
     }
+  }
+
+  /**
+   * Every staircase offers the choice: delve straight on, or step aside into
+   * the safe sídhe-mound waystation first (the mound sits *between* floors —
+   * visiting it never consumes a floor number, so boss and smith floors can't
+   * be dodged by resting). Falls back to a direct descent when no dialog
+   * callback is wired (headless tests).
+   */
+  private openStairsChoice(): void {
+    if (!this.cb.onFloorEvent) { this.descendFloor(); return; }
+    const event: FloorEventDef = {
+      id: '__stairs_choice__', emoji: 'tile_stairs', title: 'The Way Down',
+      flavor: 'The stair falls away into the dark. Beside it, a low door of piled stones breathes warm air — a sídhe mound, where the deep cannot follow.',
+      options: [
+        {
+          label: 'Delve deeper',
+          desc: 'Take the stair down to the next floor.',
+          apply: (): string => 'You take the stair down into the dark.',
+        },
+        {
+          label: 'Rest in the mound',
+          desc: 'A hearth, a storyteller, and the Fear Dearg\'s stall. The stair waits inside.',
+          apply: (): string => 'You duck through the low door into the warmth of the mound.',
+        },
+      ],
+    };
+    this.paused = true;
+    this.cb.onFloorEvent(event, (index) => {
+      this.paused = false;
+      if (index === 1) this.enterWaystation();
+      else this.descendFloor();
+      this.cb.onAction();
+    });
+  }
+
+  /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (pact, floor event, peddler, omen, smith). */
+  private descendFloor(): void {
+    this.inWaystation = false;
+    this.dungeonLevel++;
+    this.floorsDescended++;
+    if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.announceBossFloor();
+    this.cb.onAudio?.('descend');
+    this.updateBiome();
+    this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
+    this.resetDungeonState();
+    // An Draoi's pact ceremony fires on the first descent, before any other
+    // floor modal (floor 2 collides with neither shop, floor events, nor
+    // bosses — but the guard is on state, not floor number, so it also
+    // covers collapse-descents skipping floors).
+    if (this.maybeOfferPact()) return;
+    // Floor event fires every N voluntary descents (skip boss floors); the
+    // wandering peddler takes the descents in between (offset so the two
+    // can never stack modals on the same floor).
+    const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
+    if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && this.cb.onFloorEvent) {
+      const event = FloorEvent.random();
+      this.paused = true;
+      this.cb.onFloorEvent(event, (index) => {
+        const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+        this.cb.log(msg, 'log-perk', event.emoji);
+        this.storyBeats.push(`answered the call of "${event.title}"`);
+        this.paused = false;
+        this.cb.onAction();
+      });
+    } else if (!isBossFloor
+        && this.floorsDescended % Balance.CONFIG.economy.shop.descentModulo === Balance.CONFIG.economy.shop.descentRemainder
+        && this.cb.onOpenShop) {
+      this.openPeddler();
+    }
+    this.maybeRollOmen(isBossFloor);
+    this.maybeAnnounceSmithFloor(isBossFloor);
   }
 
   /** Rests one turn: a small heal (more on sacred ground, less with a monster adjacent). */

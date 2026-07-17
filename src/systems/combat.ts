@@ -287,9 +287,6 @@ export class CombatSystem {
       game.player.killAtkFloorBonus += atkGain;
     }
     if (m.isBoss) {
-      // The next descent after any boss kill surfaces into a waystation
-      // (Gorgoth's death ends the run outright, so the flag never matters there).
-      game.bossSlainThisFloor = true;
       const deathLine = BOSSES.find(b => b.name === m.name)?.deathLine;
       game.cb.log(`BOSS SLAIN: ${m.name}!${deathLine ? ` ${deathLine}` : ''}`, 'log-boss', 'sprite_equip_iron_sword');
       game.cb.onParticle(m.x, m.y, 'BOSS!', '#ffd54f', undefined, 'item_trophy');
