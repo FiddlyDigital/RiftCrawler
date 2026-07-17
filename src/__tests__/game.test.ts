@@ -1767,7 +1767,7 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(ids).toContain('__campfire__');
     expect(ids).toContain('__peddler__');
     // Exit stairs pre-placed, no monsters, and the whole floor is revealed.
-    expect(game.map[8]![23]).toBe(Tile.STAIRS);
+    expect(game.map[Game.MOUND.stairs.x]![Game.MOUND.stairs.y]).toBe(Tile.STAIRS);
     expect(game.monsters).toHaveLength(0);
     expect(game.visibility[0]![0]).toBe(true);
   });
@@ -1817,10 +1817,9 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     const game = new Game(cb);
     enterMound(game, onFloorEvent);
     game.player.hp = 5;
-    // Walk the hero adjacent to the campfire tile (5, 23) and bump it.
-    game.player.x = 4; game.player.y = 23;
-    // The seanchaí sits at (4,23) — hero placement overlaps; move him aside for the test.
-    game.npcTiles = game.npcTiles.filter(n => n.npcId !== 'seanchai');
+    // Stand the hero beside the hearth and bump it.
+    game.player.x = Game.MOUND.campfire.x - 1; game.player.y = Game.MOUND.campfire.y;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__campfire__');
     game.handleHeroMove(1, 0);
     expect(game.player.hp).toBe(game.player.maxHp);
     expect(game.npcTiles.some(n => n.npcId === '__campfire__')).toBe(false);
@@ -1833,8 +1832,8 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     enterMound(game, onFloorEvent);
     const floorBefore = game.dungeonLevel;
     onFloorEvent.mockClear();
-    // Step to the exit stairs at (8,23): teleport adjacent and move onto them.
-    game.player.x = 7; game.player.y = 23;
+    // Step to the exit stairs: teleport adjacent and move onto them.
+    game.player.x = Game.MOUND.stairs.x - 1; game.player.y = Game.MOUND.stairs.y;
     game.npcTiles = [];  // clear residents from the path for the test
     game.handleHeroMove(1, 0);
     expect(game.dungeonLevel).toBe(floorBefore + 1);
@@ -1875,8 +1874,8 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     const held = game.pendingFloorEvent!;
     enterMound(game, onFloorEvent);
     expect(game.npcTiles.some(n => n.npcId === '__event__')).toBe(true);
-    // Bump the stranger at (7,23).
-    game.player.x = 6; game.player.y = 23;
+    // Bump the stranger.
+    game.player.x = Game.MOUND.stranger.x - 1; game.player.y = Game.MOUND.stranger.y;
     game.npcTiles = game.npcTiles.filter(n => n.npcId === '__event__');
     onFloorEvent.mockClear();
     game.paused = false;
@@ -1887,7 +1886,6 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     onChoice(0);
     expect(game.paused).toBe(false);
     // Claimed — the next mound visit has no stranger.
-    game.player.x = 7; game.player.y = 23;
     (game as unknown as { enterWaystation(): void }).enterWaystation();
     expect(game.npcTiles.some(n => n.npcId === '__event__')).toBe(false);
   });
@@ -1900,8 +1898,9 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     chooseAtStairs(game, onFloorEvent, 0);  // reach floor 2 (pact needs depth >= 2)
     enterMound(game, onFloorEvent);
     expect(game.npcTiles.some(n => n.npcId === '__pact__')).toBe(true);
-    // Bump the emissary at (3,23).
-    game.player.x = 2; game.player.y = 23;
+    // Bump the emissary.
+    game.player.x = Game.MOUND.emissary.x - 1; game.player.y = Game.MOUND.emissary.y;
+    game.map[Game.MOUND.emissary.x - 1]![Game.MOUND.emissary.y] = Tile.FLOOR;  // ensure standing room at the chamber edge
     game.npcTiles = game.npcTiles.filter(n => n.npcId === '__pact__');
     onFloorEvent.mockClear();
     game.paused = false;

@@ -157,6 +157,23 @@ export class Game {
   // Waystation state — the safe sídhe mound offered at every staircase
   /** Whether the hero is currently inside the waystation — no falling stone, no monsters, just the mound's residents. */
   public inWaystation = false;
+
+  /**
+   * The mound chamber layout: an 8×8 square hall centered on the canvas
+   * (inclusive bounds), the hearth at its heart with the seanchaí beside it,
+   * the emissary aloof in a corner, the stall along a wall, and the exit
+   * stairs in the far corner. Public so tests target positions by name.
+   */
+  public static readonly MOUND = {
+    x0: 1, y0: 9, x1: 8, y1: 16,
+    hero:     { x: 2, y: 15 },
+    emissary: { x: 2, y: 10 },
+    seanchai: { x: 5, y: 13 },
+    campfire: { x: 4, y: 12 },
+    peddler:  { x: 7, y: 10 },
+    stranger: { x: 6, y: 15 },
+    stairs:   { x: 8, y: 16 },
+  } as const;
   /** A floor event rolled on an interval descent but embodied as a waiting stranger in the mound — held until met, across floors if need be. */
   public pendingFloorEvent: FloorEvent | null = null;
 
@@ -1086,23 +1103,24 @@ export class Game {
     this.brazierTiles = [];
     this.brazierLitCount = 0;
     this.ritualComplete = false;
-    // A broad flat resting ledge in place of the usual narrow start platform.
-    for (let x = 1; x < GameConfig.COLS - 1; x++) {
-      for (const y of [23, 24]) {
+    // The mound chamber: a broad square hall centered on the canvas.
+    const M = Game.MOUND;
+    for (let x = M.x0; x <= M.x1; x++) {
+      for (let y = M.y0; y <= M.y1; y++) {
         this.map[x]![y] = Tile.FLOOR;
         this.colors[x]![y] = '#2c2a40';
       }
     }
-    this.player.x = 2; this.player.y = 23;
-    this.npcTiles.push({ x: 4, y: 23, npcId: 'seanchai' });
-    this.npcTiles.push({ x: 5, y: 23, npcId: '__campfire__' });
-    this.npcTiles.push({ x: 6, y: 23, npcId: '__peddler__' });
+    this.player.x = M.hero.x; this.player.y = M.hero.y;
+    this.npcTiles.push({ x: M.seanchai.x, y: M.seanchai.y, npcId: 'seanchai' });
+    this.npcTiles.push({ x: M.campfire.x, y: M.campfire.y, npcId: '__campfire__' });
+    this.npcTiles.push({ x: M.peddler.x, y: M.peddler.y, npcId: '__peddler__' });
     // Between-floor choices stand here in person: An Draoi's unsworn pact as
     // a deity emissary, and any pending floor event as a waiting stranger.
-    if (this.pactPending) this.npcTiles.push({ x: 3, y: 23, npcId: '__pact__' });
-    if (this.pendingFloorEvent) this.npcTiles.push({ x: 7, y: 23, npcId: '__event__' });
-    this.map[8]![23] = Tile.STAIRS;
-    this.colors[8]![23] = '#6d3f7a';
+    if (this.pactPending) this.npcTiles.push({ x: M.emissary.x, y: M.emissary.y, npcId: '__pact__' });
+    if (this.pendingFloorEvent) this.npcTiles.push({ x: M.stranger.x, y: M.stranger.y, npcId: '__event__' });
+    this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
+    this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
     // while the Tetris layer is suspended, so set the full reveal directly).
     for (let x = 0; x < GameConfig.COLS; x++) {
