@@ -236,6 +236,17 @@
         "rollChance": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
+    "well": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseCost", "costPerFloor", "baseXp", "xpPerFloor"],
+      "properties": {
+        "baseCost": { "type": "number" },
+        "costPerFloor": { "type": "number" },
+        "baseXp": { "type": "number" },
+        "xpPerFloor": { "type": "number" }
+      }
+    },
     "spearOfLugh": {
       "type": "object",
       "additionalProperties": false,

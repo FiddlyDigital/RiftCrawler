@@ -577,28 +577,27 @@ export class Renderer {
         } else if (npcHere) {
           const isGhost = npcHere.npcId === '__ghost__';
           const smithId = npcHere.npcId.startsWith('__smith_') ? npcHere.npcId.slice('__smith_'.length, -2) : null;
-          const isCampfire = npcHere.npcId === '__campfire__';
-          const isPeddler = npcHere.npcId === '__peddler__';
-          const isEmissary = npcHere.npcId === '__pact__';
-          const isStranger = npcHere.npcId === '__event__';
+          // Waystation fixtures and residents resolve to dedicated sprites;
+          // everything else falls through to the NPC roster.
+          const SENTINEL_SPRITES: Record<string, { char: string; rgb: string }> = {
+            '__campfire__':    { char: 'tile_brazier',     rgb: '255,140,50' },
+            '__peddler__':     { char: 'npc_fear_dearg',   rgb: '198,58,50' },
+            '__pact__':        { char: 'npc_emissary',     rgb: '141,111,212' },
+            '__event__':       { char: 'npc_stranger',     rgb: '89,159,124' },
+            '__ogham_stone__': { char: 'tile_ogham_stone', rgb: '168,132,184' },
+            '__well__':        { char: 'tile_well',        rgb: '80,200,255' },
+          };
+          const sentinel = SENTINEL_SPRITES[npcHere.npcId];
           const char = isGhost
             ? 'sprite_boss_wraith'
             : smithId
             ? (SMITHS.find(s => s.id === smithId)?.char ?? 'smith_goibniu')
-            : isCampfire
-            ? 'tile_brazier'
-            : isPeddler
-            ? 'npc_fear_dearg'
-            : isEmissary
-            ? 'npc_emissary'
-            : isStranger
-            ? 'npc_stranger'
+            : sentinel
+            ? sentinel.char
             : (NPCS.find(n => n.id === npcHere.npcId)?.char ?? 'npc_fili');
           const rgb = isGhost ? '176,196,222'
             : smithId ? '184,115,51'
-            : isCampfire ? '255,140,50'
-            : isPeddler ? '198,58,50'
-            : isEmissary ? '141,111,212'
+            : sentinel ? sentinel.rgb
             : '89,159,124';
           const inset = TS * 0.1;
           if (isGhost) ctx.globalAlpha *= 0.75;  // translucent — it isn't quite here

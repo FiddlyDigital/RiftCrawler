@@ -7,7 +7,7 @@ import { CombatSystem } from '../systems/combat';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { HazardSystem } from '../systems/hazards';
 import { StatusEffectSystem } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon, Omen, OMENS, Npc } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon, Omen, OMENS, Npc, NPCS } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -1912,6 +1912,81 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     // Sworn — the next mound visit has no emissary.
     (game as unknown as { enterWaystation(): void }).enterWaystation();
     expect(game.npcTiles.some(n => n.npcId === '__pact__')).toBe(false);
+  });
+
+  it('the mound holds the ogham stone and well fixtures, and Aoife only while no bounty is active', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    enterMound(game, onFloorEvent);
+    const ids = game.npcTiles.map(n => n.npcId);
+    expect(ids).toContain('__ogham_stone__');
+    expect(ids).toContain('__well__');
+    expect(ids).toContain('aoife');
+    game.activeBountyQuest = { bossName: 'Test', floor: 5 };
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    expect(game.npcTiles.some(n => n.npcId === 'aoife')).toBe(false);
+  });
+
+  it('the ogham stone opens the lore codex and stays put', () => {
+    const onOpenCodex = vi.fn();
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent, onOpenCodex };
+    const game = new Game(cb);
+    enterMound(game, onFloorEvent);
+    game.player.x = Game.MOUND.oghamStone.x + 1; game.player.y = Game.MOUND.oghamStone.y;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__ogham_stone__');
+    game.handleHeroMove(-1, 0);
+    expect(onOpenCodex).toHaveBeenCalledTimes(1);
+    expect(game.npcTiles.some(n => n.npcId === '__ogham_stone__')).toBe(true);  // fixture persists
+  });
+
+  it('the Well of Segais trades gold for XP, refuses the penniless, and persists either way', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    enterMound(game, onFloorEvent);
+    const cost = Balance.CONFIG.well.baseCost + game.dungeonLevel * Balance.CONFIG.well.costPerFloor;
+    const xpGain = Balance.CONFIG.well.baseXp + game.dungeonLevel * Balance.CONFIG.well.xpPerFloor;
+    game.gold = cost + 10;
+    const xpBefore = game.player.totalXpEarned;
+    game.player.x = Game.MOUND.well.x - 1; game.player.y = Game.MOUND.well.y;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__well__');
+    onFloorEvent.mockClear();
+    game.paused = false;
+    game.handleHeroMove(1, 0);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('__well__');
+    onChoice(0);  // drink
+    expect(game.gold).toBe(10);
+    expect(game.player.totalXpEarned).toBe(xpBefore + xpGain);
+    expect(game.npcTiles.some(n => n.npcId === '__well__')).toBe(true);  // fixture persists
+
+    // Penniless drink: nothing changes but the well stays.
+    game.paused = false;
+    game.player.x = Game.MOUND.well.x - 1; game.player.y = Game.MOUND.well.y;
+    onFloorEvent.mockClear();
+    game.handleHeroMove(1, 0);
+    const [, onChoice2] = onFloorEvent.mock.calls[0]!;
+    onChoice2(0);
+    expect(game.gold).toBe(10);
+    expect(game.player.totalXpEarned).toBe(xpBefore + xpGain);
+    expect(game.npcTiles.some(n => n.npcId === '__well__')).toBe(true);
+  });
+
+  it('the seanchaí can recite your own tale mid-run, built from the story beats', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    game.storyBeats.push('felled a test boss', 'lit the fires of Bealtaine');
+    (game as unknown as { triggerNpcEncounter(npc: unknown): void })
+      .triggerNpcEncounter(NPCS.find(n => n.id === 'seanchai')!);
+    const [event] = onFloorEvent.mock.calls[0]!;
+    expect(event.options.length).toBe(2);
+    expect(event.options[0].label).toContain('tale');
+    const tale = event.options[0].apply(game);
+    expect(tale).toContain('felled a test boss');
+    expect(tale).toContain('lit the fires of Bealtaine');
   });
 
   it('non-Draoi classes never get a deity emissary in the mound', () => {

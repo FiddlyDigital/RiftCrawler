@@ -139,6 +139,12 @@
   "omens": {
     "rollChance": 0.6
   },
+  "well": {
+    "baseCost": 25,
+    "costPerFloor": 5,
+    "baseXp": 60,
+    "xpPerFloor": 20
+  },
   "spearOfLugh": {
     "dmgMult": 3,
     "cooldownMax": 8

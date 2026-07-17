@@ -53,6 +53,8 @@
   "tile_merchant":      { "sheet": "rogues", "sx": 64,  "sy": 192, "sw": 32, "sh": 32 },
   "tile_altar":         { "sheet": "tiles", "sx": 32,  "sy": 576, "sw": 32, "sh": 32 },
   "tile_brazier":       { "sheet": "tiles", "sx": 96,  "sy": 544, "sw": 32, "sh": 32 },
+  "tile_ogham_stone":   { "sheet": "tiles", "sx": 96,  "sy": 736, "sw": 32, "sh": 32 },
+  "tile_well":          { "sheet": "tiles", "sx": 128, "sy": 544, "sw": 32, "sh": 32 },
 
   "tile_stone_a":       { "sheet": "tiles", "sx": 0,   "sy": 32,  "sw": 32, "sh": 32 },
   "tile_stone_b":       { "sheet": "tiles", "sx": 32,  "sy": 32,  "sw": 32, "sh": 32 },

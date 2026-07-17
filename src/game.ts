@@ -166,13 +166,16 @@ export class Game {
    */
   public static readonly MOUND = {
     x0: 1, y0: 9, x1: 8, y1: 16,
-    hero:     { x: 2, y: 15 },
-    emissary: { x: 2, y: 10 },
-    seanchai: { x: 5, y: 13 },
-    campfire: { x: 4, y: 12 },
-    peddler:  { x: 7, y: 10 },
-    stranger: { x: 6, y: 15 },
-    stairs:   { x: 8, y: 16 },
+    hero:       { x: 2, y: 15 },
+    emissary:   { x: 2, y: 10 },
+    seanchai:   { x: 5, y: 13 },
+    campfire:   { x: 4, y: 12 },
+    peddler:    { x: 7, y: 10 },
+    stranger:   { x: 6, y: 15 },
+    oghamStone: { x: 1, y: 12 },
+    well:       { x: 5, y: 10 },
+    aoife:      { x: 7, y: 13 },
+    stairs:     { x: 8, y: 16 },
   } as const;
   /** A floor event rolled on an interval descent but embodied as a waiting stranger in the mound — held until met, across floors if need be. */
   public pendingFloorEvent: FloorEvent | null = null;
@@ -1011,6 +1014,25 @@ export class Game {
         id: npc.id, emoji: npc.char, title: npc.name, flavor,
         options: [{ label: 'Farewell', desc: '', apply: (): string => 'You part ways.' }],
       };
+      // The seanchaí can also recite YOUR tale so far — the same story-beat
+      // recap the death/victory screen builds, heard mid-run by the fire.
+      if (npc.id === 'seanchai') {
+        event.options.unshift({
+          label: 'Ask for your own tale',
+          desc: 'Hear the seanchaí recount your descent so far.',
+          apply: (game: Game): string => {
+            const cls = CLASSES.find(c => c.id === game.activeClassId)?.name ?? 'a wanderer';
+            const beats = game.storyBeats.slice(0, 5);
+            const joined = beats.length === 0
+              ? 'you have only begun'
+              : beats.length === 1
+              ? `already you ${beats[0]!}`
+              : `already you ${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
+            const more = game.storyBeats.length > 5 ? ' …and more besides — the verse grows long.' : '';
+            return `He closes his eyes and speaks it like an old poem: "${cls}, ${game.dungeonLevel} floor${game.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}" He opens one eye. "The ending, now. That part is still yours."`;
+          },
+        });
+      }
     }
 
     this.storyBeats.push(`crossed paths with ${npc.name}`);
@@ -1119,6 +1141,12 @@ export class Game {
     // a deity emissary, and any pending floor event as a waiting stranger.
     if (this.pactPending) this.npcTiles.push({ x: M.emissary.x, y: M.emissary.y, npcId: '__pact__' });
     if (this.pendingFloorEvent) this.npcTiles.push({ x: M.stranger.x, y: M.stranger.y, npcId: '__event__' });
+    // Fixtures of the hall: the ogham stone (lore codex) and the Well of
+    // Segais (gold for wisdom); Aoife takes a seat only while she has a
+    // vengeance contract to offer.
+    this.npcTiles.push({ x: M.oghamStone.x, y: M.oghamStone.y, npcId: '__ogham_stone__' });
+    this.npcTiles.push({ x: M.well.x, y: M.well.y, npcId: '__well__' });
+    if (!this.activeBountyQuest) this.npcTiles.push({ x: M.aoife.x, y: M.aoife.y, npcId: 'aoife' });
     this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
     this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
@@ -2083,6 +2111,50 @@ export class Game {
       if (npcTile.npcId === '__pact__') {
         this.cb.onBeam?.(nx, '141,111,212');
         if (!this.maybeOfferPact()) this.advanceTurn();
+        return;
+      }
+      // The ogham stone is a fixture — reading it never consumes it.
+      if (npcTile.npcId === '__ogham_stone__') {
+        this.npcTiles.push(npcTile);
+        this.cb.log('You trace the ogham strokes. Old names surface: everything the deep has shown you.', 'log-perk', 'tile_ogham_stone');
+        this.cb.onOpenCodex?.();
+        return;
+      }
+      if (npcTile.npcId === '__well__') {
+        const cost = Balance.CONFIG.well.baseCost + this.dungeonLevel * Balance.CONFIG.well.costPerFloor;
+        const xpGain = Balance.CONFIG.well.baseXp + this.dungeonLevel * Balance.CONFIG.well.xpPerFloor;
+        const wellEvent: FloorEventDef = {
+          id: '__well__', emoji: 'tile_well', title: 'The Well of Segais',
+          flavor: 'Nine hazels lean over black water. The salmon below watches you, unblinking. Wisdom has a price — it always has.',
+          options: [
+            {
+              label: `Drink deep (${cost} gold)`,
+              desc: `+${xpGain} XP, if you can pay.`,
+              apply: (game: Game): string => {
+                if (game.gold < cost) return 'The water turns dark and shows you nothing. The well does not extend credit.';
+                game.gold -= cost;
+                const levelled = game.player.gainXP(xpGain);
+                if (levelled) {
+                  game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
+                  game.openLevelUpBoons();
+                }
+                game.storyBeats.push('drank from the Well of Segais');
+                return `The water is cold enough to burn. Knowing floods in behind it. +${xpGain} XP.`;
+              },
+            },
+            { label: 'Leave it', desc: '', apply: (): string => 'The salmon sinks back into the dark, unoffended. Wisdom keeps.' },
+          ],
+        };
+        if (!this.cb.onFloorEvent) { this.npcTiles.push(npcTile); this.advanceTurn(); return; }
+        this.paused = true;
+        this.cb.onFloorEvent(wellEvent, (index) => {
+          const msg = wellEvent.options[index]?.apply(this) ?? 'Nothing happened.';
+          this.cb.log(msg, 'log-perk', 'tile_well');
+          // The well is a fixture — it stays whether you drink or not.
+          this.npcTiles.push(npcTile);
+          this.paused = false;
+          this.cb.onAction();
+        });
         return;
       }
       if (npcTile.npcId === '__event__') {

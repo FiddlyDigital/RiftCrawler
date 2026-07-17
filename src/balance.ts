@@ -80,6 +80,7 @@ export interface BalanceConfig {
   narrative: { closeCallHpFraction: number };
   smiths: { floorInterval: number; pieceThreshold: number; warningThreshold: number };
   omens: { rollChance: number };
+  well: { baseCost: number; costPerFloor: number; baseXp: number; xpPerFloor: number };
   spearOfLugh: { dmgMult: number; cooldownMax: number };
 }
 
