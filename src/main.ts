@@ -103,6 +103,28 @@ class GameApp {
       },
     });
 
+    // ── Standalone viewport-height sync ────────────────────────────────────
+    // Feeds the CSS --app-height used in @media (display-mode: standalone):
+    // Chrome-on-Android installed apps can first-lay-out against a viewport
+    // that still includes the system nav-bar area (bottom controls cut off
+    // until something forces a resize). Re-reading innerHeight on resize
+    // events AND on short timers after launch picks up Chrome's silent
+    // correction even when no resize event fires.
+    const syncAppHeight = (): void => {
+      // Take the smaller of the layout and visual viewport heights — the
+      // failure mode is always "layout viewport too tall", and the visual
+      // viewport tends to be the accurate one while they disagree.
+      const h = Math.min(window.innerHeight, Math.round(window.visualViewport?.height ?? Infinity));
+      if (h > 0) document.documentElement.style.setProperty('--app-height', `${h}px`);
+    };
+    syncAppHeight();
+    window.addEventListener('resize', syncAppHeight);
+    window.addEventListener('orientationchange', syncAppHeight);
+    window.visualViewport?.addEventListener('resize', syncAppHeight);
+    setTimeout(syncAppHeight, 500);
+    setTimeout(syncAppHeight, 1500);
+    setTimeout(syncAppHeight, 3000);
+
     // ── Settings ───────────────────────────────────────────────────────────
     this.soundOn = !StorageService.loadMute();
     // No stored preference → follow the OS reduced-motion setting.

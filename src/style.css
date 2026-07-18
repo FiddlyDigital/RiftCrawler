@@ -956,3 +956,18 @@ canvas {
 }
 .tut-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
 .tut-btn-primary { border-color: var(--accent-color); color: var(--accent-color); font-weight: bold; }
+
+/* ── Installed-app (standalone) viewport height ──────────────────────────
+   Chrome-on-Android standalone bug: the first layout can be computed
+   against a viewport that still includes the system navigation-bar area,
+   cutting off the bottom controls until some resize (e.g. a fullscreen
+   round-trip) forces a re-layout. dvh doesn't help — it tracks the same
+   wrong viewport. In standalone mode only, the app height comes from a
+   JS-measured --app-height (window.innerHeight, re-synced on resize and
+   shortly after launch to catch Chrome's silent correction). Browser-tab
+   layout is untouched. Divided by --ui-zoom so desktop-installed PWAs on
+   large monitors keep the zoom compensation. */
+@media (display-mode: standalone) {
+  html { height: var(--app-height, 100%); }
+  body { height: calc(var(--app-height, 100%) / var(--ui-zoom, 1)); }
+}
