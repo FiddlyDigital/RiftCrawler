@@ -11,6 +11,7 @@ const GHOSTS_KEY = 'riftcrawler_ghosts_v1';
 const MOTION_KEY = 'riftcrawler_reduced_motion';
 const CODEX_KEY = 'riftcrawler_codex_v1';
 const STASH_KEY = 'riftcrawler_stash_v1';
+const TUTORIAL_KEY = 'riftcrawler_tutorial_done_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -166,6 +167,16 @@ export class StorageService {
       const raw = localStorage.getItem(MOTION_KEY);
       return raw === null ? null : raw === '1';
     } catch { return null; }
+  }
+
+  /** Whether the first-run tutorial has already been shown (completed, skipped, or interrupted). */
+  static loadTutorialDone(): boolean {
+    try { return localStorage.getItem(TUTORIAL_KEY) === '1'; } catch { return false; }
+  }
+
+  /** Marks the first-run tutorial as shown. */
+  static saveTutorialDone(): void {
+    try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch { /* quota */ }
   }
 
   /** Gold left with the Sídhe by past characters, not yet claimed (0 if none). */

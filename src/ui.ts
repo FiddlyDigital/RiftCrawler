@@ -449,8 +449,8 @@ export class UIManager {
   }
 
   /** Shows the start-screen modal. */
-  public showStart(highScore: number, onBegin: () => void): void {
-    this.startModal.showStart(highScore, onBegin);
+  public showStart(highScore: number, onBegin: () => void, onBeginTutorial?: () => void): void {
+    this.startModal.showStart(highScore, onBegin, onBeginTutorial);
   }
 
   /** Hides the start-screen modal. */

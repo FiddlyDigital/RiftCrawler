@@ -9,6 +9,7 @@ import { StorageService } from './storage';
 import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
 import { HapticsController } from './haptics';
+import { TutorialController, type TutorialEvent } from './tutorial';
 import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef } from './types';
 
 const DRAWER_EDGE_ZONE       = 24; // px from the right screen edge that starts an "open" gesture
@@ -53,6 +54,11 @@ class GameApp {
 
   private lastInspectTile: { x: number; y: number } | null = null;
   private installPrompt: BeforeInstallPromptEvent | null = null;
+
+  // ── First-run tutorial ───────────────────────────────────────────────────
+  private tutorial: TutorialController | null = null;
+  /** Set by the start screen's "How to Play" button — forces the tutorial on the next run even if already seen. */
+  private tutorialRequested = false;
 
   // ── PWA update detection ─────────────────────────────────────────────────
   /** True once a new service worker is installed and waiting — surfaces the pause-menu "Update App" button. */
@@ -200,7 +206,7 @@ class GameApp {
     });
 
     // The Begin Descent button itself is wired inside <start-modal>.
-    this.ui.showStart(StorageService.getHighXp(), () => {
+    const beginRun = (): void => {
       audio.init(); // unlock AudioContext on first user gesture
       if (StorageService.loadMute()) audio.toggle();
       this.launchWithModifier(() => {
@@ -209,7 +215,12 @@ class GameApp {
         audio.startAmbient();
         audio.playDescend();
         this.ui.log('The rift yawns open... descend!', 'log-success');
+        this.maybeStartTutorial();
       });
+    };
+    this.ui.showStart(StorageService.getHighXp(), beginRun, () => {
+      this.tutorialRequested = true;
+      beginRun();
     });
 
     document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePauseMenu());
@@ -383,6 +394,7 @@ class GameApp {
   }
 
   private restartRun(): void {
+    this.tutorial?.stop();
     this.manualPaused = false;
     this.ui.hidePauseMenu();
     this.ui.hideDeath();
@@ -494,7 +506,27 @@ class GameApp {
 
   // ── Audio event router ───────────────────────────────────────────────────
 
+  /** Starts the guided tutorial on the first run ever (or when requested from the start screen). */
+  private maybeStartTutorial(): void {
+    if (!this.tutorialRequested && StorageService.loadTutorialDone()) return;
+    this.tutorialRequested = false;
+    const host = document.getElementById('canvas-container');
+    if (!host) return;
+    const keyboard = window.matchMedia?.('(min-width: 640px)').matches ?? true;
+    this.tutorial = new TutorialController(host, keyboard, () => StorageService.saveTutorialDone());
+    this.tutorial.start(this.game);
+  }
+
+  /** AudioEvents that double as tutorial progress signals. */
+  private static readonly TUTORIAL_AUDIO_MAP: Partial<Record<AudioEvent, TutorialEvent>> = {
+    blockMove: 'blockSteer', blockRotate: 'blockSteer',
+    blockLand: 'blockLand', lineClear: 'lineClear', kill: 'kill',
+    descend: 'descend', waystationEnter: 'waystation',
+  };
+
   private handleAudio(event: AudioEvent, data?: number): void {
+    const tutEv = GameApp.TUTORIAL_AUDIO_MAP[event];
+    if (tutEv) this.tutorial?.notify(tutEv, this.game);
     switch (event) {
       case 'blockLand':    audio.playBlockLand();    this.renderer.triggerShake(2, 4); HapticsController.vibrate(5); break;
       case 'blockRotate':  audio.playBlockRotate();      break;
@@ -527,7 +559,7 @@ class GameApp {
     this.game = new Game({
       log:      (text, cls, icon)    => this.ui.log(text, cls, icon),
       updateUI: (state)              => this.ui.updateStats(state),
-      onAction: ()                   => this.resetTick(),
+      onAction: ()                   => { this.tutorial?.notify('tick', this.game); this.resetTick(); },
       onParticle: (x, y, text, col, fontSize, icon) => this.renderer.spawnParticle(x, y, text, col, fontSize, icon),
       onParticleBurst: (x, y, count, col, icon)     => this.renderer.spawnBurst(x, y, count, col, icon),
       onImpactGlow: (x, y, rgb, frames)             => this.renderer.triggerImpactGlow(x, y, rgb, frames),
@@ -545,6 +577,7 @@ class GameApp {
       onCombo:     (mult)            => this.renderer.showCombo(mult),
 
       onDeath: (title, reason, floor, totalXpEarned, stats, story) => {
+        this.tutorial?.stop();
         this.stopTick();
         audio.stopAmbient();
         audio.playDeath();
@@ -614,6 +647,7 @@ class GameApp {
       },
 
       onFloorEvent: (event: FloorEventDef, onChoice) => {
+        if (event.id === '__stairs_choice__') this.tutorial?.notify('stairsChoice', this.game);
         this.stopTick();
         this.ui.showFloorEvent(event, (index) => {
           onChoice(index);

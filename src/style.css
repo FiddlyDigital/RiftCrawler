@@ -923,3 +923,32 @@ canvas {
     body { height: calc(100dvh / var(--ui-zoom, 1)); }
   }
 }
+
+/* ── First-run tutorial callout ──────────────────────────────────────────── */
+#tutorial-callout {
+  /* Top placement, under the toast line: the hero's platform lives at the
+     bottom of the canvas and must stay visible while the tutorial points
+     at it; the top is only transited briefly by freshly spawned pieces. */
+  position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+  z-index: 7; width: min(84%, 340px); box-sizing: border-box;
+  background: rgba(12, 14, 11, .93); border: 1px solid var(--accent-color);
+  border-radius: 8px; padding: 9px 12px 8px;
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  pointer-events: auto;
+}
+#tutorial-callout.tut-pop { animation: tut-pop .25s ease-out; }
+@keyframes tut-pop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.tut-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.tut-title { font-family: var(--font-pixel); font-size: 14px; color: var(--accent-color); letter-spacing: .5px; }
+.tut-count { font-family: var(--font-pixel); font-size: 11px; color: #666; }
+.tut-text  { font-size: 11px; line-height: 1.45; color: var(--text-color); }
+.tut-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.tut-btn {
+  background: none; border: 1px solid var(--border-color); border-radius: 5px;
+  color: #999; font-size: 10px; padding: 3px 10px; cursor: pointer;
+}
+.tut-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+.tut-btn-primary { border-color: var(--accent-color); color: var(--accent-color); font-weight: bold; }
