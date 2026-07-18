@@ -7,7 +7,7 @@ import { CombatSystem } from '../systems/combat';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { HazardSystem } from '../systems/hazards';
 import { StatusEffectSystem } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, RESCUES, Boon, Omen, OMENS, Npc, NPCS } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, RESCUES, Boon, Omen, OMENS, Npc } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -1974,19 +1974,39 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(game.npcTiles.some(n => n.npcId === '__well__')).toBe(true);
   });
 
-  it('the seanchaí can recite your own tale mid-run, built from the story beats', () => {
+  it('the seanchaí recites your tale in its own dialog and never departs the mound', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
     game.storyBeats.push('felled a test boss', 'lit the fires of Bealtaine');
-    (game as unknown as { triggerNpcEncounter(npc: unknown): void })
-      .triggerNpcEncounter(NPCS.find(n => n.id === 'seanchai')!);
-    const [event] = onFloorEvent.mock.calls[0]!;
-    expect(event.options.length).toBe(2);
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const tile = game.npcTiles.find(n => n.npcId === 'seanchai')!;
+    game.player.x = tile.x - 1; game.player.y = tile.y;
+    game.map[tile.x - 1]![tile.y] = Tile.FLOOR;
+    game.npcTiles = [tile];
+    onFloorEvent.mockClear();
+    game.paused = false;
+    game.handleHeroMove(1, 0);
+    // First dialog: the greeting with both options; the resident persists.
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('seanchai');
     expect(event.options[0].label).toContain('tale');
-    const tale = event.options[0].apply(game);
-    expect(tale).toContain('felled a test boss');
-    expect(tale).toContain('lit the fires of Bealtaine');
+    expect(game.npcTiles.some(n => n.npcId === 'seanchai')).toBe(true);
+    // Choosing the tale chains into a SECOND dialog whose flavor IS the story.
+    onChoice(0);
+    const [taleEvent, onTaleClose] = onFloorEvent.mock.calls[1]!;
+    expect(taleEvent.id).toBe('__seanchai_tale__');
+    expect(taleEvent.flavor).toContain('felled a test boss');
+    expect(taleEvent.flavor).toContain('lit the fires of Bealtaine');
+    expect(game.paused).toBe(true);  // still paused between the chained dialogs
+    onTaleClose(0);
+    expect(game.paused).toBe(false);
+    // Bump again: he is still there, still talking.
+    game.player.x = tile.x - 1; game.player.y = tile.y;
+    onFloorEvent.mockClear();
+    game.handleHeroMove(1, 0);
+    expect(onFloorEvent.mock.calls[0]![0].id).toBe('seanchai');
+    expect(game.npcTiles.some(n => n.npcId === 'seanchai')).toBe(true);
   });
 
   it('the Sídhe coffer banks gold across runs; a new character inherits the tithed remainder', () => {

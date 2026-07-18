@@ -1089,25 +1089,6 @@ export class Game {
         id: npc.id, emoji: npc.char, title: npc.name, flavor,
         options: [{ label: 'Farewell', desc: '', apply: (): string => 'You part ways.' }],
       };
-      // The seanchaí can also recite YOUR tale so far — the same story-beat
-      // recap the death/victory screen builds, heard mid-run by the fire.
-      if (npc.id === 'seanchai') {
-        event.options.unshift({
-          label: 'Ask for your own tale',
-          desc: 'Hear the seanchaí recount your descent so far.',
-          apply: (game: Game): string => {
-            const cls = CLASSES.find(c => c.id === game.activeClassId)?.name ?? 'a wanderer';
-            const beats = game.storyBeats.slice(0, 5);
-            const joined = beats.length === 0
-              ? 'you have only begun'
-              : beats.length === 1
-              ? `already you ${beats[0]!}`
-              : `already you ${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
-            const more = game.storyBeats.length > 5 ? ' …and more besides — the verse grows long.' : '';
-            return `He closes his eyes and speaks it like an old poem: "${cls}, ${game.dungeonLevel} floor${game.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}" He opens one eye. "The ending, now. That part is still yours."`;
-          },
-        });
-      }
     }
 
     this.storyBeats.push(`crossed paths with ${npc.name}`);
@@ -1119,6 +1100,64 @@ export class Game {
       this.paused = false;
       this.cb.onAction();
       onClosed?.();
+    });
+  }
+
+  /** Your run's story so far, in the seanchaí's voice — built from {@link storyBeats}. */
+  private buildOwnTale(): string {
+    const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'a wanderer';
+    const beats = this.storyBeats.slice(0, 5);
+    const joined = beats.length === 0
+      ? 'you have only begun'
+      : beats.length === 1
+      ? `already you ${beats[0]!}`
+      : `already you ${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
+    const more = this.storyBeats.length > 5 ? ' …and more besides — the verse grows long.' : '';
+    return `He closes his eyes and speaks it like an old poem: "${cls}, ${this.dungeonLevel} floor${this.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}" He opens one eye. "The ending, now. That part is still yours."`;
+  }
+
+  /**
+   * The seanchaí of the mound: mound-lore flavor plus "ask for your own
+   * tale" — which opens a SECOND dialog whose body IS the tale, so the
+   * story is actually read on screen instead of scrolling past in the log
+   * (invisible on mobile, where the sidebar is a drawer). He never departs.
+   */
+  private triggerSeanchaiEncounter(): void {
+    const npc = NPCS.find(n => n.id === 'seanchai');
+    if (!npc || !this.cb.onFloorEvent) { this.advanceTurn(); return; }
+    this.cb.onCodexDiscover?.('npc', npc.id);
+    const metBefore = this.metFlavorNpcIds.has(npc.id);
+    const lines = npc.lines ?? [];
+    const flavor = (metBefore && npc.returnLine) || lines[Math.floor(Math.random() * Math.max(1, lines.length))] || npc.name;
+    this.metFlavorNpcIds.add(npc.id);
+    const event: FloorEventDef = {
+      id: npc.id, emoji: npc.char, title: npc.name, flavor,
+      options: [
+        { label: 'Ask for your own tale', desc: 'Hear the seanchaí recount your descent so far.', apply: (): string => '' },
+        { label: 'Farewell', desc: '', apply: (): string => 'The seanchaí nods and returns to watching the fire.' },
+      ],
+    };
+    this.cb.onAudio?.('npcEncounter');
+    this.paused = true;
+    this.cb.onFloorEvent(event, (index) => {
+      if (index === 0) {
+        // Chain straight into the tale dialog — the game stays paused between the two.
+        const tale = this.buildOwnTale();
+        this.cb.log(tale, 'log-perk', npc.char);
+        this.storyBeats.push('heard your own tale by the mound-fire');
+        const taleEvent: FloorEventDef = {
+          id: '__seanchai_tale__', emoji: npc.char, title: 'Your Tale, So Far', flavor: tale,
+          options: [{ label: 'Farewell', desc: '', apply: (): string => 'The seanchaí nods and returns to watching the fire.' }],
+        };
+        this.cb.onFloorEvent?.(taleEvent, () => {
+          this.paused = false;
+          this.cb.onAction();
+        });
+        return;
+      }
+      this.cb.log('The seanchaí nods and returns to watching the fire.', 'log-perk', npc.char);
+      this.paused = false;
+      this.cb.onAction();
     });
   }
 
@@ -2518,6 +2557,13 @@ export class Game {
       const departOnClose = (): void => {
         this.cb.onBeam?.(nx, isGhost ? '176,196,222' : isSmith ? '184,115,51' : '89,159,124');
       };
+      // The seanchaí is a permanent mound resident — he stays by his fire
+      // (no beam-away), and his tale gets a proper dialog of its own.
+      if (npcTile.npcId === 'seanchai') {
+        this.npcTiles.push(npcTile);
+        this.triggerSeanchaiEncounter();
+        return;
+      }
       if (isGhost) {
         this.triggerGhostEncounter(departOnClose);
         return;
