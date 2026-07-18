@@ -56,8 +56,27 @@ jobs:
         env:
           APP_VERSION: 1.0.${{ github.run_number }}
 
+      - name: Get Playwright version
+        id: pw-version
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Browsers are keyed on the Playwright version: a cache hit skips the
+      # ~1 min download entirely; the (much faster) OS package step still runs
+      # on hits because apt packages don't live in the cached directory.
+      - name: Cache Playwright Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+
       - name: Install Playwright Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       # The last gate before going live: boot the actual production build in
       # headless Chromium and play the first seconds of a real run.
