@@ -13,6 +13,8 @@ export interface PauseMenuHandlers {
   onToggleMotion: () => void;
   onCycleVolume: () => void;
   onRestart: () => void;
+  /** Nukes the service worker + caches and reloads — the "the PWA is stuck on an old version" escape hatch. */
+  onForceRefresh: () => void;
 }
 
 /** The in-run pause/settings menu. */
@@ -26,6 +28,7 @@ export class PauseModal extends BaseModal {
         <button class="settings-row" id="pause-volume"><span>🔉 Volume</span><span id="pause-volume-state" class="settings-val">100%</span></button>
         <button class="settings-row" id="pause-motion"><span>🎬 Reduced Motion</span><span id="pause-motion-state" class="settings-val">Off</span></button>
         <button class="restart-btn" id="pause-restart" style="background-color:#3a1414;color:#ffab91;margin-top:4px;">↻ New Run</button>
+        <button class="settings-row" id="pause-refresh"><span>⟳ Update App</span><span class="settings-val">Reload</span></button>
       </div>
       <p class="kbd-only" style="color:#444;font-size:8px;margin-top:10px;">Esc or P to resume · M mutes</p>
     </div>`;
@@ -54,6 +57,22 @@ export class PauseModal extends BaseModal {
     this.bind('pause-motion', handlers.onToggleMotion);
     this.bind('pause-volume', handlers.onCycleVolume);
     this.bind('pause-restart', handlers.onRestart);
+    // Two-tap confirm: the first tap arms the button (mid-run reloads lose
+    // the run, so a single stray tap must never fire it).
+    const refreshBtn = this.querySelector<HTMLButtonElement>('#pause-refresh');
+    if (refreshBtn) {
+      refreshBtn.innerHTML = '<span>⟳ Update App</span><span class="settings-val">Reload</span>';
+      let armed = false;
+      refreshBtn.onclick = () => {
+        if (!armed) {
+          armed = true;
+          refreshBtn.innerHTML = '<span>⟳ Ends this run!</span><span class="settings-val" style="color:#ffab91;">Tap again</span>';
+          return;
+        }
+        refreshBtn.innerHTML = '<span>⟳ Updating…</span><span class="settings-val">…</span>';
+        handlers.onForceRefresh();
+      };
+    }
     this.show();
   }
 

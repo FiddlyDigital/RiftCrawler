@@ -277,7 +277,33 @@ class GameApp {
       onToggleMotion: () => this.toggleReducedMotion(),
       onCycleVolume:  () => this.cycleVolume(),
       onRestart:      () => this.restartRun(),
+      onForceRefresh: () => { void this.forceRefreshApp(); },
     });
+  }
+
+  /**
+   * The "stuck on an old version" escape hatch: unregisters every service
+   * worker, deletes every Cache Storage bucket, then hard-reloads with a
+   * cache-busting query param so the next load fetches everything fresh
+   * from the network (the SW re-registers itself on that load).
+   */
+  private async forceRefreshApp(): Promise<void> {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch {
+      // Even if cleanup partially fails, the cache-busted reload below still
+      // forces fresh HTML — which references the newest hashed assets.
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('fresh', String(Date.now()));
+    window.location.replace(url.toString());
   }
 
   private openPauseMenu(): void {
