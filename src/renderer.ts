@@ -602,6 +602,7 @@ export class Renderer {
             '__ogham_stone__': { char: 'tile_ogham_stone', rgb: '168,132,184' },
             '__well__':        { char: 'tile_well',        rgb: '80,200,255' },
             '__stash__':       { char: 'item_gold_pouch',  rgb: '217,164,65' },
+            '__dagda__':       { char: 'npc_dagda',        rgb: '217,164,65' },
           };
           const sentinel = SENTINEL_SPRITES[npcHere.npcId];
           const rescueId = npcHere.npcId.startsWith('__rescue_') ? npcHere.npcId.slice('__rescue_'.length, -2) : null;

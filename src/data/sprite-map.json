@@ -112,6 +112,7 @@
   "npc_tuan":            { "sheet": "rogues", "sx": 128, "sy": 64,  "sw": 32, "sh": 32 },
   "npc_scathach":        { "sheet": "rogues", "sx": 160, "sy": 96,  "sw": 32, "sh": 32 },
   "npc_cliodhna":        { "sheet": "rogues", "sx": 64,  "sy": 64,  "sw": 32, "sh": 32 },
+  "npc_dagda":           { "sheet": "rogues", "sx": 32,  "sy": 128, "sw": 32, "sh": 32 },
 
   "smith_luchta":        { "sheet": "rogues", "sx": 64,  "sy": 160, "sw": 32, "sh": 32 },
   "smith_credne":        { "sheet": "rogues", "sx": 96,  "sy": 160, "sw": 32, "sh": 32 },

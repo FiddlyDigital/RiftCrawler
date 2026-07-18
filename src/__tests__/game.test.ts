@@ -2294,71 +2294,62 @@ describe('Tutorial safety (no natural enemies while teaching)', () => {
   });
 });
 
-describe('Tetris reward (4-line clear bonus trader)', () => {
+describe("An Dagda's gift (4-line clear)", () => {
   function clearFourLines(game: Game): void {
     for (let y = 0; y < 4; y++) for (let x = 0; x < 10; x++) game.map[x]![y] = Tile.FLOOR;
     (game as unknown as { checkLineClears(): void }).checkLineClears();
   }
-  function maybeOpen(game: Game): void {
-    (game as unknown as { maybeOpenTetrisReward(): void }).maybeOpenTetrisReward();
-  }
 
-  it('clearing exactly 4 lines at once opens a one-off shop (once it is safe to), once per run', () => {
+  it('a real Tetris earns the gift once per run — no dialog fires on the clear itself', () => {
+    const onFloorEvent = vi.fn();
     const onOpenShop = vi.fn();
-    const cb = { ...makeCallbacks(), onOpenShop };
+    const cb = { ...makeCallbacks(), onFloorEvent, onOpenShop };
     const game = new Game(cb);
     clearFourLines(game);
-    expect(onOpenShop).not.toHaveBeenCalled(); // deferred, not immediate
-    game.paused = false; // a Tetris's XP burst may itself have leveled the player up — assume that modal is resolved
-    maybeOpen(game);
-    expect(onOpenShop).toHaveBeenCalledTimes(1);
-    const [stock, , , , title] = onOpenShop.mock.calls[0]!;
-    expect(stock.some((i: { id: string }) => i.id === 'boon')).toBe(true);
-    expect(title).toBe('THE OTHERWORLD PEDDLER');
-
-    // Doesn't fire again on a second Tetris the same run.
-    clearFourLines(game);
-    game.paused = false;
-    maybeOpen(game);
-    expect(onOpenShop).toHaveBeenCalledTimes(1);
+    expect(game.dagdaGiftEarned).toBe(true);
+    expect(onFloorEvent).not.toHaveBeenCalled();
+    expect(onOpenShop).not.toHaveBeenCalled();
+    expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('An Dagda'), expect.any(String));
   });
 
-  it('does not open the special trader on a 1-3 line clear', () => {
-    const onOpenShop = vi.fn();
-    const cb = { ...makeCallbacks(), onOpenShop };
-    const game = new Game(cb);
+  it('a 1-3 line clear earns nothing', () => {
+    const game = new Game(makeCallbacks());
     for (let x = 0; x < 10; x++) game.map[x]![5] = Tile.FLOOR;
     (game as unknown as { checkLineClears(): void }).checkLineClears();
-    maybeOpen(game);
-    expect(onOpenShop).not.toHaveBeenCalled();
+    expect(game.dagdaGiftEarned).toBe(false);
   });
 
-  it('waits if another modal (e.g. a level-up from the same clear) already has the game paused', () => {
-    const onOpenShop = vi.fn();
-    const cb = { ...makeCallbacks(), onOpenShop };
+  it('An Dagda waits in the mound corner and gifts one tier-3 Geis, then departs for the run', () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
     clearFourLines(game);
-    game.paused = true; // simulate a level-up boon-choice modal still open
-    maybeOpen(game);
-    expect(onOpenShop).not.toHaveBeenCalled();
-    game.paused = false; // modal closes
-    maybeOpen(game);
-    expect(onOpenShop).toHaveBeenCalledTimes(1);
-  });
-
-  it('the free Sídhe Blessing grants a tier-2 boon at no gold cost', () => {
-    const onOpenShop = vi.fn();
-    const cb = { ...makeCallbacks(), onOpenShop };
-    const game = new Game(cb);
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const dagda = game.npcTiles.find(n => n.npcId === '__dagda__');
+    expect(dagda).toBeDefined();
+    expect(dagda!.x).toBe(Game.MOUND.x0);
+    expect(dagda!.y).toBe(Game.MOUND.y0);
+    // Bump him and accept.
     const boonsBefore = game.player.boons.length;
-    clearFourLines(game);
+    game.player.x = dagda!.x + 1; game.player.y = dagda!.y;
+    game.map[dagda!.x + 1]![dagda!.y] = Tile.FLOOR;
+    game.npcTiles = [dagda!];
+    onFloorEvent.mockClear();
     game.paused = false;
-    maybeOpen(game);
-    const [, gold, buy] = onOpenShop.mock.calls[0]!;
-    const result = buy('boon');
-    expect(result.ok).toBe(true);
-    expect(result.gold).toBe(gold); // free — no gold deducted
+    game.handleHeroMove(-1, 0);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('__dagda__');
+    onChoice(0);
     expect(game.player.boons.length).toBe(boonsBefore + 1);
+    const gifted = game.player.boons[game.player.boons.length - 1]!;
+    expect(Boon.BY_TIER[3].some(b => b.id === gifted.id)).toBe(true);
+    expect(game.dagdaGiftClaimed).toBe(true);
+    // Claimed — the next mound visit has no Dagda, and a second Tetris does not re-earn.
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    expect(game.npcTiles.some(n => n.npcId === '__dagda__')).toBe(false);
+    clearFourLines(game);
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    expect(game.npcTiles.some(n => n.npcId === '__dagda__')).toBe(false);
   });
 });
 

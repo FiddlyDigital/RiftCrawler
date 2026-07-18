@@ -244,10 +244,10 @@ export class Game {
   public spearPartsHeld = new Set<'shaft' | 'bolts' | 'head'>();
   /** Whether Goibniu has reforged the complete Spear of Lugh this run. */
   public spearForged = false;
-  /** Whether the one-time real-Tetris (4-line clear) reward has already been granted this run. */
-  private tetrisRewardGranted = false;
-  /** Set the instant a real Tetris is cleared; opened at the next safe (unpaused) moment. */
-  private pendingTetrisReward = false;
+  /** Set by the run's first real Tetris (4-line clear): An Dagda takes notice and waits in the mound with a gift. */
+  public dagdaGiftEarned = false;
+  /** Set once his tier-3 Geis has been accepted — he departs for the rest of the run. */
+  public dagdaGiftClaimed = false;
   public comboCount = 0;
   private lastLineClearMs = 0;
   private tattooTiles: Array<{ x: number; y: number }> = [];
@@ -825,7 +825,6 @@ export class Game {
     this.checkLineClears();
     this.cb.onAudio?.('blockLand');
     this.maybeHintGorgoth();
-    this.maybeOpenTetrisReward();
     this.spawnBlock();
   }
 
@@ -1228,6 +1227,10 @@ export class Game {
     if (!this.activeBountyQuest) this.npcTiles.push({ x: M.aoife.x, y: M.aoife.y, npcId: 'aoife' });
     if (!this.player.brandsCapped && Math.random() < Balance.CONFIG.waystation.tattooistChance) {
       this.tattooTiles.push({ x: M.tattooist.x, y: M.tattooist.y });
+    }
+    // An Dagda takes the north-west corner while his gift goes unclaimed.
+    if (this.dagdaGiftEarned && !this.dagdaGiftClaimed) {
+      this.npcTiles.push({ x: M.x0, y: M.y0, npcId: '__dagda__' });
     }
     // Everyone freed from Fomorian captivity settles along the north wall.
     RESCUES.filter(r => this.rescuedIds.has(r.id)).forEach((r, i) => {
@@ -1782,15 +1785,15 @@ export class Game {
         this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold. (Cursed — no heal)`, 'log-tetris');
       }
 
-      // A real Tetris (all 4 lines at once) is rare enough to reward once
-      // per run with a one-off, unusually generous trader. Deferred rather
-      // than opened immediately — a Tetris's huge XP payout can level the
-      // player up in this very call, and that boon-choice modal must not be
-      // stacked under/over this one.
-      if (rowsCleared === 4 && !this.tetrisRewardGranted && this.cb.onOpenShop) {
-        this.tetrisRewardGranted = true;
-        this.pendingTetrisReward = true;
-        this.cb.log('A PERFECT CLEAR! The Otherworld takes notice, and sends a trader through the rift...', 'log-combo', 'fx_arcane');
+      // A real Tetris (all 4 lines at once) is rare enough to be noticed by
+      // the Good God himself — once per run, An Dagda takes a seat in the
+      // sídhe mound with a tier-3 Geis from his cauldron. No modal here; the
+      // gift is claimed in person at the next mound visit.
+      if (rowsCleared === 4 && !this.dagdaGiftEarned) {
+        this.dagdaGiftEarned = true;
+        this.cb.log('A PERFECT CLEAR! A great slow laugh rolls up through the stone — An Dagda has taken notice. He waits in the sídhe mounds with a gift.', 'log-combo', 'fx_arcane');
+        this.cb.onToast?.('An Dagda has seen your perfect clear — a gift waits in the mounds.', 'fx_arcane');
+        this.storyBeats.push('cleared four lines as one and drew the Good God\'s eye');
       }
     }
   }
@@ -2170,57 +2173,6 @@ export class Game {
     this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
   }
 
-  /** Opens the pending Tetris-clear reward once it's actually safe to (no other modal — e.g. a level-up from the same clear's XP — already has the game paused). */
-  private maybeOpenTetrisReward(): void {
-    if (!this.pendingTetrisReward || this.paused || !this.cb.onOpenShop) return;
-    this.pendingTetrisReward = false;
-    this.openTetrisReward();
-  }
-
-  /**
-   * A one-off, unusually generous trader — granted once per run, the first
-   * time the player clears a real Tetris (all 4 lines at once). Flat, cheap
-   * prices regardless of depth, plus one exclusive free item not sold
-   * anywhere else.
-   */
-  private openTetrisReward(): void {
-    if (!this.cb.onOpenShop) return;
-    this.paused = true;
-    const flatCost = 15;
-    const stock: ShopItem[] = [
-      { id: 'heal',  icon: 'sprite_potion',           name: 'Hearth Broth',       desc: 'Restore to full HP',                     cost: flatCost, purchased: false },
-      { id: 'maxhp', icon: 'item_heart',              name: 'Bogwood Charm',      desc: '+10% Max HP',                            cost: flatCost, purchased: false },
-      { id: 'atk',   icon: 'sprite_equip_iron_sword', name: 'Ogham-Etched Edge',  desc: '+10% ATK',                               cost: flatCost, purchased: false },
-      { id: 'ward',  icon: 'status_poison',           name: 'Deathward Sigil',    desc: 'Survive one killing blow (this floor)',  cost: flatCost, purchased: false },
-      { id: 'boon',  icon: 'fx_arcane',               name: 'Sídhe Blessing',     desc: 'A random Geis, free of charge',          cost: 0,        purchased: false },
-    ];
-    const buy = (id: string): { gold: number; ok: boolean } => {
-      const item = stock.find(s => s.id === id);
-      if (!item || item.purchased || this.gold < item.cost) return { gold: this.gold, ok: false };
-      this.gold -= item.cost;
-      item.purchased = true;
-      switch (id) {
-        case 'heal':  this.player.heal(this.player.maxHp); break;
-        case 'maxhp': this.player.maxHp *= 1.10; this.player.hp = Math.min(this.player.hp * 1.10, this.player.maxHp); break;
-        case 'atk':   this.player.atk *= 1.10; break;
-        case 'ward':  this.player.deathwardCharges += 1; break;
-        case 'boon': {
-          const pool = Boon.BY_TIER[2];
-          const reward = pool[Math.floor(Math.random() * pool.length)]!;
-          this.player.addBoon(reward);
-          break;
-        }
-      }
-      this.cb.log(`Bought ${item.name}${item.cost > 0 ? ` for ${item.cost}g` : ''}.`, 'log-perk', item.icon);
-      this.pushUI();
-      return { gold: this.gold, ok: true };
-    };
-    this.cb.onOpenShop(
-      stock, this.gold, buy, () => { this.paused = false; this.pushUI(); },
-      'THE OTHERWORLD PEDDLER', 'A stranger from beyond the rift, drawn by a perfect clear. "Take your due, and be quick about it."',
-    );
-  }
-
   /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). `onClosed` fires once a boon is chosen. */
   private openAltar(tier: 1 | 2 | 3, onClosed?: () => void): void {
     this.paused = true;
@@ -2369,6 +2321,38 @@ export class Game {
       // Waystation residents: the deity emissary swears An Draoi's pact, the
       // waiting stranger delivers the held floor event, the hearth-fire heals
       // in full once, and the Fear Dearg's stall opens the regular peddler shop.
+      // An Dagda: the once-per-run gift for a perfect (4-line) clear.
+      if (npcTile.npcId === '__dagda__') {
+        const pool = Boon.BY_TIER[3];
+        const gift = pool[Math.floor(Math.random() * pool.length)]!;
+        const grant = (): void => {
+          this.player.addBoon(gift);
+          this.dagdaGiftClaimed = true;
+          this.storyBeats.push("took a gift from An Dagda's cauldron");
+          this.cb.onBeam?.(nx, '217,164,65');
+          this.cb.onParticleBurst?.(nx, ny, 12, '#d9a441', 'fx_arcane');
+          this.pushUI();
+        };
+        if (!this.cb.onFloorEvent) { grant(); this.advanceTurn(); return; }
+        const event: FloorEventDef = {
+          id: '__dagda__', emoji: 'npc_dagda', title: 'An Dagda',
+          flavor: 'A vast old man fills the corner of the mound, a club that could level a house resting easy across his knees and a cauldron steaming beside him. "A fourfold clearing," he rumbles, approving. "Few enough manage that above ground, let alone under it. Come — no one leaves my cauldron unsatisfied."',
+          options: [{
+            label: 'Accept the gift',
+            desc: `${gift.name} — ${gift.desc}`,
+            apply: (): string => `He ladles something bright out of the cauldron and presses it into your hands. You gain ${gift.name}!`,
+          }],
+        };
+        this.paused = true;
+        this.cb.onFloorEvent(event, (index) => {
+          const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+          grant();
+          this.cb.log(msg, 'log-perk', 'npc_dagda');
+          this.paused = false;
+          this.cb.onAction();
+        });
+        return;
+      }
       if (npcTile.npcId === '__pact__') {
         this.cb.onBeam?.(nx, '141,111,212');
         if (!this.maybeOfferPact()) this.advanceTurn();
@@ -2590,6 +2574,7 @@ export class Game {
     if (!this.cb.onFloorEvent) { this.descendFloor(); return; }
     // The rest option's pitch names whoever is actually waiting inside.
     const waiting: string[] = [];
+    if (this.dagdaGiftEarned && !this.dagdaGiftClaimed) waiting.push('the Good God, bearing a gift');
     if (this.pactPending) waiting.push('an emissary of the gods');
     if (this.pendingFloorEvent) waiting.push('a sheltering stranger');
     const event: FloorEventDef = {
