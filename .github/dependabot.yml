@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # npm dependencies — weekly, minor+patch grouped into one PR to keep noise
+  # down; majors arrive individually so breaking changes get their own review.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  # GitHub Actions — keep the workflow actions themselves current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        update-types: ["minor", "patch", "major"]

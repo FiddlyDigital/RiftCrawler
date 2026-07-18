@@ -40,6 +40,12 @@ jobs:
         env:
           APP_VERSION: pr-${{ github.event.pull_request.number || 'manual' }}.${{ github.run_number }}
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test the built app
+        run: npm run smoke
+
       - name: Coverage summary
         if: always()
         run: |
