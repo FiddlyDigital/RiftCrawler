@@ -19,9 +19,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
@@ -46,7 +46,7 @@ jobs:
       # hardcoding the repo name as the base path.
       - name: Detect Pages base path
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       # Every deploy gets an auto-incrementing version (1.0.<run number>),
       # baked into the bundle via Vite define and shown on the start screen
@@ -68,7 +68,7 @@ jobs:
         run: echo "Deployed **v1.0.${{ github.run_number }}** (commit ${GITHUB_SHA::7})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
 
@@ -81,4 +81,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
