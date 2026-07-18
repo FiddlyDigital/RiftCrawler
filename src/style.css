@@ -906,21 +906,25 @@ canvas {
    height-driven and would overflow with it). Guarded by @supports so
    browsers without `zoom` keep today's layout instead of a broken height. */
 @supports (zoom: 1) {
+  /* Everything — including the zoom/height declarations themselves — lives
+     inside the large-display media queries, so phones/tablets/laptops never
+     receive a zoom or height override at all (a "no-op" zoom:1 is not safe
+     to assume across engines; iOS WebKit's zoom path has real quirks). */
   @media (min-width: 1800px) and (min-height: 1000px) {
-    body { --ui-zoom: 1.3; }
+    body {
+      --ui-zoom: 1.3;
+      zoom: var(--ui-zoom);
+      height: calc(100% / var(--ui-zoom));
+    }
+    @supports (height: 100dvh) {
+      body { height: calc(100dvh / var(--ui-zoom)); }
+    }
   }
   @media (min-width: 2400px) and (min-height: 1260px) {
     body { --ui-zoom: 1.6; }
   }
   @media (min-width: 3400px) and (min-height: 1800px) {
     body { --ui-zoom: 2; }
-  }
-  body {
-    zoom: var(--ui-zoom, 1);
-    height: calc(100% / var(--ui-zoom, 1));
-  }
-  @supports (height: 100dvh) {
-    body { height: calc(100dvh / var(--ui-zoom, 1)); }
   }
 }
 

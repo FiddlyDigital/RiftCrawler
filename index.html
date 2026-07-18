@@ -5,7 +5,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- viewport-fit=cover: required for env(safe-area-inset-*) to report real
+       values in standalone/PWA mode — without it they're 0 and the bottom
+       touch controls sit behind the iPhone home-indicator bar. The game
+       wrapper pads all four edges with max(10px, env(safe-area-inset-*)). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="description" content="Causeway to Ériu — a mobile-first tetris-roguelike hybrid dungeon crawler." />
   <meta name="theme-color" content="#08090a" />
   <title>Causeway to Ériu</title>
