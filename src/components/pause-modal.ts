@@ -5,6 +5,8 @@ export interface PauseMenuState {
   soundOn: boolean;
   reducedMotion: boolean;
   volumePct: number;
+  /** True when a new service worker is installed and waiting — reveals the Update App row. */
+  updateAvailable: boolean;
 }
 
 export interface PauseMenuHandlers {
@@ -28,7 +30,7 @@ export class PauseModal extends BaseModal {
         <button class="settings-row" id="pause-volume"><span>🔉 Volume</span><span id="pause-volume-state" class="settings-val">100%</span></button>
         <button class="settings-row" id="pause-motion"><span>🎬 Reduced Motion</span><span id="pause-motion-state" class="settings-val">Off</span></button>
         <button class="restart-btn" id="pause-restart" style="background-color:#3a1414;color:#ffab91;margin-top:4px;">↻ New Run</button>
-        <button class="settings-row" id="pause-refresh"><span>⟳ Update App</span><span class="settings-val">Reload</span></button>
+        <button class="settings-row" id="pause-refresh" style="display:none;border-color:#d9a441;color:#ffd54f;"><span>⟳ Update App</span><span class="settings-val">New version!</span></button>
       </div>
       <p class="kbd-only" style="color:#444;font-size:8px;margin-top:10px;">Esc or P to resume · M mutes</p>
     </div>`;
@@ -57,11 +59,12 @@ export class PauseModal extends BaseModal {
     this.bind('pause-motion', handlers.onToggleMotion);
     this.bind('pause-volume', handlers.onCycleVolume);
     this.bind('pause-restart', handlers.onRestart);
-    // Two-tap confirm: the first tap arms the button (mid-run reloads lose
-    // the run, so a single stray tap must never fire it).
+    // Only shown while a new version is actually waiting; two-tap confirm,
+    // since the update reload ends the current run.
     const refreshBtn = this.querySelector<HTMLButtonElement>('#pause-refresh');
     if (refreshBtn) {
-      refreshBtn.innerHTML = '<span>⟳ Update App</span><span class="settings-val">Reload</span>';
+      refreshBtn.style.display = state.updateAvailable ? '' : 'none';
+      refreshBtn.innerHTML = '<span>⟳ Update App</span><span class="settings-val">New version!</span>';
       let armed = false;
       refreshBtn.onclick = () => {
         if (!armed) {

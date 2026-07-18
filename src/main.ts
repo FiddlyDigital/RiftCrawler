@@ -1,5 +1,6 @@
 import './style.css';
 import './components';
+import { registerSW } from 'virtual:pwa-register';
 import { Game, GameMath } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
@@ -53,6 +54,14 @@ class GameApp {
   private lastInspectTile: { x: number; y: number } | null = null;
   private installPrompt: BeforeInstallPromptEvent | null = null;
 
+  // ── PWA update detection ─────────────────────────────────────────────────
+  /** True once a new service worker is installed and waiting — surfaces the pause-menu "Update App" button. */
+  private updateAvailable = false;
+  /** Activates the waiting service worker and reloads (from virtual:pwa-register). */
+  private applyUpdateSW: ((reload?: boolean) => Promise<void>) | null = null;
+  /** The live SW registration, kept so version checks can be triggered on demand. */
+  private swRegistration: ServiceWorkerRegistration | null = null;
+
   constructor() {
     this.ui = new UIManager();
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -65,6 +74,28 @@ class GameApp {
     // The reload button itself is wired inside <crash-modal>.
     window.addEventListener('error', (e) => this.handleFatalError(e.error ?? e.message, 'window'));
     window.addEventListener('unhandledrejection', (e) => this.handleFatalError(e.reason, 'promise'));
+
+    // ── PWA update flow ────────────────────────────────────────────────────
+    // 'prompt' registration: a new deploy installs as a *waiting* worker
+    // instead of activating mid-session. We toast it, and the pause menu
+    // grows an "Update App" button while one is waiting. Checks run hourly,
+    // whenever the (i)PWA returns to the foreground, and every time the
+    // pause menu opens — so looking for the button IS the version check.
+    this.applyUpdateSW = registerSW({
+      immediate: true,
+      onNeedRefresh: () => {
+        this.updateAvailable = true;
+        this.ui.showToast('A new version is ready — update from the pause menu.', 'ui_warning');
+        if (this.manualPaused) this.refreshPauseMenu();
+      },
+      onRegisteredSW: (_swUrl, reg) => {
+        this.swRegistration = reg ?? null;
+        setInterval(() => { void reg?.update(); }, 60 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') void reg?.update();
+        });
+      },
+    });
 
     // ── Settings ───────────────────────────────────────────────────────────
     this.soundOn = !StorageService.loadMute();
@@ -271,14 +302,33 @@ class GameApp {
   }
 
   private refreshPauseMenu(): void {
-    this.ui.showPauseMenu({ soundOn: this.soundOn, reducedMotion: this.reducedMotion, volumePct: Math.round(this.masterVolume * 100) }, {
+    // Opening the menu doubles as a version check: if a new deploy is found,
+    // onNeedRefresh re-renders this menu with the Update App button visible.
+    void this.swRegistration?.update();
+    this.ui.showPauseMenu({ soundOn: this.soundOn, reducedMotion: this.reducedMotion, volumePct: Math.round(this.masterVolume * 100), updateAvailable: this.updateAvailable }, {
       onResume:       () => this.closePauseMenu(),
       onToggleMute:   () => this.toggleMute(),
       onToggleMotion: () => this.toggleReducedMotion(),
       onCycleVolume:  () => this.cycleVolume(),
       onRestart:      () => this.restartRun(),
-      onForceRefresh: () => { void this.forceRefreshApp(); },
+      onForceRefresh: () => { void this.applyUpdate(); },
     });
+  }
+
+  /** Activates the waiting service worker and reloads into the new version, falling back to the nuclear cache-wipe if the clean path is unavailable. */
+  private async applyUpdate(): Promise<void> {
+    if (this.applyUpdateSW) {
+      // If the graceful reload stalls (controllerchange never firing is a
+      // known Safari quirk), fall through to the hard refresh.
+      const fallback = setTimeout(() => { void this.forceRefreshApp(); }, 4000);
+      try {
+        await this.applyUpdateSW(true);
+      } finally {
+        clearTimeout(fallback);
+      }
+      return;
+    }
+    await this.forceRefreshApp();
   }
 
   /**

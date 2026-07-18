@@ -4,7 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new service worker waits instead of activating silently —
+      // main.ts's registerSW() hook surfaces it as a toast + pause-menu
+      // "Update App" button, and users who never tap still get the new
+      // version on their next cold start (the waiting worker activates once
+      // the old one has no clients left).
+      registerType: 'prompt',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
