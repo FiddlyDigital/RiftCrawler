@@ -30,10 +30,16 @@ jobs:
         run: npm ci
 
       - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm test
+      - name: Validate game data against schemas
+        run: npm run validate-data
+
+      - name: Unit tests with coverage thresholds
+        run: npm run test:coverage
 
       # Reads the repo's actual Pages configuration (project page vs. custom
       # domain) so the built asset paths are correct either way, instead of
@@ -42,8 +48,16 @@ jobs:
         id: pages
         uses: actions/configure-pages@v5
 
+      # Every deploy gets an auto-incrementing version (1.0.<run number>),
+      # baked into the bundle via Vite define and shown on the start screen
+      # and pause menu — so players and bug reports can name the exact build.
       - name: Build
         run: npm run build -- --base="${{ steps.pages.outputs.base_path }}/"
+        env:
+          APP_VERSION: 1.0.${{ github.run_number }}
+
+      - name: Version summary
+        run: echo "Deployed **v1.0.${{ github.run_number }}** (commit ${GITHUB_SHA::7})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

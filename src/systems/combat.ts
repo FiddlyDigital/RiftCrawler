@@ -237,7 +237,7 @@ export class CombatSystem {
     }
 
     // Criticals always inflict status; others use normal chance
-    const inflictStatus = outcome === 'critical' || (m.statusInflict != null && Math.random() < m.statusInflict.chance);
+    const inflictStatus = outcome === 'critical' || (m.statusInflict !== undefined && m.statusInflict !== null && Math.random() < m.statusInflict.chance);
     if (inflictStatus && m.statusInflict && !game.player.statuses.some(s => s.type === m.statusInflict!.type)) {
       game.player.statuses.push({
         type:     m.statusInflict.type,

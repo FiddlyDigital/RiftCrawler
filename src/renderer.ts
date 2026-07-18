@@ -446,7 +446,7 @@ export class Renderer {
           : cell === Cell.SMITH
           ? (game.pendingSmithId && SMITHS.find(s => s.id === game.pendingSmithId)?.char) || CELL_SPRITE[cell]
           : cell === Cell.RESCUE
-          ? (game.pendingRescueId && RESCUES.find(r => r.id === game.pendingRescueId)?.char) || CELL_SPRITE[cell]
+          ? (game.pendingRescueId && RESCUES.find(res => res.id === game.pendingRescueId)?.char) || CELL_SPRITE[cell]
           : cell === Cell.ELITE_GUARD
           ? (game.pendingGuardKey && MONSTERS[game.pendingGuardKey]?.char) || CELL_SPRITE[cell]
           : CELL_SPRITE[cell];

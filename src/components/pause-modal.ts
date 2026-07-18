@@ -33,6 +33,7 @@ export class PauseModal extends BaseModal {
         <button class="settings-row" id="pause-refresh" style="display:none;border-color:#d9a441;color:#ffd54f;"><span>⟳ Update App</span><span class="settings-val">New version!</span></button>
       </div>
       <p class="kbd-only" style="color:#444;font-size:8px;margin-top:10px;">Esc or P to resume · M mutes</p>
+      <p style="color:#3a3a3a;font-size:8px;margin-top:6px;">Causeway to Ériu v${__APP_VERSION__}</p>
     </div>`;
   }
 

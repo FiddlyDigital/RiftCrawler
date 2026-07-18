@@ -162,7 +162,7 @@ class GameApp {
     this.drawerToggleBtn = document.getElementById('drawer-toggle-btn') as HTMLButtonElement | null;
     this.sidebarPanel = document.getElementById('sidebar-panel');
     this.sidebarBackdrop = document.getElementById('sidebar-backdrop');
-    this.drawerToggleBtn?.addEventListener('click', () => { this.isDrawerOpen() ? this.closeDrawer() : this.openDrawer(); });
+    this.drawerToggleBtn?.addEventListener('click', () => { if (this.isDrawerOpen()) this.closeDrawer(); else this.openDrawer(); });
     this.sidebarBackdrop?.addEventListener('click', () => this.closeDrawer());
 
     // ── Character sheet ────────────────────────────────────────────────────
@@ -431,7 +431,7 @@ class GameApp {
   // ── Fullscreen ───────────────────────────────────────────────────────────
 
   private isFullscreenActive(): boolean {
-    return document.fullscreenElement != null;
+    return document.fullscreenElement !== null;
   }
 
   private updateFullscreenButton(): void {

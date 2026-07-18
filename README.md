@@ -1,6 +1,6 @@
 # Causeway to Ériu
 
-**[▶ Play it live](https://fiddlydigital.github.io/RiftCrawler/)**
+**[▶ Play it live](https://fiddlydigital.github.io/RiftCrawler/)** · ![CI](https://github.com/FiddlyDigital/RiftCrawler/actions/workflows/ci.yml/badge.svg) ![Deploy](https://github.com/FiddlyDigital/RiftCrawler/actions/workflows/deploy-pages.yml/badge.svg)
 
 A mobile-first **Tetris-meets-roguelike** hybrid. You play both halves of the board at once: steer falling tetrominoes to **build** the dungeon floor, then move a hero across the tiles you just laid down to **fight, grow stronger, and descend**. Bres the Beautiful has returned from the depths with his army of mutant Fomorians, weaving ancient magic to raise a bridge back to Ériu, the Emerald Isle. Grow strong enough, then deliberately top out the stack to summon him — **Bres the Beautiful** — and escape the Rift.
 
@@ -269,6 +269,19 @@ After any content change: `npm run lint && npm test && npm run build` (the build
 ---
 
 ## Testing
+
+**One command runs every quality gate** — the same set CI enforces:
+
+```bash
+npm run verify        # typecheck + lint + schema validation + tests w/ coverage thresholds + build
+```
+
+Individually: `npm run typecheck` (tsc), `npm run lint` (oxlint, warnings are errors), `npm run validate-data` (AJV against `schema/*.json`), `npm run test:coverage` (vitest + v8 coverage with ratchet thresholds in `vitest.config.ts` — raise them as coverage grows, CI fails if a change drops below).
+
+**Versioning**: every Pages deploy is stamped `1.0.<run number>` (shown on the start screen and pause menu, `dev` locally), so bug reports can name the exact build.
+
+### Test suite
+
 
 Unit tests live in `src/__tests__/` and run on **Vitest** (`npm test`). They cover the pure game logic — combat math, spawning, line clears, boons/brands/curses (including the JSON effect resolver), the Gorgoth endgame, and monster AI. There's no jsdom/happy-dom configured, so **the UI/component/renderer layers have no unit harness** — verify those changes live in the browser (`npm run dev`), driving the actual DOM rather than poking internals.
 

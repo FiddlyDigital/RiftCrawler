@@ -718,7 +718,7 @@ export class Game {
           if (smith) this.npcTiles.push({ x: tx, y: ty, npcId: `__smith_${smith.id}__` });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.RESCUE) {
-          const rescue = RESCUES.find(r => r.id === this.pendingRescueId);
+          const rescue = RESCUES.find(res => res.id === this.pendingRescueId);
           this.pendingRescueId = null;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#2e2210';

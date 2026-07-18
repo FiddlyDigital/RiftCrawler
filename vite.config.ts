@@ -2,6 +2,10 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // Stamped by CI (APP_VERSION=1.0.<run>); local builds show "dev".
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? 'dev'),
+  },
   plugins: [
     VitePWA({
       // 'prompt': a new service worker waits instead of activating silently —

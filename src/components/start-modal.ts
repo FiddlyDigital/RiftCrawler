@@ -64,7 +64,7 @@ export class StartModal extends BaseModal {
       <button class="restart-btn" id="start-btn" style="font-size:15px;letter-spacing:2px;">▶ BEGIN DESCENT</button>
       <button id="start-tutorial-btn" style="background:none;border:none;color:#8a7a4d;font-size:11px;margin-top:8px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">❓ New here? Play the guided tutorial</button>
       <p class="kbd-only" style="color:#333;font-size:8px;margin-top:8px;">Press <b style="color:#444;">M</b> during play to toggle sound</p>
-      <p style="color:#333;font-size:8px;margin-top:4px;">Art: <span style="color:#444;">32rogues</span> tileset by Seth Boyles</p>
+      <p style="color:#333;font-size:8px;margin-top:4px;">Art: <span style="color:#444;">32rogues</span> tileset by Seth Boyles · <span style="color:#444;">v${__APP_VERSION__}</span></p>
     </div>`;
   }
 
