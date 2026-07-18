@@ -247,7 +247,7 @@ To add a new special: put a one-liner in `BOON_SPECIALS` / `MODIFIER_SPECIALS` a
 **`omens.json`** — per-floor modifiers rolled on floor entry (chance in `balance.json`'s `omens.rollChance`). Fields: `id`, `icon`, `name`, `toastText`, `logText`, `weight` (relative roll weight), `params` (numeric tunables read by that omen's effect hook in `game.ts`, e.g. `goldMult`, `visionPenalty`, `gravityPct`), and optional `special` — the escape hatch for scripted ritual omens (`"bealtaine"` drives the brazier ritual). Pure stat omens need no code: their hooks read whatever params are present, so a new one is usually just a JSON entry.
 
 ### Support files
-- **`shapes.json`** — the 9 piece shapes in the random draw pool: the 7 standard tetrominoes plus two extra non-standard shapes (`Q`, `H`), each `{ matrix, color }` keyed by letter.
+- **`shapes.json` (each shape carries a `weight` — classics ~10, rare custom shapes ~1, `0` removes it from the natural rotation)** — the 9 piece shapes in the random draw pool: the 7 standard tetrominoes plus two extra non-standard shapes (`Q`, `H`), each `{ matrix, color }` keyed by letter.
 - **`sprite-map.json`** — sprite-atlas coordinates (`sheet`, `sx`, `sy`, `sw`, `sh`) into the `public/sprites/*.png` 32rogues sheets, read by `SpriteService`. A key with no entry renders nothing (`SpriteService.iconHTML` returns `''`) — there is no emoji fallback.
 - **`balance.json`, `combat.json`, `hazards.json`, `monster-ai.json`, `colors.json`** — flat tuning numbers (dice/combat math, hazard timers, monster-AI thresholds, altar-tier colors), loaded by `balance.ts`/`colors.ts`. Edit these to retune the game; no code changes needed.
 

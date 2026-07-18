@@ -7,8 +7,9 @@
   "additionalProperties": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["matrix", "color"],
+    "required": ["matrix", "color", "weight"],
     "properties": {
+      "weight": { "type": "number", "minimum": 0, "description": "Relative spawn weight — classics ~10, rare custom shapes ~1, 0 disables spawning (still usable via hold/wright)." },
       "matrix": {
         "type": "array",
         "minItems": 1,

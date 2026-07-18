@@ -2314,6 +2314,25 @@ describe('Tutorial safety (no natural enemies while teaching)', () => {
   });
 });
 
+describe('Weighted shape spawns', () => {
+  it('classic shapes dominate; custom shapes (Q, H) are rare but present', () => {
+    const game = new Game(makeCallbacks());
+    const pick = (game as unknown as { randomShapeKey(): string }).randomShapeKey.bind(game);
+    const counts: Record<string, number> = {};
+    const N = 3000;
+    for (let i = 0; i < N; i++) {
+      const k = pick();
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+    const special = (counts['Q'] ?? 0) + (counts['H'] ?? 0);
+    expect(special).toBeGreaterThan(0);        // they do still visit
+    expect(special / N).toBeLessThan(0.10);    // ...rarely (expected ~2.8%)
+    for (const k of ['I', 'O', 'T', 'S', 'Z', 'J', 'L']) {
+      expect(counts[k] ?? 0).toBeGreaterThan(N * 0.05);  // each classic ~13.9%
+    }
+  });
+});
+
 describe('Rotation is a free action', () => {
   it('rotating advances no turn: no gravity step, no status ticks; moving left still does', () => {
     const game = new Game(makeCallbacks());

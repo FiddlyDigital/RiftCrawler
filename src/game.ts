@@ -370,9 +370,14 @@ export class Game {
   }
 
   /** A uniformly random tetromino shape key. */
+  /** Weighted spawn table for the falling pieces, straight from shapes.json — classics dominate; custom shapes (Q, H) are rare visitors. */
+  private static readonly SHAPE_WEIGHTS: Record<ShapeKey, number> =
+    Object.fromEntries((Object.keys(SHAPES) as ShapeKey[]).map(k => [k, SHAPES[k].weight])) as Record<ShapeKey, number>;
+  private static readonly SHAPE_WEIGHT_TOTAL: number =
+    Object.values(Game.SHAPE_WEIGHTS).reduce((a, b) => a + b, 0);
+
   private randomShapeKey(): ShapeKey {
-    const keys = Object.keys(SHAPES) as ShapeKey[];
-    return keys[Math.floor(Math.random() * keys.length)]!;
+    return Balance.weightedPick(Game.SHAPE_WEIGHTS, Math.random() * Game.SHAPE_WEIGHT_TOTAL) ?? 'I';
   }
 
   // ── Fog of war ───────────────────────────────────────────────────────────

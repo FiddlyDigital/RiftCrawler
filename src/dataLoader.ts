@@ -319,11 +319,13 @@ export class Modifier implements ModifierDef {
 // Pure tetromino geometry/color — no behavior, so this stays plain typed data
 // rather than a class (consistent with the data-contract types in types.ts).
 
-export type ShapeKey = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
+export type ShapeKey = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L' | 'Q' | 'H';
 
 export interface ShapeDef {
   matrix: number[][];
   color: string;
+  /** Relative spawn weight: the classic seven sit around 10, rare custom shapes around 1; 0 removes a shape from the natural rotation entirely. */
+  weight: number;
 }
 
 export const SHAPES = shapesData as Record<ShapeKey, ShapeDef>;
