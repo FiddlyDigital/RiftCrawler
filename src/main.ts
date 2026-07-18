@@ -327,24 +327,22 @@ class GameApp {
       onToggleMotion: () => this.toggleReducedMotion(),
       onCycleVolume:  () => this.cycleVolume(),
       onRestart:      () => this.restartRun(),
-      onForceRefresh: () => { void this.applyUpdate(); },
+      onForceRefresh: () => this.applyUpdate(),
     });
   }
 
   /** Activates the waiting service worker and reloads into the new version, falling back to the nuclear cache-wipe if the clean path is unavailable. */
-  private async applyUpdate(): Promise<void> {
-    if (this.applyUpdateSW) {
-      // If the graceful reload stalls (controllerchange never firing is a
-      // known Safari quirk), fall through to the hard refresh.
-      const fallback = setTimeout(() => { void this.forceRefreshApp(); }, 4000);
-      try {
-        await this.applyUpdateSW(true);
-      } finally {
-        clearTimeout(fallback);
-      }
-      return;
-    }
-    await this.forceRefreshApp();
+  private applyUpdate(): void {
+    // The graceful path (skipWaiting + reload on controllerchange) can
+    // silently do nothing: updateSW's promise resolves once the waiting
+    // worker is *messaged*, not when the page reloads, and controllerchange
+    // never fires if the worker already activated or on Safari's quirks.
+    // So the only success signal is the page reloading out from under us —
+    // arm the nuclear cache-wipe reload unconditionally (never cleared; a
+    // successful reload discards it with the page), and the update can
+    // never soft-lock on "Updating…".
+    setTimeout(() => { void this.forceRefreshApp(); }, 3000);
+    if (this.applyUpdateSW) void this.applyUpdateSW(true).catch(() => { /* fallback timer handles it */ });
   }
 
   /**
