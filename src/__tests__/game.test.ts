@@ -2151,6 +2151,57 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
   });
 });
 
+describe('Tutorial safety (no natural enemies while teaching)', () => {
+  it('tutorialSafety suppresses monster cells in spawned pieces', () => {
+    const game = new Game(makeCallbacks());
+    game.tutorialSafety = true;
+    game.dungeonLevel = 8;  // deep floors have high natural spawn odds
+    const monsterCells = new Set<number>([Cell.MONSTER_RAT, Cell.MONSTER_SKEL, Cell.MONSTER_ARCHER, Cell.MONSTER_SLIME, Cell.MONSTER_ORC, Cell.MONSTER_BAT]);
+    for (let i = 0; i < 100; i++) {
+      (game as unknown as { spawnBlock(): void }).spawnBlock();
+      const cells = (game as unknown as { blockMatrix: number[][] }).blockMatrix.flat();
+      expect(cells.some(c => monsterCells.has(c))).toBe(false);
+    }
+    // Released: monsters return to the spawn table (statistically certain
+    // within 100 deep-floor pieces).
+    game.tutorialSafety = false;
+    let seen = false;
+    for (let i = 0; i < 400 && !seen; i++) {
+      (game as unknown as { spawnBlock(): void }).spawnBlock();
+      seen = (game as unknown as { blockMatrix: number[][] }).blockMatrix.flat().some(c => monsterCells.has(c));
+    }
+    expect(seen).toBe(true);
+  });
+
+  it('spawnTutorialFoe places exactly one rat on a floor tile near the hero', () => {
+    const game = new Game(makeCallbacks());
+    expect(game.monsters).toHaveLength(0);
+    game.spawnTutorialFoe();
+    expect(game.monsters).toHaveLength(1);
+    const foe = game.monsters[0]!;
+    const d = Math.abs(foe.x - game.player.x) + Math.abs(foe.y - game.player.y);
+    expect(d).toBeGreaterThanOrEqual(2);
+    expect(d).toBeLessThanOrEqual(7);
+    expect(game.map[foe.x]![foe.y]).toBe(Tile.FLOOR);
+  });
+
+  it('tutorialSafety also holds back rescue pieces (their captors are enemies)', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.tutorialSafety = true;
+    const rand = vi.spyOn(Math, 'random').mockReturnValue(0);  // would always roll a rescue
+    try {
+      (game as unknown as { descendFloor(): void }).descendFloor();
+      expect(game.pendingRescueId).toBeNull();
+      game.tutorialSafety = false;
+      (game as unknown as { descendFloor(): void }).descendFloor();
+      expect(game.pendingRescueId).not.toBeNull();
+    } finally {
+      rand.mockRestore();
+    }
+  });
+});
+
 describe('Tetris reward (4-line clear bonus trader)', () => {
   function clearFourLines(game: Game): void {
     for (let y = 0; y < 4; y++) for (let x = 0; x < 10; x++) game.map[x]![y] = Tile.FLOOR;

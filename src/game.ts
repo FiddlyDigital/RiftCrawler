@@ -196,6 +196,9 @@ export class Game {
   /** ATK granted by Bricriu's Champion's Portion, reverted on the next descent. */
   private portionAtkBonus = 0;
 
+  /** While the first-run tutorial is teaching, natural enemy spawns are suppressed — the tutorial introduces its own single practice foe (see spawnTutorialFoe). */
+  public tutorialSafety = false;
+
   /** Whether An Draoi's deity pact is still unsworn — the emissary waits in the mound until it is. */
   private get pactPending(): boolean {
     return this.activeClassId === 'draoi' && this.activePatronId === null && this.dungeonLevel >= 2;
@@ -554,7 +557,7 @@ export class Game {
           Balance.CONFIG.spawnRates.monsterBaseChance + this.dungeonLevel * Balance.CONFIG.spawnRates.monsterChancePerDungeonLevel,
         );
         const hauntedChance = this.haunted ? baseMonsterChance * Balance.CONFIG.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
-        const monsterChance = hauntedChance * (this.activeOmen?.num('monsterChanceMult', 1) ?? 1);
+        const monsterChance = this.tutorialSafety ? 0 : hauntedChance * (this.activeOmen?.num('monsterChanceMult', 1) ?? 1);
         if (Math.random() < monsterChance) {
           if (monsterInjected) return Cell.FLOOR;  // cap: one monster per block
           monsterInjected = true;
@@ -599,8 +602,9 @@ export class Game {
       const p = take();
       if (p) this.blockMatrix[p.r]![p.c] = Cell.ALTAR;
     }
-    // Cursed piece: carries a monster that crawls out where it lands.
-    if (this.currentCursed) {
+    // Cursed piece: carries a monster that crawls out where it lands
+    // (held back, like all natural spawns, while the tutorial teaches).
+    if (this.currentCursed && !this.tutorialSafety) {
       const p = take();
       if (p) this.blockMatrix[p.r]![p.c] = MONSTERS[this.getRandomMonsterKey()]!.cellState;
     }
@@ -889,10 +893,11 @@ export class Game {
   // ── Monster spawning helper ───────────────────────────────────────────────
 
   /** Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the resulting `Monster` at `(tx, ty)`. */
-  private spawnMonster(key: string, tx: number, ty: number, forceElite = false, nameOverride?: string): void {
+  /** `elite`: true forces an elite, false forbids one, undefined rolls the normal chance. */
+  private spawnMonster(key: string, tx: number, ty: number, elite?: boolean, nameOverride?: string): void {
     const def = MONSTERS[key];
     if (!def) return;
-    const isElite = forceElite || Math.random() < Balance.CONFIG.eliteMonsters.spawnChance;
+    const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance);
     const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
@@ -1335,6 +1340,26 @@ export class Game {
   /** The next smith due to appear this run (Luchta → Credne → Goibniu), or `null` once all three have been met. */
   private nextSmith(): Smith | null {
     return (SMITHS as Smith[])[this.smithsMetCount] ?? null;
+  }
+
+  /**
+   * The tutorial's single practice foe: one ordinary rat on a floor tile
+   * within a few steps of the hero, spawned when the Fight step begins so
+   * the lesson has a target while natural spawns stay suppressed. No-op if
+   * no suitable tile exists (the step's landing-count fallback covers it).
+   */
+  public spawnTutorialFoe(): void {
+    let best: { x: number; y: number; d: number } | null = null;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        if (this.map[x]![y] !== Tile.FLOOR) continue;
+        if (this.getMonsterAt(x, y) || (x === this.player.x && y === this.player.y)) continue;
+        if (this.npcTiles.some(n => n.x === x && n.y === y) || this.isTattooTile(x, y)) continue;
+        const d = Math.abs(x - this.player.x) + Math.abs(y - this.player.y);
+        if (d >= 2 && d <= 7 && (best === null || d < best.d)) best = { x, y, d };
+      }
+    }
+    if (best) this.spawnMonster('rat', best.x, best.y, false);  // a practice target, never an elite
   }
 
   /** The captors' monster archetype for a rescue piece — nastier stock the deeper you are. */
@@ -2548,7 +2573,7 @@ export class Game {
     // A captive may ride down this floor under Fomorian guard — free them and
     // they join the mound as a resident (once per figure per run).
     const rescuePool = RESCUES.filter(r => !this.rescuedIds.has(r.id));
-    if (!isBossFloor && rescuePool.length > 0 && Math.random() < Balance.CONFIG.rescues.rollChance) {
+    if (!isBossFloor && !this.tutorialSafety && rescuePool.length > 0 && Math.random() < Balance.CONFIG.rescues.rollChance) {
       this.pendingRescueId = rescuePool[Math.floor(Math.random() * rescuePool.length)]!.id;
       this.cb.log('Muffled cries carry up through the stone — someone is being dragged down in the rubble.', 'log-neutral', 'sprite_boss_wraith');
       this.cb.onToast?.('Cries for help echo in the falling stone...', 'fx_impact');

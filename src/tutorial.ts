@@ -21,6 +21,9 @@ interface TutorialStep {
   fallbackLands?: number;
 }
 
+/** Index of the Fight step in {@link STEPS} — the step that needs a practice foe staged. */
+export const FIGHT_STEP_INDEX = 4;
+
 const STEPS: TutorialStep[] = [
   {
     title: 'This is you',
@@ -58,8 +61,8 @@ const STEPS: TutorialStep[] = [
   {
     title: 'Fight',
     text: [
-      'Monsters ride down inside the stone. Walk INTO one to strike it; anything beside you strikes back on its turn. Space waits a turn and heals a little.',
-      'Monsters ride down inside the stone. Walk INTO one to strike it; anything beside you strikes back on its turn. The ● button waits a turn and heals a little.',
+      'Monsters usually ride down inside the stone — one has just crept onto your floor. Walk INTO it to strike; anything beside you strikes back on its turn. Space waits a turn and heals a little.',
+      'Monsters usually ride down inside the stone — one has just crept onto your floor. Walk INTO it to strike; anything beside you strikes back on its turn. The ● button waits a turn and heals a little.',
     ],
     doneOn: ['kill'],
     fallbackLands: 10,
@@ -94,6 +97,7 @@ export class TutorialController {
   private readonly host: HTMLElement;
   private readonly keyboard: boolean;
   private readonly onFinished: () => void;
+  private readonly onStep: ((index: number, game: Game) => void) | undefined;
   private el: HTMLElement | null = null;
   private idx = -1;
   private lands = 0;
@@ -107,14 +111,16 @@ export class TutorialController {
    * @param host - Element the callout card is appended to (the canvas container).
    * @param keyboard - Chooses keyboard vs touch copy.
    * @param onFinished - Called once when the tutorial ends (completed or skipped) — persist the done-flag here.
+   * @param onStep - Optional: called when each step becomes active (0-based index) — used to stage the step's scene (e.g. the Fight step's practice foe).
    * @throws {TypeError} If `host` or `onFinished` is null/undefined.
    */
-  constructor(host: HTMLElement, keyboard: boolean, onFinished: () => void) {
+  constructor(host: HTMLElement, keyboard: boolean, onFinished: () => void, onStep?: (index: number, game: Game) => void) {
     if (!host) throw new TypeError('TutorialController: "host" must not be null/undefined');
     if (typeof onFinished !== 'function') throw new TypeError('TutorialController: "onFinished" must be a function');
     this.host = host;
     this.keyboard = keyboard;
     this.onFinished = onFinished;
+    this.onStep = onStep;
   }
 
   /** Begins the tutorial at step 1 (no-op if already running). */
@@ -124,6 +130,7 @@ export class TutorialController {
     this.lands = 0;
     this.landsAtStepStart = 0;
     this.lastHeroPos = { x: game.player.x, y: game.player.y };
+    this.onStep?.(this.idx, game);
     this.render();
   }
 
@@ -160,6 +167,7 @@ export class TutorialController {
     this.landsAtStepStart = this.lands;
     this.lastHeroPos = { x: game.player.x, y: game.player.y };
     if (this.idx >= STEPS.length) { this.stop(); return; }
+    this.onStep?.(this.idx, game);
     this.render();
   }
 

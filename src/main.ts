@@ -9,7 +9,7 @@ import { StorageService } from './storage';
 import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
 import { HapticsController } from './haptics';
-import { TutorialController, type TutorialEvent } from './tutorial';
+import { TutorialController, FIGHT_STEP_INDEX, type TutorialEvent } from './tutorial';
 import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef } from './types';
 
 const DRAWER_EDGE_ZONE       = 24; // px from the right screen edge that starts an "open" gesture
@@ -533,7 +533,21 @@ class GameApp {
     const host = document.getElementById('canvas-container');
     if (!host) return;
     const keyboard = window.matchMedia?.('(min-width: 640px)').matches ?? true;
-    this.tutorial = new TutorialController(host, keyboard, () => StorageService.saveTutorialDone());
+    // While teaching, natural enemy spawns are held back; the Fight step
+    // stages its own single practice foe, and finishing (or skipping, or
+    // dying) releases the dungeon back to normal.
+    this.tutorial = new TutorialController(
+      host,
+      keyboard,
+      () => {
+        this.game.tutorialSafety = false;
+        StorageService.saveTutorialDone();
+      },
+      (stepIndex, game) => {
+        if (stepIndex === FIGHT_STEP_INDEX) game.spawnTutorialFoe();
+      },
+    );
+    this.game.tutorialSafety = true;
     this.tutorial.start(this.game);
   }
 
