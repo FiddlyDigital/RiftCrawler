@@ -61,9 +61,24 @@ try {
     // The app itself whitelists this benign Chrome resize noise.
     if (!String(err.message).includes('ResizeObserver loop')) pageErrors.push(err.message);
   });
+  // Failed asset loads (e.g. a dist built for a different base path served at
+  // root) leave a blank page with no pageerror — collect them for diagnosis.
+  const badResponses = [];
+  page.on('response', res => {
+    if (res.status() >= 400) badResponses.push(`${res.status()} ${res.url()}`);
+  });
 
   await page.goto(url);
-  await page.waitForSelector('#start-btn', { timeout: 10000 });
+  try {
+    await page.waitForSelector('#start-btn', { timeout: 10000 });
+  } catch {
+    const hints = [
+      badResponses.length ? `failed requests: ${badResponses.slice(0, 5).join(', ')}` : null,
+      pageErrors.length ? `page errors: ${pageErrors.slice(0, 3).join(' | ')}` : null,
+      'if the dist was built with a --base path, it cannot be served at localhost root — smoke-test a plain-base build',
+    ].filter(Boolean);
+    fail(`start screen never rendered. ${hints.join('. ')}`);
+  }
   step('start screen rendered');
 
   await page.click('#start-btn');
