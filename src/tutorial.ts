@@ -15,7 +15,7 @@ interface TutorialStep {
   title: string;
   /** [keyboard copy, touch copy] */
   text: [string, string];
-  /** Which events complete this step (heroMove is handled specially via position watching). */
+  /** Which events complete this step (heroMove is handled specially via position watching; 'button' steps advance on a tap, no gameplay required). */
   doneOn: TutorialEvent[] | 'heroMove' | 'button';
   /** Auto-advance after this many block landings, so a step can never stall the run. */
   fallbackLands?: number;
@@ -50,13 +50,14 @@ const STEPS: TutorialStep[] = [
     doneOn: ['blockLand'],
   },
   {
-    title: 'Clear rows',
+    // Read-and-continue: demanding an actual line clear this early is a wall
+    // for exactly the players the tutorial exists for.
+    title: 'Clear rows (when you can)',
     text: [
-      'Fill a row wall-to-wall and it CLEARS: gold, XP, and every monster standing on it is crushed. Let the stack reach the ceiling and it collapses on your head — build low and tidy.',
-      'Fill a row wall-to-wall and it CLEARS: gold, XP, and every monster standing on it is crushed. Let the stack reach the ceiling and it collapses on your head — build low and tidy.',
+      'Fill a row wall-to-wall and it CLEARS: gold, XP, and every monster standing on it is crushed. And build low — if the stack reaches the ceiling, it collapses on your head.',
+      'Fill a row wall-to-wall and it CLEARS: gold, XP, and every monster standing on it is crushed. And build low — if the stack reaches the ceiling, it collapses on your head.',
     ],
-    doneOn: ['lineClear'],
-    fallbackLands: 8,
+    doneOn: 'button',
   },
   {
     title: 'Fight',
@@ -103,6 +104,8 @@ export class TutorialController {
   private lands = 0;
   private landsAtStepStart = 0;
   private lastHeroPos: { x: number; y: number } | null = null;
+  /** The run's game instance, captured at start() so button steps can advance without a gameplay event. */
+  private gameRef: Game | null = null;
 
   /** True while the tutorial is showing. */
   public get active(): boolean { return this.idx >= 0 && this.idx < STEPS.length; }
@@ -126,6 +129,7 @@ export class TutorialController {
   /** Begins the tutorial at step 1 (no-op if already running). */
   public start(game: Game): void {
     if (this.active) return;
+    this.gameRef = game;
     this.idx = 0;
     this.lands = 0;
     this.landsAtStepStart = 0;
@@ -178,7 +182,8 @@ export class TutorialController {
       this.el.id = 'tutorial-callout';
       this.host.appendChild(this.el);
     }
-    const last = step.doneOn === 'button';
+    const isButtonStep = step.doneOn === 'button';
+    const isLast = this.idx === STEPS.length - 1;
     this.el.innerHTML = `
       <div class="tut-head">
         <span class="tut-title">${step.title}</span>
@@ -186,14 +191,15 @@ export class TutorialController {
       </div>
       <div class="tut-text">${step.text[this.keyboard ? 0 : 1]}</div>
       <div class="tut-actions">
-        ${last
-          ? '<button id="tut-done" class="tut-btn tut-btn-primary">✓ Got it</button>'
-          : '<button id="tut-skip" class="tut-btn">Skip tutorial</button>'}
+        ${isLast ? '' : '<button id="tut-skip" class="tut-btn">Skip tutorial</button>'}
+        ${isButtonStep
+          ? `<button id="tut-next" class="tut-btn tut-btn-primary">${isLast ? '✓ Got it' : '▶ Continue'}</button>`
+          : ''}
       </div>`;
     const skip = this.el.querySelector<HTMLButtonElement>('#tut-skip');
     if (skip) skip.onclick = () => this.stop();
-    const doneBtn = this.el.querySelector<HTMLButtonElement>('#tut-done');
-    if (doneBtn) doneBtn.onclick = () => this.stop();
+    const nextBtn = this.el.querySelector<HTMLButtonElement>('#tut-next');
+    if (nextBtn) nextBtn.onclick = () => { if (isLast) this.stop(); else if (this.gameRef) this.advance(this.gameRef); };
     // Re-trigger the entrance animation on each step.
     this.el.classList.remove('tut-pop');
     void this.el.offsetWidth;
