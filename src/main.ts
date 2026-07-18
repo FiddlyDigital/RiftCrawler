@@ -242,6 +242,11 @@ class GameApp {
   // ── Fatal-error recovery ────────────────────────────────────────────────
 
   private handleFatalError(err: unknown, context: string): void {
+    // Benign browser noise, not a crash: Chrome fires this when a resize
+    // cascade (window drag between monitors, the large-display UI zoom
+    // kicking in) makes ResizeObserver skip a frame of notifications.
+    const msg = typeof err === 'string' ? err : (err as Error | undefined)?.message ?? '';
+    if (msg.includes('ResizeObserver loop')) return;
     const info = CrashReporter.formatCrashInfo(err, context);
     console.error(`[Fatal:${info.context}]`, err);
     if (!CrashReporter.shouldReport()) return;  // already showing the crash modal for an earlier error
