@@ -50,7 +50,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 | System | Where | Summary |
 |---|---|---|
 | **Dice combat** | `src/systems/combat.ts` | Attacker & defender each roll a die sized by combat level (L1→D4 … L6→D20). Outcome by margin: miss / weak (0.5×) / normal (1×) / power (1.5×) / crit (2×, natural-max roll). **Miss-pity**: the 3rd consecutive whiff is upgraded to a hit. **Graze floor**: a miss still chips ~25% ATK, so no swing is wasted. |
-| **Turns & gravity** | `src/game.ts` | `tickMsForLevel = max(400, 3000 − (floor−1)·100) × (1 + slow%/100)`. Floor 1 ≈ 3s/tick; deepens toward the 400ms floor. Every hero move / block action also advances monster turns. |
+| **Turns & gravity** | `src/game.ts` | `tickMsForLevel = max(400, 3000 − (floor−1)·100) × (1 + slow%/100)`. Floor 1 ≈ 3s/tick; deepens toward the 400ms floor. Every hero move / block action also advances monster turns — except rotation, which is free (it cycles in place; charging a turn for it just punished lining up a drop). |
 | **Boons** (*Geasa* in-game) | altars & level-ups | Stackable passives (ATK, HP, dodge, regen, line-clear damage, …), grouped into tiers I–III. |
 | **Brands** (*Ogham Marks* in-game) | Occult Tattoo Artist tiles | Permanent, body-slotted marks; collecting a **set** of the same mark grants a powerful set bonus (e.g. War ×3 → +10 ATK, Life ×3 → free revive). |
 | **Curses (modifiers)** | chosen at run start | Run-long trade-offs (Glass Cannon, Overclock, Cursed, Berserker, …). |

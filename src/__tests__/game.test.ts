@@ -2314,6 +2314,25 @@ describe('Tutorial safety (no natural enemies while teaching)', () => {
   });
 });
 
+describe('Rotation is a free action', () => {
+  it('rotating advances no turn: no gravity step, no status ticks; moving left still does', () => {
+    const game = new Game(makeCallbacks());
+    const g = game as unknown as { blockX: number; blockY: number; spawnMonster(k: string, x: number, y: number, e?: boolean): void };
+    g.spawnMonster('rat', 0, 0, false);
+    const rat = game.monsters[0]!;
+    rat.statuses.push({ type: 'stun', duration: 3, power: 0 });
+    const yBefore = g.blockY;
+    game.handleBlockRotate();
+    game.handleBlockRotate();
+    game.handleBlockRotate();
+    expect(g.blockY).toBe(yBefore);  // no gravity advanced
+    expect(rat.statuses[0]!.duration).toBe(3);  // no turn ticked
+    // A lateral move still costs a turn.
+    game.handleBlockLeft();
+    expect(rat.statuses[0]?.duration ?? 0).toBeLessThan(3);
+  });
+});
+
 describe("An Dagda's gift (4-line clear)", () => {
   function clearFourLines(game: Game): void {
     for (let y = 0; y < 4; y++) for (let x = 0; x < 10; x++) game.map[x]![y] = Tile.FLOOR;

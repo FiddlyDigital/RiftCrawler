@@ -3229,11 +3229,17 @@ export class Game {
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
-  /** Rotates the falling piece 90°, if the rotated shape doesn't collide. */
+  /**
+   * Rotates the falling piece 90°, if the rotated shape doesn't collide.
+   * Rotation is a FREE action — no turn passes, monsters don't move. It
+   * cycles in place through four orientations without advancing the piece,
+   * so there's nothing to farm; charging a turn for it just got players
+   * bitten while lining up a drop.
+   */
   public handleBlockRotate(): void {
     if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
     const rotated = GameMath.rotateMatrix(this.blockMatrix);
-    if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); this.advanceTurn(); }
+    if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); }
   }
 
   /** Drops the falling piece one row, locking it in place if it can't descend further. */
