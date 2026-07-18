@@ -25,5 +25,23 @@
     "captiveLine": "A man in a gold chain manages, somehow, to look put-upon rather than terrified. \"These gentlemen have no appreciation for hospitality. Remove them and my table is yours.\"",
     "thanksLine": "Bricriu straightens his chain and bows just slightly too deep to be sincere. \"My savior. Come to my table in the mounds — the Champion's Portion is yours by right, and I never poison the guest of honor.\"",
     "serviceFlavor": "Bricriu sweeps a hand over a table that wasn't there a moment ago — steam, fat, honey, and a cut of meat that is unmistakably the hero's."
+  },
+  {
+    "id": "airmed",
+    "char": "npc_airmed",
+    "name": "Airmed the Herb-Wise",
+    "service": "healer",
+    "captiveLine": "A woman in healer's yellow kneels ringed by captors, hands bound behind her. \"They think my herbs will mend their king's ruined flesh. Cut them down and I'll tend to worthier wounds.\"",
+    "thanksLine": "Airmed flexes her freed hands and is already assessing your bruises. \"Three hundred and sixty-five herbs grew from my brother's grave, and I remember every one my father scattered. Come to me in the mounds — flesh can always be made stronger.\"",
+    "serviceFlavor": "Airmed's stall smells of yarrow, comfrey, and things that have no name above ground. \"The herbs of Miach's grave,\" she says. \"Costly, and worth it.\""
+  },
+  {
+    "id": "abcan",
+    "char": "npc_abcan",
+    "name": "Abcán the Harper",
+    "service": "harper",
+    "captiveLine": "A small man sits cross-legged among his captors, gagged with iron chain. His eyes say: they gagged me for a reason. Kill them and hear why.",
+    "thanksLine": "Abcán spits out the chain and hums one low note that makes the nearest stones lean in to listen. \"They gag the poet first, always. Find me by the hearth, friend — I owe you a lullaby your enemies will not enjoy.\"",
+    "serviceFlavor": "Abcán tunes a harp strung with something brighter than wire. \"The suantraí,\" he says. \"The sleep-strain. I play it down the stair ahead of you, and what wakes there wakes slowly.\""
   }
 ]

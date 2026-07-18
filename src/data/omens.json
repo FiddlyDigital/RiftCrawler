@@ -6,7 +6,9 @@
     "toastText": "The Rising Bog — the deep floods, foul water pools below...",
     "logText": "Bog-water seeps up from the deep. Floor laid in the lowest rows becomes fen.",
     "weight": 3,
-    "params": { "swampRows": 3 }
+    "params": {
+      "swampRows": 3
+    }
   },
   {
     "id": "sidhe_fog",
@@ -15,7 +17,9 @@
     "toastText": "Féth Fíada — the fairy mist closes in around you...",
     "logText": "The druid-mist of the Sídhe swallows the dark. You cannot see as far.",
     "weight": 3,
-    "params": { "visionPenalty": 2 }
+    "params": {
+      "visionPenalty": 2
+    }
   },
   {
     "id": "rich_vein",
@@ -24,7 +28,9 @@
     "toastText": "Cluricaun's Hoard — gold glints in every seam of the stone!",
     "logText": "A cluricaun's hoard laces this floor. Line clears pay double gold.",
     "weight": 2,
-    "params": { "goldMult": 2 }
+    "params": {
+      "goldMult": 2
+    }
   },
   {
     "id": "restless_dead",
@@ -33,7 +39,10 @@
     "toastText": "The Unquiet Cairn — the buried dead stir beneath the stone...",
     "logText": "This cairn's dead do not rest. More monsters ride the falling stone, and the bones walk.",
     "weight": 3,
-    "params": { "monsterChanceMult": 1.5, "skeletonBias": 0.6 }
+    "params": {
+      "monsterChanceMult": 1.5,
+      "skeletonBias": 0.6
+    }
   },
   {
     "id": "heavy_air",
@@ -42,7 +51,9 @@
     "toastText": "Fomorian Weight — the air itself presses down. Stone falls faster!",
     "logText": "A Fomorian curse hangs heavy here. Blocks fall 20% faster.",
     "weight": 3,
-    "params": { "gravityPct": -20 }
+    "params": {
+      "gravityPct": -20
+    }
   },
   {
     "id": "wild_magic",
@@ -51,7 +62,9 @@
     "toastText": "Wild Rift-Surge — the Otherworld bleeds through the stone...",
     "logText": "The rift runs wild. Far more falling stone comes cursed — or blessed.",
     "weight": 2,
-    "params": { "curseBlessMult": 2.5 }
+    "params": {
+      "curseBlessMult": 2.5
+    }
   },
   {
     "id": "bealtaine_fires",
@@ -60,7 +73,79 @@
     "toastText": "Night of Bealtaine — light every need-fire the stone brings you!",
     "logText": "It is Bealtaine in the deep. Braziers will ride the falling stone — light all three and the Sídhe will grant a Geis.",
     "weight": 2,
-    "params": { "brazierPieceInterval": 5, "braziersRequired": 3 },
+    "params": {
+      "brazierPieceInterval": 5,
+      "braziersRequired": 3
+    },
     "special": "bealtaine"
+  },
+  {
+    "id": "morrigan_ravens",
+    "icon": "sprite_boss_wraith",
+    "name": "The Morrígan's Ravens",
+    "toastText": "The Morrígan's Ravens — the war-crow watches this floor. Blood pays double...",
+    "logText": "Ravens crowd the dark above. The Morrígan has claimed this floor: her creatures strike harder, but every kill feeds you twice the battle-glory.",
+    "weight": 2,
+    "params": {
+      "monsterAtkMult": 1.3,
+      "xpMult": 2
+    }
+  },
+  {
+    "id": "lughnasa_truce",
+    "icon": "special_sacred",
+    "name": "Lughnasa Truce",
+    "toastText": "Lughnasa Truce — Lugh's long arm steadies the falling stone...",
+    "logText": "It is harvest-fair time above, and even the rift keeps the god's peace. The stone falls a quarter slower.",
+    "weight": 2,
+    "params": {
+      "gravityPct": 25
+    }
+  },
+  {
+    "id": "salmon_run",
+    "icon": "special_swamp",
+    "name": "The Salmon's Passage",
+    "toastText": "The Salmon's Passage — wisdom swims these waters. All learning is doubled...",
+    "logText": "The Salmon of Knowledge passes through the deep waters below this floor. Every scrap of experience here teaches twice as much.",
+    "weight": 2,
+    "params": {
+      "xpMult": 2
+    }
+  },
+  {
+    "id": "brigid_hearthlight",
+    "icon": "tile_brazier",
+    "name": "Brigid's Hearthlight",
+    "toastText": "Brigid's Hearthlight — the saint of healing warms this floor's stone...",
+    "logText": "A soft forge-light with no source warms the stone. Brigid keeps this floor: resting heals twice as deep.",
+    "weight": 2,
+    "params": {
+      "waitHealMult": 2
+    }
+  },
+  {
+    "id": "crom_tithe",
+    "icon": "item_gold_pouch",
+    "name": "Crom Cruach's Tithe",
+    "toastText": "Crom Cruach's Tithe — the old god pays gold for blood...",
+    "logText": "Something older than the Tuatha Dé stirs beneath this floor. Its creatures hit like falling stone, but line clears pay two-and-a-half-fold — Crom always pays his tithe.",
+    "weight": 1,
+    "params": {
+      "monsterAtkMult": 1.4,
+      "goldMult": 2.5
+    }
+  },
+  {
+    "id": "samhain_thinning",
+    "icon": "trap_teleport",
+    "name": "The Samhain Thinning",
+    "toastText": "The Samhain Thinning — the veil is thin. The dead walk tonight...",
+    "logText": "The veil between worlds is worn thin as a caul here. The dead of your own past runs will surely find you, and far more stone comes cursed — or blessed.",
+    "weight": 2,
+    "params": {
+      "forceHaunt": 1,
+      "curseBlessMult": 2
+    }
   }
 ]

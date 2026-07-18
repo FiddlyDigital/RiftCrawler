@@ -638,7 +638,7 @@ export class Rescue implements RescueDef {
   readonly id: string;
   readonly char: string;
   readonly name: string;
-  readonly service: 'wright' | 'seer' | 'cook';
+  readonly service: 'wright' | 'seer' | 'cook' | 'healer' | 'harper';
   readonly captiveLine: string;
   readonly thanksLine: string;
   readonly serviceFlavor: string;

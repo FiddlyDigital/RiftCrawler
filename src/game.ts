@@ -199,6 +199,9 @@ export class Game {
   /** While the first-run tutorial is teaching, natural enemy spawns are suppressed — the tutorial introduces its own single practice foe (see spawnTutorialFoe). */
   public tutorialSafety = false;
 
+  /** The floor Abcán's sleep-strain was played for — every monster spawning on that floor arrives stunned for 2 turns. */
+  public harperLullFloor = 0;
+
   /** Whether An Draoi's deity pact is still unsworn — the emissary waits in the mound until it is. */
   private get pactPending(): boolean {
     return this.activeClassId === 'draoi' && this.activePatronId === null && this.dungeonLevel >= 2;
@@ -901,7 +904,9 @@ export class Game {
     const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
-    const atk = isElite ? Math.floor(baseAtk * Balance.CONFIG.eliteMonsters.atkMult) : baseAtk;
+    // Omens like the Morrígan's Ravens or Crom's Tithe harden every spawn.
+    const omenAtkMult = this.activeOmen?.num('monsterAtkMult', 1) ?? 1;
+    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult);
     const name = nameOverride ?? (isElite ? `Elite ${def.name}` : def.name);
     const m = new Monster(
       tx, ty, def.char, name, hp, hp, atk, def.xpReward,
@@ -915,6 +920,11 @@ export class Game {
     m.combatLevel = Math.min(6, def.combatLevel + (isElite ? Balance.CONFIG.eliteMonsters.combatLevelBonus : 0));
     if (this.frozenRift) {
       m.statuses.push({ type: 'stun', duration: 1, power: 0 });
+    }
+    // Abcán's suantraí (sleep-strain) lulls everything that arrives on the
+    // floor it was played for.
+    if (this.dungeonLevel === this.harperLullFloor) {
+      m.statuses.push({ type: 'stun', duration: 2, power: 0 });
     }
     this.monsters.push(m);
     if (isElite) {
@@ -1221,7 +1231,7 @@ export class Game {
     }
     // Everyone freed from Fomorian captivity settles along the north wall.
     RESCUES.filter(r => this.rescuedIds.has(r.id)).forEach((r, i) => {
-      this.npcTiles.push({ x: 3 + i * 2, y: M.y0, npcId: `__rescue_${r.id}__` });
+      this.npcTiles.push({ x: 2 + i, y: M.y0, npcId: `__rescue_${r.id}__` });
     });
     this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
     this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
@@ -1280,6 +1290,51 @@ export class Game {
         flavor: `${rescue.serviceFlavor} "I see crimson at floor ${nextBossFloor} — ${boss.name} waits there, and knows you are coming.${smithLine}"`,
         options: [{ label: 'Thank her', desc: '', apply: (): string => 'The flame gutters out. Fedelm is already looking at something else — something further down.' }],
       };
+    } else if (rescue.service === 'healer') {
+      const cost = Balance.CONFIG.rescues.healerBaseCost + this.dungeonLevel * Balance.CONFIG.rescues.healerCostPerFloor;
+      const hpGain = Balance.CONFIG.rescues.healerHpGain;
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: rescue.serviceFlavor,
+        options: [
+          {
+            label: `Buy her herbs (${cost} gold)`,
+            desc: `+${hpGain} Max HP, permanently.`,
+            apply: (game: Game): string => {
+              if (game.gold < cost) return 'Airmed folds the herbs away. "Healing is costly. Dying is costlier — come back with gold."';
+              game.gold -= cost;
+              game.player.maxHp += hpGain;
+              game.player.hp += hpGain;
+              game.storyBeats.push("ate of the herbs of Miach's grave");
+              game.pushUI();
+              return `The herbs are bitter as grief and warm as a hearth. +${hpGain} Max HP, forever.`;
+            },
+          },
+          { label: 'Not today', desc: '', apply: (): string => '"Then don\'t come crying to me with your ribs showing," she says, not unkindly.' },
+        ],
+      };
+    } else if (rescue.service === 'harper') {
+      const played = this.harperLullFloor === this.dungeonLevel + 1;
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: played
+          ? 'Abcán is still playing, eyes closed. The suantraí already drifts down the stair ahead of you — one floor of it is all one harp can hold.'
+          : rescue.serviceFlavor,
+        options: played
+          ? [{ label: 'Leave him to it', desc: '', apply: (): string => 'You leave the harper to his slow, heavy tune.' }]
+          : [
+              {
+                label: 'Ask for the suantraí',
+                desc: 'Every monster on the NEXT floor arrives drowsy (stunned 2 turns).',
+                apply: (game: Game): string => {
+                  game.harperLullFloor = game.dungeonLevel + 1;
+                  game.storyBeats.push("descended under Abcán's sleep-strain");
+                  return 'Abcán bends to the strings, and the stairwell fills with a tune like falling snow. Whatever waits below will wake slowly.';
+                },
+              },
+              { label: 'Not now', desc: '', apply: (): string => '"Suit yourself," he says. "The deep is louder without me."' },
+            ],
+      };
     } else {
       const fed = this.portionAtkBonus > 0;
       const atk = Balance.CONFIG.rescues.portionAtk;
@@ -1321,6 +1376,15 @@ export class Game {
     const omen = Omen.random();
     this.activeOmen = omen;
     this.omenGravityPct = omen.num('gravityPct', 0);
+    // Samhain: the veil is thin — a ghost of a past run WILL find you, if any
+    // is close enough to your level (the normal roll already happened in
+    // resetDungeonState; this overrides a miss).
+    if (omen.num('forceHaunt', 0) > 0 && !this.activeGhost) {
+      const eligible = this.availableGhosts.filter(
+        g => Math.abs(g.playerLevel - this.player.playerLevel) <= Balance.CONFIG.ghosts.levelTolerance,
+      );
+      if (eligible.length > 0) this.activeGhost = eligible[Math.floor(Math.random() * eligible.length)]!;
+    }
     this.cb.log(omen.logText, 'log-tetris', omen.icon);
     this.cb.onToast?.(omen.toastText, omen.icon);
     // Gravity-affecting omens need the host's tick timer re-armed right away.
@@ -1662,7 +1726,8 @@ export class Game {
       const LINE_CLEAR_XP = [0, 15, 40, 80, 150];
       const xpGain = Math.round((LINE_CLEAR_XP[Math.min(rowsCleared, 4)] ?? 150) * this.player.lineClearXpMult);
       this.cb.onParticle(this.player.x, this.player.y, `+${xpGain}XP`, '#ce93d8', 14);
-      const levelled = this.player.gainXP(Math.floor(xpGain * this.xpMultiplier));
+      const omenXpMult = this.activeOmen?.num('xpMult', 1) ?? 1;
+      const levelled = this.player.gainXP(Math.floor(xpGain * this.xpMultiplier * omenXpMult));
       if (levelled) {
         this.cb.log(`LEVEL UP! Now level ${this.player.playerLevel}!`, 'log-perk', 'special_sacred');
         this.openLevelUpBoons();
@@ -1807,6 +1872,8 @@ export class Game {
       this.player.atk -= this.portionAtkBonus;
       this.portionAtkBonus = 0;
     }
+    // Abcán's suantraí fades once its floor is behind you.
+    if (this.harperLullFloor !== 0 && this.dungeonLevel > this.harperLullFloor) this.harperLullFloor = 0;
     // A Bealtaine floor left with fires unlit — the ritual quietly lapses.
     if (this.activeOmen?.special === 'bealtaine' && !this.ritualComplete && this.brazierLitCount > 0) {
       this.cb.log('The need-fires gutter out below, unlit and unanswered. The Sídhe withdraw.', 'log-neutral', 'tile_brazier');
@@ -2586,7 +2653,7 @@ export class Game {
   public handleHeroWait(): void {
     if (this.player.hp <= 0 || this.paused) return;
     const nearbyMonster = this.monsters.some(m => Math.abs(m.x - this.player.x) <= 1 && Math.abs(m.y - this.player.y) <= 1);
-    const healAmt = nearbyMonster ? 1 : 4;
+    const healAmt = (nearbyMonster ? 1 : 4) * (this.activeOmen?.num('waitHealMult', 1) ?? 1);
     const healed = this.player.heal(healAmt);
     if (healed > 0) {
       this.cb.onParticle(this.player.x, this.player.y, `+${healed} HP`, '#69f0ae');

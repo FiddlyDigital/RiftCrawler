@@ -66,5 +66,41 @@
     ],
     "returnLine": "Back from the dark, and still in one piece. Sit — the fire has kept your place.",
     "waystationOnly": true
+  },
+  {
+    "id": "tuan",
+    "char": "npc_tuan",
+    "name": "Tuan mac Cairill",
+    "kind": "flavor",
+    "lines": [
+      "I have been a stag, an eagle, a boar, and a salmon, and I remember every invasion of Ireland from Partholón's landing on. This bridge of Bres's? I will remember how it ends, too. I always do.",
+      "Do not pity me, wanderer. I watched every soul I knew die of plague and wore new shapes until the grief fit. There are worse fates down here than yours.",
+      "The salmon-shape was best. You see everything from the water, and nothing expects you to fight."
+    ],
+    "returnLine": "Still the same shape as last time, I see. A pity. You'd make a passable eagle."
+  },
+  {
+    "id": "scathach",
+    "char": "npc_scathach",
+    "name": "Scáthach of the Shadows",
+    "kind": "flavor",
+    "lines": [
+      "I trained the Hound of Ulster himself on the Isle of Shadows, and even he needed the salmon-leap shown twice. Keep your feet under you when the stone falls — that is the whole of war, in the end.",
+      "You grip your weapon like a farmer. Loosen the wrist. There — now you might live past the next floor.",
+      "I gave Cú Chulainn the Gáe Bolg and half a mind to keep it. Bres's deep is full of old students of mine, wanderer. Most of them are bones. Do better."
+    ],
+    "returnLine": "Back again, and still breathing. My teaching sticks to you better than it did to most."
+  },
+  {
+    "id": "cliodhna",
+    "char": "npc_cliodhna",
+    "name": "Clíodhna of the Fair Hair",
+    "kind": "flavor",
+    "lines": [
+      "I am queen of the banshees of Munster, wanderer, and I know the sound of every death that is coming. Yours I have not heard yet. Walk carefully and keep it that way.",
+      "A wave took me once at Glandore — the tide that bears my name still runs there. Everything in the deep wants to sweep you away like that. Be heavier than your grief.",
+      "My three bright birds could sing the sick to sleep and heal them with apples from the Otherworld tree. No birds down here. Only the stone, and what rides it."
+    ],
+    "returnLine": "Still no keening for you on the wind. Good. I had begun to listen for it."
   }
 ]

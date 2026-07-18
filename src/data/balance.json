@@ -152,7 +152,10 @@
   "rescues": {
     "rollChance": 0.3,
     "pieceThreshold": 6,
-    "portionAtk": 2
+    "portionAtk": 2,
+    "healerBaseCost": 40,
+    "healerCostPerFloor": 6,
+    "healerHpGain": 5
   },
   "spearOfLugh": {
     "dmgMult": 3,

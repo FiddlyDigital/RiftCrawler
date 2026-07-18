@@ -272,7 +272,8 @@ export class CombatSystem {
     if (m.isBoss) game.bossesKilled++;
     game.gold += m.isBoss ? Balance.COMBAT.rewards.goldOnBossKill : Balance.COMBAT.rewards.goldOnKill;
     game.monsters = game.monsters.filter(x => x !== m);
-    const levelled = game.player.gainXP(Math.floor(m.xpReward * game.xpMultiplier));
+    const omenXpMult = game.activeOmen?.num('xpMult', 1) ?? 1;
+    const levelled = game.player.gainXP(Math.floor(m.xpReward * game.xpMultiplier * omenXpMult));
     if (levelled) {
       game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
       game.openLevelUpBoons();

@@ -259,11 +259,14 @@
     "rescues": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rollChance", "pieceThreshold", "portionAtk"],
+      "required": ["rollChance", "pieceThreshold", "portionAtk", "healerBaseCost", "healerCostPerFloor", "healerHpGain"],
       "properties": {
         "rollChance": { "type": "number", "minimum": 0, "maximum": 1 },
         "pieceThreshold": { "type": "number" },
-        "portionAtk": { "type": "number" }
+        "portionAtk": { "type": "number" },
+        "healerBaseCost": { "type": "number" },
+        "healerCostPerFloor": { "type": "number" },
+        "healerHpGain": { "type": "number" }
       }
     },
     "spearOfLugh": {

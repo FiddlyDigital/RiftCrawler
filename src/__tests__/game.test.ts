@@ -7,7 +7,7 @@ import { CombatSystem } from '../systems/combat';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { HazardSystem } from '../systems/hazards';
 import { StatusEffectSystem } from '../systems/statusEffects';
-import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, Boon, Omen, OMENS, Npc, NPCS } from '../content';
+import { BRANDS, BOONS, MODIFIERS, CLASSES, FLOOR_EVENTS, PATRONS, SMITHS, RESCUES, Boon, Omen, OMENS, Npc, NPCS } from '../content';
 import { Balance } from '../balance';
 import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
@@ -2148,6 +2148,98 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     chooseAtStairs(game, onFloorEvent, 0);
     enterMound(game, onFloorEvent);
     expect(game.npcTiles.some(n => n.npcId === '__pact__')).toBe(false);
+  });
+});
+
+describe('New omens (lore expansion) and rescue services', () => {
+  const omenById = (id: string): Omen => OMENS.find(o => o.id === id) as Omen;
+
+  it('the six new omens are loaded with their mechanical params', () => {
+    for (const id of ['morrigan_ravens', 'lughnasa_truce', 'salmon_run', 'brigid_hearthlight', 'crom_tithe', 'samhain_thinning']) {
+      expect(omenById(id)).toBeDefined();
+    }
+    expect(omenById('lughnasa_truce').num('gravityPct', 0)).toBe(25);
+  });
+
+  it("the Morrígan's Ravens harden spawns (monsterAtkMult applied at spawn)", () => {
+    const game = new Game(makeCallbacks());
+    (game as unknown as { spawnMonster(k: string, x: number, y: number, e?: boolean): void }).spawnMonster('rat', 0, 0, false);
+    const baseAtk = game.monsters[0]!.atk;
+    game.monsters = [];
+    game.activeOmen = omenById('morrigan_ravens');
+    (game as unknown as { spawnMonster(k: string, x: number, y: number, e?: boolean): void }).spawnMonster('rat', 0, 0, false);
+    expect(game.monsters[0]!.atk).toBe(Math.floor(baseAtk * 1.3));
+  });
+
+  it('xpMult omens double kill XP', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    const kill = (): number => {
+      const before = game.player.totalXpEarned;
+      const m = new Monster(0, 23, 'sprite_rat', 'XP Rat', 1, 1, 1, 30, false);
+      game.monsters.push(m);
+      m.hp = 0;
+      CombatSystem.killMonster(m, game);
+      return game.player.totalXpEarned - before;
+    };
+    const normal = kill();
+    game.activeOmen = omenById('salmon_run');
+    expect(kill()).toBe(normal * 2);
+  });
+
+  it("Brigid's Hearthlight doubles wait-healing", () => {
+    const game = new Game(makeCallbacks());
+    game.player.hp = 10;
+    game.handleHeroWait();
+    const normalHeal = game.player.hp - 10;
+    game.player.hp = 10;
+    game.activeOmen = omenById('brigid_hearthlight');
+    game.handleHeroWait();
+    expect(game.player.hp - 10).toBe(normalHeal * 2);
+  });
+
+  it("Abcán's suantraí stuns every spawn on its floor, and lapses after", () => {
+    const game = new Game(makeCallbacks());
+    game.harperLullFloor = game.dungeonLevel;
+    (game as unknown as { spawnMonster(k: string, x: number, y: number, e?: boolean): void }).spawnMonster('rat', 0, 0, false);
+    expect(game.monsters[0]!.isStunned).toBe(true);
+    // Two floors later the strain has faded.
+    game.dungeonLevel += 2;
+    (game as unknown as { resetDungeonState(): void }).resetDungeonState();
+    expect(game.harperLullFloor).toBe(0);
+  });
+
+  it("Airmed's herbs trade gold for permanent Max HP", () => {
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb);
+    game.rescuedIds.add('airmed');
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const resident = game.npcTiles.find(n => n.npcId === '__rescue_airmed__')!;
+    const cost = Balance.CONFIG.rescues.healerBaseCost + game.dungeonLevel * Balance.CONFIG.rescues.healerCostPerFloor;
+    game.gold = cost;
+    const maxBefore = game.player.maxHp;
+    game.player.x = resident.x; game.player.y = resident.y + 1;
+    game.map[resident.x]![resident.y + 1] = Tile.FLOOR;
+    game.npcTiles = [resident];
+    game.paused = false;
+    game.handleHeroMove(0, -1);
+    const [, onChoice] = onFloorEvent.mock.calls[0]!;
+    onChoice(0);
+    expect(game.gold).toBe(0);
+    expect(game.player.maxHp).toBe(maxBefore + Balance.CONFIG.rescues.healerHpGain);
+  });
+
+  it('all five rescued residents fit inside the mound chamber', () => {
+    const game = new Game(makeCallbacks());
+    for (const r of RESCUES) game.rescuedIds.add(r.id);
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const residents = game.npcTiles.filter(n => n.npcId.startsWith('__rescue_'));
+    expect(residents).toHaveLength(RESCUES.length);
+    for (const r of residents) {
+      expect(r.x).toBeGreaterThanOrEqual(Game.MOUND.x0);
+      expect(r.x).toBeLessThanOrEqual(Game.MOUND.x1);
+    }
   });
 });
 

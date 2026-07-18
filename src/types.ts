@@ -290,7 +290,7 @@ export interface RescueDef {
   /** Display name. */
   name: string;
   /** Which mound service this figure provides once rescued. */
-  service: 'wright' | 'seer' | 'cook';
+  service: 'wright' | 'seer' | 'cook' | 'healer' | 'harper';
   /** Line shown when bumped while their elite captors still live. */
   captiveLine: string;
   /** Dialog shown on the rescue itself, before they beam away to the mounds. */

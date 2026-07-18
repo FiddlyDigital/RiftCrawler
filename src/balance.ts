@@ -82,7 +82,7 @@ export interface BalanceConfig {
   omens: { rollChance: number };
   well: { baseCost: number; costPerFloor: number; baseXp: number; xpPerFloor: number };
   waystation: { tattooistChance: number; stashRecoveryPct: number };
-  rescues: { rollChance: number; pieceThreshold: number; portionAtk: number };
+  rescues: { rollChance: number; pieceThreshold: number; portionAtk: number; healerBaseCost: number; healerCostPerFloor: number; healerHpGain: number };
   spearOfLugh: { dmgMult: number; cooldownMax: number };
 }
 

@@ -12,7 +12,7 @@
       "id": { "type": "string", "minLength": 1 },
       "char": { "type": "string", "minLength": 1 },
       "name": { "type": "string", "minLength": 1 },
-      "service": { "type": "string", "enum": ["wright", "seer", "cook"] },
+      "service": { "type": "string", "enum": ["wright", "seer", "cook", "healer", "harper"] },
       "captiveLine": { "type": "string", "minLength": 1 },
       "thanksLine": { "type": "string", "minLength": 1 },
       "serviceFlavor": { "type": "string", "minLength": 1 }
