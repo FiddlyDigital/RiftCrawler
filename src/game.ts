@@ -1896,11 +1896,13 @@ export class Game {
     this.dungeonLevel++;
     this.floorsDescended++;
     const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
-    if (isBossFloor) this.announceBossFloor();
     this.updateBiome();
     this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
     this.resetDungeonState();
     this.inWaystation = false;  // defense-in-depth: a collapse can't start inside the mound, but never carry the suspension out
+    // A boss floor reached by a stack collapse also opens as a Causeway Duel.
+    if (isBossFloor && this.duelBossFloorsEnabled()) { this.startCausewayDuel(); return; }
+    if (isBossFloor) this.announceBossFloor();
     // Omen first, smith second — if both toast, the more actionable smith
     // hint wins the banner while both keep their log lines.
     this.maybeRollOmen(isBossFloor);
@@ -2783,14 +2785,11 @@ export class Game {
   }
 
   /**
-   * Opt-in (spike): when this flag is set, boss floors run as a Causeway Duel
-   * instead of the normal boss-rider encounter. Off by default — set
-   * `localStorage.riftcrawler_duel_boss = '1'` to try it. Wrapped so tests and
-   * non-browser contexts (no localStorage) are safe.
+   * Whether boss floors run as a Causeway Duel (this branch: always). Kept as
+   * a single toggle point so it's easy to gate behind a setting later.
    */
   private duelBossFloorsEnabled(): boolean {
-    try { return typeof localStorage !== 'undefined' && localStorage.getItem('riftcrawler_duel_boss') === '1'; }
-    catch { return false; }
+    return true;
   }
 
   /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (omen, smith, pending-event roll). */
