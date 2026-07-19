@@ -239,6 +239,8 @@ export class Game {
   private duelBoons: Array<{ x: number; y: number; kind: 'geis' | 'gold' | 'heal'; taken: boolean }> = [];
   /** Turns elapsed in the current duel (player placements). */
   private duelTurns = 0;
+  /** One-time flag so the "bridge nears your shore" warning fires only once. */
+  private duelNearShoreWarned = false;
   private static readonly DUEL_PLAYER_COLOR = '#2f5c8a';
   private static readonly DUEL_BOSS_COLOR = '#5c2530';
   private static readonly DUEL_WALL_COLOR = '#3a3550';
@@ -3608,6 +3610,7 @@ export class Game {
       this.cb.onParticleBurst?.(x, y, 10, '#b98fc4', boon.char);
     }
     this.cb.onRingPulse?.(x, y, '217,164,65');
+    this.cb.onAudio?.('comboMilestone', 2);
   }
 
   /**
@@ -3631,6 +3634,7 @@ export class Game {
     this.duelWall = [];
     this.duelBoons = [];
     this.duelTurns = 0;
+    this.duelNearShoreWarned = false;
 
     const midX = Math.floor(GameConfig.COLS / 2);
     const homeY = GameConfig.ROWS - 1, topY = 0;
@@ -3818,29 +3822,52 @@ export class Game {
    * its pawn to the new frontier; reaching the shore lands the bridge and loses
    * the run.
    */
+  /**
+   * The lane the boss steers its bridge toward: the column that reaches the
+   * shore with the least resistance — fewest player tiles blocking the way
+   * down and nearest the home. So if the hero walls off the centre, the boss
+   * routes around toward an open flank instead of butting against the wall.
+   */
+  private duelBossLaneColumn(): number {
+    let bestX = this.duelHome.x, bestCost = Infinity;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      let blockers = 0;
+      for (let y = 0; y < GameConfig.ROWS; y++) if (this.duelOwner[x]![y] === 1) blockers++;
+      const cost = blockers * 3 + Math.abs(x - this.duelHome.x);
+      if (cost < bestCost) { bestCost = cost; bestX = x; }
+    }
+    return bestX;
+  }
+
   private duelBossTurn(): void {
     if (this.duelResolved || !this.duelBoss) return;
-    // The bridge's leading edge: the deepest boss tile, nearest the hero's column.
+    const laneX = this.duelBossLaneColumn();  // the open lane to the shore
+    // The bridge's leading edge: the deepest boss tile, nearest the target lane.
     let edge = { x: this.duelBoss.x, y: this.duelBoss.y };
     let bestScore = -Infinity;
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) {
         if (this.duelOwner[x]![y] !== 2) continue;
-        const score = y * 10 - Math.abs(x - this.player.x);
+        const score = y * 10 - Math.abs(x - laneX);
         if (score > bestScore) { bestScore = score; edge = { x, y }; }
       }
     }
-    // Extend a 2-wide causeway two rows down, angling toward the hero's column,
-    // so it reads as a bridge being built — not a one-tile thread.
+    // Extend a 2-wide causeway two rows down, angling toward the open lane,
+    // so it reads as a bridge being built — and routes around the player's walls.
     const rows = 2;
     for (let i = 0; i < rows; i++) {
       const ny = edge.y + 1;
       if (ny >= GameConfig.ROWS) break;
-      let nx = Math.max(0, Math.min(edge.x + Math.sign(this.player.x - edge.x), GameConfig.COLS - 1));
+      let nx = Math.max(0, Math.min(edge.x + Math.sign(laneX - edge.x), GameConfig.COLS - 1));
       if (this.duelOwner[nx]![ny] !== 0) nx = edge.x;      // angled cell blocked → straight down
-      if (this.duelOwner[nx]![ny] !== 0) break;            // fully walled off — the player blocked the bridge
+      // If straight down is also blocked, try to sidestep either way to keep advancing.
+      if (this.duelOwner[nx]![ny] !== 0) {
+        const side = [edge.x - 1, edge.x + 1].find(sx => sx >= 0 && sx < GameConfig.COLS && this.duelOwner[sx]![ny] === 0);
+        if (side === undefined) break;                     // truly walled off — the player blocked the bridge
+        nx = side;
+      }
       const claimed = [{ x: nx, y: ny }];
-      const wideX = nx + (nx < this.player.x ? 1 : -1);    // widen toward the hero for a bridge look
+      const wideX = nx + (nx < laneX ? 1 : -1);            // widen toward the lane for a bridge look
       if (wideX >= 0 && wideX < GameConfig.COLS && this.duelOwner[wideX]![ny] === 0) claimed.push({ x: wideX, y: ny });
       this.duelClaim(claimed, 2, Game.DUEL_BOSS_COLOR);
       edge = { x: nx, y: ny };
@@ -3848,6 +3875,16 @@ export class Game {
     }
     // The boss walks its pawn to the new leading edge — coming to meet the hero.
     this.duelBoss.x = edge.x; this.duelBoss.y = edge.y;
+    this.cb.onRingPulse?.(edge.x, edge.y, '150,40,55');  // the bridge grinds a length longer
+    this.cb.onAudio?.('blockMove');
+    // One-time alarm once the bridge is closing on the shore.
+    const gap = (GameConfig.ROWS - 1) - this.duelBossDeepestRow();
+    if (!this.duelNearShoreWarned && gap <= 4 && this.duelWall.length === 0) {
+      this.duelNearShoreWarned = true;
+      this.cb.log('The bridge is almost across — cut them down NOW or the invasion lands!', 'log-boss', 'ui_warning');
+      this.cb.onToast?.('THE BRIDGE NEARS YOUR SHORE!', 'ui_warning');
+      this.cb.onAudio?.('bossWarn');
+    }
   }
 
   /** Boss slain in the duel — the causeway is broken; stairs rise so the run can go on. */
@@ -3869,7 +3906,11 @@ export class Game {
     this.colors[spot.x]![spot.y] = '#6d3f7a';
     this.cb.log('The enemy causeway crumbles into the dark — the way on is open.', 'log-boss', 'item_trophy');
     this.cb.onToast?.('The bridge is broken! Take the stairs on.', 'special_sacred');
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 14, '#d9a441', 'item_trophy');
+    // A victory flourish: a golden burst and pulse over the hero + the fallen edge.
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 18, '#d9a441', 'item_trophy');
+    this.cb.onRingPulse?.(this.player.x, this.player.y, '217,164,65');
+    this.cb.onImpactGlow?.(this.player.x, this.player.y, '217,164,65', 24);
+    this.cb.onAudio?.('bountyFulfilled');
     this.storyBeats.push('broke a Fomorian causeway in single combat');
     this.pushUI();
   }
@@ -3879,6 +3920,10 @@ export class Game {
     if (this.duelResolved) return;
     this.duelResolved = true;
     this.cb.log('The bridge lands. The invasion crosses over you — the causeway to Ériu is complete.', 'log-boss', 'ui_warning');
+    // A grim flourish at the shore before the run ends.
+    this.cb.onRingPulse?.(this.duelHome.x, this.duelHome.y, '150,40,55');
+    this.cb.onParticleBurst?.(this.duelHome.x, this.duelHome.y, 14, '#c1443c', 'ui_warning');
+    this.cb.onAudio?.('bossWarn');
     this.player.hp = 0;
     this.cb.onDeath('THE BRIDGE LANDS', 'the Fomorian causeway reached the shore', this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('death'));
   }
@@ -4061,6 +4106,7 @@ export class Game {
     'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
     'activeGhost', 'availableGhosts',
     'lastLineClearMs', 'tutorialSafety',
+    'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
@@ -4121,7 +4167,14 @@ export class Game {
     // Boss mechanics are functions — reattach them from the live content
     // definitions around the restored boss instance.
     const boss = this.monsters.find(m => m.isBoss);
-    if (boss?.isGorgoth) {
+    if (this.inCausewayDuel) {
+      // The duel owns its boss outright (no biome hooks) — just re-link the
+      // reference to the restored boss instance so the win path still fires.
+      this.duelBoss = boss ?? null;
+      this.activeBossOnHalfHp = null;
+      this.activeBossOnDeath = null;
+      this.bossHalfHpTriggered = true;
+    } else if (boss?.isGorgoth) {
       this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
       this.activeBossOnDeath = null;
     } else if (boss) {

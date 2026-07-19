@@ -51,15 +51,37 @@ Turn-based, no gravity, on the shared 10×25 grid:
 - **Hero walks the causeway to fight** (uses real combat depth) rather than
   auto-resolving on contact.
 
-## Deferred until the core feels good
+## The trimmings (all shipped)
 
-- **Center wall + switch-islands** — a barrier between the halves that only
-  opens once you route your causeway to a switch and flip it.
-- **Boon-islands** off the main line — detour to grab them, at a tempo cost.
-- Smarter boss AI, wiring onto real boss floors (replacing/《optioning》 the
-  current boss-rider spawn), save/resume of duel state, and tests.
+- **Center wall + switch-islands** — a sealed full-width barrier splits the two
+  halves. Two switch-islands sit below it; route your causeway to abut each one
+  to light it, and lighting both dissolves the wall so you can climb to the
+  bridge.
+- **Boon-islands** off the main line — two islands above the wall carry rewards
+  (a tier-scaled Geis, a heal, or gold). Detour your causeway to touch one and
+  it's granted, at a tempo cost that lets the boss gain ground.
+- **Characterful boss AI** — the boss no longer marches a straight column. Each
+  turn it picks the *lane* that minimises `player-blockers×3 + distance-to-home`
+  (`duelBossLaneColumn()`), so it routes around walls you build and probes for
+  the shortest open path to your shore.
+- **Save / resume** — mid-duel state survives a snapshot round trip. `duelBoss`
+  is skipped in the raw scalar sweep and re-linked to the live restored
+  `Monster` on load; owner grid, switches, wall, and boons all persist.
+- **Polish** — a distinct gold pulsing cursor during the build phase; a
+  one-time "the bridge nears your shore" warning when the boss closes in; sound
+  cues on boss advance, boon pickup, and wall-open; and richer particle / ring /
+  glow flourishes on both the win (stairs rise) and the loss (the bridge lands).
+
+## Boss floors
+
+Every boss floor (5, 10, 15…) enters a Causeway Duel in place of the normal
+boss encounter — `duelBossFloorsEnabled()` returns `true`, and both descent
+paths (`descendFloor()` / `transitionToNextFloor()`) route into
+`startCausewayDuel()` after resetting the dungeon state.
 
 ## Status
 
-Spike in progress — core loop first, driven behind a debug entry, then a
-live check-in with screenshots before building the trimmings.
+Shipped. Core loop plus all trimmings are live, proven end-to-end in a headless
+browser (enter → both causeways grow → meet → walk-and-fight → win-stairs or
+loss-at-shore, switches open the wall, boons grant, save/resume), and covered by
+11 unit tests in `src/__tests__/causewayDuel.test.ts`.

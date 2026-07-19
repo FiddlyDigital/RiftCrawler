@@ -33,6 +33,7 @@ type DuelInternals = {
   duelBossTurn: () => void;
   duelPlacePiece: () => void;
   duelCheckObstacles: () => void;
+  duelBossLaneColumn: () => number;
   duelClaim: (cells: Array<{ x: number; y: number }>, owner: number, color: string) => void;
   duelSwitches: Array<{ x: number; y: number; lit: boolean }>;
   duelWall: Array<{ x: number; y: number }>;
@@ -156,6 +157,42 @@ describe('Causeway Duel', () => {
     // a reward of some kind landed (gold up, or healed, or a new geis)
     const rewarded = game.gold > goldBefore || game.player.hp > hpBefore || game.player.boons.length > boonsBefore;
     expect(rewarded).toBe(true);
+  });
+
+  it('the boss routes toward an open lane, not into the player\'s wall', () => {
+    game.startCausewayDuel();
+    // The hero walls off the whole home column with player causeway.
+    const home = { x: 5, y: 24 };
+    for (let y = 14; y <= 23; y++) priv(game).duelClaim([{ x: home.x, y }], 1, '#fff');
+    // The boss should now prefer a different, unobstructed column to reach the shore.
+    const lane = priv(game).duelBossLaneColumn();
+    expect(lane).not.toBe(home.x);
+  });
+
+  it('a mid-duel state survives a save/resume round trip', () => {
+    game.startCausewayDuel();
+    // Advance the duel a bit: place, light a switch, let the boss build.
+    priv(game).duelClaim([{ x: priv(game).duelSwitches[0]!.x, y: priv(game).duelSwitches[0]!.y + 1 }], 1, '#fff');
+    priv(game).duelCheckObstacles();
+    priv(game).duelBossTurn();
+    const ownerBefore = JSON.stringify(priv(game).duelOwner);
+    const litBefore = priv(game).duelSwitches.filter(s => s.lit).length;
+
+    const save = JSON.parse(JSON.stringify(game.serialize()));
+    const restored = new Game(makeCallbacks(), { forRestore: true });
+    restored.applySave(save);
+
+    expect(restored.inCausewayDuel).toBe(true);
+    expect(JSON.stringify(priv(restored).duelOwner)).toBe(ownerBefore);
+    expect(priv(restored).duelSwitches.filter(s => s.lit).length).toBe(litBefore);
+    expect(priv(restored).duelWall.length).toBe(priv(game).duelWall.length);
+    expect(priv(restored).duelBoons.length).toBe(2);
+    // the boss reference is re-linked to a live restored Monster (not a plain object)
+    expect(priv(restored).duelBoss).not.toBeNull();
+    expect(priv(restored).duelBoss!.isBoss).toBe(true);
+    expect(restored.monsters).toContain(priv(restored).duelBoss);
+    // and the restored duel still simulates
+    expect(() => priv(restored).duelBossTurn()).not.toThrow();
   });
 
   it('a headless boss floor with the duel opt-in enters a duel instead of the normal encounter', () => {
