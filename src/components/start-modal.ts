@@ -61,6 +61,8 @@ export class StartModal extends BaseModal {
       </div>
 
       <div id="start-best" style="color:#555;font-size:9px;margin-bottom:10px;min-height:14px;"></div>
+      <button class="restart-btn" id="start-resume-btn" style="font-size:14px;letter-spacing:2px;display:none;margin-bottom:8px;background:#1d2a1d;border-color:#4a6b4a;">⟲ CONTINUE RUN</button>
+      <div id="start-resume-info" style="display:none;color:#7a9a7a;font-size:9px;margin:-4px 0 10px 0;"></div>
       <button class="restart-btn" id="start-btn" style="font-size:15px;letter-spacing:2px;">▶ BEGIN DESCENT</button>
       <button id="start-tutorial-btn" style="background:none;border:none;color:#8a7a4d;font-size:11px;margin-top:8px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">❓ New here? Play the guided tutorial</button>
       <p class="kbd-only" style="color:#333;font-size:8px;margin-top:8px;">Press <b style="color:#444;">M</b> during play to toggle sound</p>
@@ -71,13 +73,30 @@ export class StartModal extends BaseModal {
   /**
    * Shows the start screen with the given high score and begin-run handler.
    * @param onBeginTutorial - Optional: starts the run with the guided tutorial forced on.
+   * @param resume - Optional: a resumable mid-run save — shows the Continue card above Begin Descent.
    */
-  public showStart(highScore: number, onBegin: () => void, onBeginTutorial?: () => void): void {
+  public showStart(
+    highScore: number,
+    onBegin: () => void,
+    onBeginTutorial?: () => void,
+    resume?: { floor: number; classLabel: string; onResume: () => void },
+  ): void {
     if (typeof highScore !== 'number') throw new TypeError('StartModal.showStart: "highScore" must be a number');
     if (typeof onBegin !== 'function') throw new TypeError('StartModal.showStart: "onBegin" must be a function');
 
     const el = this.querySelector('#start-best');
     if (el) el.textContent = highScore > 0 ? `Best run: ${highScore.toLocaleString()} XP` : '';
+    const resumeBtn  = this.querySelector<HTMLButtonElement>('#start-resume-btn');
+    const resumeInfo = this.querySelector<HTMLElement>('#start-resume-info');
+    if (resumeBtn && resumeInfo) {
+      resumeBtn.style.display = resume ? '' : 'none';
+      resumeInfo.style.display = resume ? '' : 'none';
+      if (resume) {
+        resumeBtn.textContent = `⟲ CONTINUE — FLOOR ${resume.floor}`;
+        resumeInfo.textContent = resume.classLabel;
+        resumeBtn.onclick = () => { this.hide(); resume.onResume(); };
+      }
+    }
     (this.querySelector('#start-btn') as HTMLButtonElement).onclick = () => { this.hide(); onBegin(); };
     const tutBtn = this.querySelector<HTMLButtonElement>('#start-tutorial-btn');
     if (tutBtn) {

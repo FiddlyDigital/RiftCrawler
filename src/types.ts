@@ -443,6 +443,10 @@ export interface UIState {
   biomeName: string;
   /** The floor's active omen (per-floor modifier), for the sidebar badge — null on a plain floor. */
   activeOmen: { icon: string; name: string } | null;
+  /** The run's difficulty for the sidebar badge — null on the standard path (no badge noise for the default). */
+  activeDifficulty: { icon: string; name: string } | null;
+  /** The run's New Game+ heat level for the sidebar badge — null on a heat-0 run. */
+  heatLevel: number | null;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
   /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */
@@ -480,6 +484,64 @@ export interface GhostRecord {
   classId: string | null;
   cause: string;
   date: string;
+}
+
+// ── Mid-run save/resume ──────────────────────────────────────────────────────
+
+/**
+ * Bump when the serialized shape changes incompatibly — older saves are
+ * silently discarded rather than half-restored.
+ */
+export const SAVE_VERSION = 1;
+
+/** A serialized live {@link Monster} — enough to reconstruct it exactly. */
+export interface SavedMonsterState {
+  x: number; y: number; char: string; name: string;
+  hp: number; maxHp: number; atk: number; xpReward: number;
+  isBoss: boolean; behaviorType: string; attackRange: number; moveSpeed: number;
+  statusInflict?: MonsterDef['statusInflict'];
+  statuses: StatusEffect[];
+  isElite: boolean; isGorgoth: boolean; stepCharge: number; combatLevel: number;
+}
+
+/**
+ * A serialized `Player`. `scalars` carries every plain data field verbatim
+ * (numbers/booleans/plain arrays like `statuses`); content-referencing fields
+ * (boons/brands) are stored by id and re-resolved against the loaded data on
+ * restore, so a content update between sessions degrades to "that boon is
+ * gone" rather than a crash.
+ */
+export interface SavedPlayerState {
+  scalars: Record<string, unknown>;
+  boons: Array<{ id: string; stacks: number }>;
+  brands: Array<{ slot: BodyPart; id: string }>;
+  /** Plain-data ability objects (patron spells / class ability / Spear of Lugh) — JSON-safe as-is. */
+  spellbook: RangedAbility[];
+  rangedAbility: RangedAbility | null;
+}
+
+/**
+ * A complete mid-run snapshot, written by `Game.serialize()` and consumed by
+ * `Game.applySave()`. Like {@link SavedPlayerState}, `scalars` carries every
+ * plain data field (grids, counters, tile lists) verbatim; everything that
+ * references live objects, content definitions, or functions is stored in a
+ * re-resolvable form alongside it.
+ */
+export interface SavedRun {
+  version: number;
+  savedAt: number;
+  scalars: Record<string, unknown>;
+  player: SavedPlayerState;
+  monsters: SavedMonsterState[];
+  /** Indices into `monsters` for the live rescue-piece captors. */
+  rescueGuardIdx: number[];
+  omenId: string | null;
+  pendingFloorEventId: string | null;
+  rescuedIds: string[];
+  spearPartsHeld: string[];
+  metFlavorNpcIds: string[];
+  /** This floor's rolled ghost haunting (the cross-run ghost *file* is reloaded from storage instead). */
+  activeGhost: GhostRecord | null;
 }
 
 /** The lore-codex category a discovery belongs to. */

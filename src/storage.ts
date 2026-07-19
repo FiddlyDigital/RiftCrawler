@@ -1,4 +1,4 @@
-import type { RunRecord, RunStats, GhostRecord, CodexKind, CodexState } from './types';
+import { SAVE_VERSION, type RunRecord, type RunStats, type GhostRecord, type CodexKind, type CodexState, type SavedRun } from './types';
 import type { Game } from './game';
 import { Balance } from './balance';
 
@@ -12,6 +12,11 @@ const MOTION_KEY = 'riftcrawler_reduced_motion';
 const CODEX_KEY = 'riftcrawler_codex_v1';
 const STASH_KEY = 'riftcrawler_stash_v1';
 const TUTORIAL_KEY = 'riftcrawler_tutorial_done_v1';
+const RUN_KEY = 'riftcrawler_run_v1';
+const DIFFICULTY_KEY = 'riftcrawler_difficulty_v1';
+const SCREEN_FX_KEY = 'riftcrawler_screen_fx';
+const COLORBLIND_KEY = 'riftcrawler_colorblind';
+const HEAT_KEY = 'riftcrawler_max_heat_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -212,6 +217,101 @@ export class StorageService {
     if (total <= 0) return 0;
     try { localStorage.removeItem(STASH_KEY); } catch { /* quota */ }
     return Math.floor(total * Balance.CONFIG.waystation.stashRecoveryPct);
+  }
+
+  /**
+   * Persists the mid-run snapshot (see `Game.serialize`). Overwrites any
+   * previous snapshot — there is exactly one resumable run at a time.
+   * @throws {TypeError} If `run` is null/undefined.
+   */
+  static saveRun(run: SavedRun): void {
+    if (run === null || run === undefined) throw new TypeError('StorageService.saveRun: "run" must not be null/undefined');
+    try { localStorage.setItem(RUN_KEY, JSON.stringify(run)); } catch { /* quota */ }
+  }
+
+  /** The stored mid-run snapshot, or `null` if none exists / it predates the current {@link SAVE_VERSION} / it can't be parsed. */
+  static loadRun(): SavedRun | null {
+    try {
+      const raw = localStorage.getItem(RUN_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as SavedRun;
+      return parsed.version === SAVE_VERSION ? parsed : null;
+    } catch { return null; }
+  }
+
+  /** Discards the stored mid-run snapshot (run ended, or a fresh run began). */
+  static clearRun(): void {
+    try { localStorage.removeItem(RUN_KEY); } catch { /* unavailable */ }
+  }
+
+  /**
+   * Persists the last-chosen difficulty preset id (the picker marks it next run).
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  static saveDifficulty(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('StorageService.saveDifficulty: "id" must be a non-empty string');
+    try { localStorage.setItem(DIFFICULTY_KEY, id); } catch { /* quota */ }
+  }
+
+  /** The last-chosen difficulty preset id, or `null` if never chosen. */
+  static loadDifficulty(): string | null {
+    try { return localStorage.getItem(DIFFICULTY_KEY); } catch { return null; }
+  }
+
+  /**
+   * Persists the impact shake + damage flash toggle.
+   * @throws {TypeError} If `on` is not a boolean.
+   */
+  static saveScreenEffects(on: boolean): void {
+    if (typeof on !== 'boolean') throw new TypeError('StorageService.saveScreenEffects: "on" must be a boolean');
+    try { localStorage.setItem(SCREEN_FX_KEY, on ? '1' : '0'); } catch { /* quota */ }
+  }
+
+  /** The persisted shake/flash toggle (defaults to `true`). */
+  static loadScreenEffects(): boolean {
+    try { return localStorage.getItem(SCREEN_FX_KEY) !== '0'; } catch { return true; }
+  }
+
+  /**
+   * Persists the colorblind-marks toggle.
+   * @throws {TypeError} If `on` is not a boolean.
+   */
+  static saveColorblind(on: boolean): void {
+    if (typeof on !== 'boolean') throw new TypeError('StorageService.saveColorblind: "on" must be a boolean');
+    try { localStorage.setItem(COLORBLIND_KEY, on ? '1' : '0'); } catch { /* quota */ }
+  }
+
+  /** The persisted colorblind-marks toggle (defaults to `false`). */
+  static loadColorblind(): boolean {
+    try { return localStorage.getItem(COLORBLIND_KEY) === '1'; } catch { return false; }
+  }
+
+  /**
+   * The highest New Game+ heat level the player has ever *chosen to attempt*
+   * (0 until a victory unlocks heat 1). This is the ceiling the heat picker
+   * offers — it grows by one each time a run is won at the current max, so
+   * clearing heat N unlocks heat N+1.
+   */
+  static loadMaxHeat(): number {
+    try {
+      const v = Number(localStorage.getItem(HEAT_KEY) ?? 0);
+      return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    } catch { return 0; }
+  }
+
+  /**
+   * Raises the unlocked-heat ceiling to `level` if it's higher than what's
+   * stored (a no-op otherwise). Called on victory with the beaten run's
+   * heat + 1, so each win opens exactly one more geis.
+   * @throws {TypeError} If `level` is not a non-negative finite number.
+   */
+  static unlockHeat(level: number): number {
+    if (typeof level !== 'number' || !Number.isFinite(level) || level < 0) {
+      throw new TypeError('StorageService.unlockHeat: "level" must be a non-negative finite number');
+    }
+    const next = Math.max(StorageService.loadMaxHeat(), Math.floor(level));
+    try { localStorage.setItem(HEAT_KEY, String(next)); } catch { /* quota */ }
+    return next;
   }
 
   /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */

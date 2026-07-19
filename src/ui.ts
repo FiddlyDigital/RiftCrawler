@@ -5,6 +5,9 @@ import type { PauseModal, PauseMenuState, PauseMenuHandlers } from './components
 import type { BossWarningModal } from './components/boss-warning-modal';
 import type { ModifierModal } from './components/modifier-modal';
 import type { ClassModal } from './components/class-modal';
+import type { DifficultyModal } from './components/difficulty-modal';
+import type { ControlsModal } from './components/controls-modal';
+import type { HeatModal } from './components/heat-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
 import type { OfferModal } from './components/offer-modal';
 import type { ShopModal } from './components/shop-modal';
@@ -13,6 +16,7 @@ import type { CodexModal } from './components/codex-modal';
 import type { GameOverModal } from './components/game-over-modal';
 import type { StartModal } from './components/start-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
+import type { DifficultyPreset, HeatTier } from './balance';
 import type { RunRecord } from './types';
 
 /**
@@ -29,6 +33,9 @@ export class UIManager {
   private readonly modifierModal: ModifierModal;
   private readonly bossWarningModal: BossWarningModal;
   private readonly classModal: ClassModal;
+  private readonly difficultyModal: DifficultyModal;
+  private readonly controlsModal: ControlsModal;
+  private readonly heatModal: HeatModal;
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
   private readonly toastBanner: HTMLElement;
@@ -41,6 +48,8 @@ export class UIManager {
   private readonly codexModal: CodexModal;
   private readonly els: Record<string, HTMLElement>;
   private lastXpEarned = -1;
+  /** Mirrors the renderer's colorblind mode for HUD color choices (cursed badge). */
+  private colorblind = false;
   private lastCharacterSheet: CharacterSheetSection[] = [];
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly fullLog: { text: string; cls: LogClass; icon?: string }[] = [];
@@ -52,6 +61,9 @@ export class UIManager {
     this.modifierModal     = document.querySelector('modifier-modal')!;
     this.bossWarningModal  = document.querySelector('boss-warning-modal')!;
     this.classModal        = document.querySelector('class-modal')!;
+    this.difficultyModal   = document.querySelector('difficulty-modal')!;
+    this.controlsModal     = document.querySelector('controls-modal')!;
+    this.heatModal         = document.querySelector('heat-modal')!;
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.toastBanner       = document.getElementById('toast-banner')!;
@@ -87,6 +99,8 @@ export class UIManager {
       statusRow:        document.getElementById('status-row')!,
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
+      difficultyBadge:  document.getElementById('difficulty-badge')!,
+      heatBadge:        document.getElementById('heat-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
       heldPreview:      document.getElementById('held-preview-box')!,
@@ -192,7 +206,7 @@ export class UIManager {
     const psBadge = this.els['pieceStateBadge']!;
     if (state.pieceState === 'cursed') {
       psBadge.style.display = '';
-      psBadge.style.color = '#ef5350';
+      psBadge.style.color = this.colorblind ? '#42a5f5' : '#ef5350';
       psBadge.innerHTML = `${SpriteService.iconHTML('status_poison', 12)}CURSED PIECE`;
     } else if (state.pieceState === 'blessed') {
       psBadge.style.display = '';
@@ -216,6 +230,18 @@ export class UIManager {
       .join('');
 
     // Active modifier badge
+    if (state.activeDifficulty) {
+      this.els['difficultyBadge']!.style.display = '';
+      this.els['difficultyBadge']!.innerHTML = `${SpriteService.iconHTML(state.activeDifficulty.icon, 12)}${HtmlUtils.escapeHtml(state.activeDifficulty.name)}`;
+    } else {
+      this.els['difficultyBadge']!.style.display = 'none';
+    }
+    if (state.heatLevel !== null) {
+      this.els['heatBadge']!.style.display = '';
+      this.els['heatBadge']!.innerHTML = `${SpriteService.iconHTML('ui_warning', 12)}Heat ${state.heatLevel}`;
+    } else {
+      this.els['heatBadge']!.style.display = 'none';
+    }
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
       this.els['activeModifier']!.innerHTML = `${SpriteService.iconHTML(state.activeModifier.emoji, 12)}${HtmlUtils.escapeHtml(state.activeModifier.name)}`;
@@ -299,6 +325,26 @@ export class UIManager {
   /** Shows the run-start modifier (Rift Curse) picker. */
   public showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
     this.modifierModal.showModifierPick(mods, onSelect);
+  }
+
+  /** Shows the run-start difficulty picker (`lastChosenId` marks last run's pick). */
+  public showDifficultyPick(presets: DifficultyPreset[], lastChosenId: string | null, onSelect: (id: string) => void): void {
+    this.difficultyModal.showDifficultyPick(presets, lastChosenId, onSelect);
+  }
+
+  /** Shows the keyboard-remap Controls screen; `onClose` fires when dismissed. */
+  public showControls(onClose: () => void): void {
+    this.controlsModal.showControls(onClose);
+  }
+
+  /** Shows the New Game+ heat picker (levels 0..`maxHeat`). */
+  public showHeatPick(tiers: HeatTier[], maxHeat: number, xpBonusPerHeat: number, onSelect: (level: number) => void): void {
+    this.heatModal.showHeatPick(tiers, maxHeat, xpBonusPerHeat, onSelect);
+  }
+
+  /** Mirrors the colorblind-marks setting into HUD color choices. */
+  public setColorblind(on: boolean): void {
+    this.colorblind = on;
   }
 
   /** Shows the run-start class picker. */
@@ -448,9 +494,14 @@ export class UIManager {
     this.offerModal.showAltarModal(tier, choices, ownedBoons, onChoice, titleOverride, reroll);
   }
 
-  /** Shows the start-screen modal. */
-  public showStart(highScore: number, onBegin: () => void, onBeginTutorial?: () => void): void {
-    this.startModal.showStart(highScore, onBegin, onBeginTutorial);
+  /** Shows the start-screen modal (with a Continue card when a resumable mid-run save exists). */
+  public showStart(
+    highScore: number,
+    onBegin: () => void,
+    onBeginTutorial?: () => void,
+    resume?: { floor: number; classLabel: string; onResume: () => void },
+  ): void {
+    this.startModal.showStart(highScore, onBegin, onBeginTutorial, resume);
   }
 
   /** Hides the start-screen modal. */

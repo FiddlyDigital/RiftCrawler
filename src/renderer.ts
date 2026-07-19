@@ -31,6 +31,10 @@ export class Renderer {
   private floorTransitionFrames = 0;
   private floorTransitionColor = '10,10,20';
   private reducedMotion = false;
+  /** Impact shake + damage flash, toggleable independently of reduced motion. */
+  private screenEffects = true;
+  /** Colorblind-safe cursed/blessed marking: blue dashed outline replaces the red one (red/gold reads as near-identical under protanopia). */
+  private colorblind = false;
   private impactGlow: { x: number; y: number; rgb: string; frames: number; maxFrames: number } | null = null;
 
   // One-shot "juice" effects (all gated by reducedMotion at the trigger)
@@ -429,13 +433,17 @@ export class Renderer {
         if (cell === Cell.BOSS) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
         } else if (game.currentCursed) {
-          ctx.strokeStyle = '#ef5350'; ctx.lineWidth = 2;
+          // Colorblind mode adds a non-color cue: a dashed blue outline
+          // (red vs gold is nearly indistinguishable under protanopia).
+          ctx.strokeStyle = this.colorblind ? '#42a5f5' : '#ef5350'; ctx.lineWidth = 2;
+          if (this.colorblind) ctx.setLineDash([4, 3]);
         } else if (game.currentBlessed) {
           ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 2;
         } else {
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
         }
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
+        ctx.setLineDash([]);
         ctx.lineWidth = 1;
 
         // The Cell.NPC/Cell.SMITH placeholders resolve to whichever archetype
@@ -889,11 +897,15 @@ export class Renderer {
 
   /** Toggles the reduced-motion accessibility mode, gating every juice effect below. */
   public setReducedMotion(on: boolean): void { this.reducedMotion = on; }
-  /** Brief full-screen red flash on player damage. No-op under reduced motion. */
-  public triggerDamageFlash(): void { if (!this.reducedMotion) this.damageFlashFrames = 8; }
-  /** Screen shake for a set duration/intensity. No-op under reduced motion. */
+  /** Toggles impact shake + damage flash on their own (finer-grained than reduced motion, which disables much more). */
+  public setScreenEffects(on: boolean): void { this.screenEffects = on; }
+  /** Toggles colorblind-safe cursed/blessed piece marking (blue dashed outline instead of red). */
+  public setColorblind(on: boolean): void { this.colorblind = on; }
+  /** Brief full-screen red flash on player damage. No-op under reduced motion or with screen effects off. */
+  public triggerDamageFlash(): void { if (!this.reducedMotion && this.screenEffects) this.damageFlashFrames = 8; }
+  /** Screen shake for a set duration/intensity. No-op under reduced motion or with screen effects off. */
   public triggerShake(intensity: number, duration: number): void {
-    if (this.reducedMotion) return;  // no screen shake when reduced motion is on
+    if (this.reducedMotion || !this.screenEffects) return;
     this.shakeIntensity = intensity;
     this.shakeFrames = duration;
   }
