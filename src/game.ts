@@ -137,6 +137,9 @@ export class Game {
   // Difficulty state (chosen at run start, active for the whole run)
   public activeDifficultyId = 'standard';
 
+  /** New Game+ heat: how many victory-unlocked geasa (cumulative handicaps) this run carries. 0 = a normal run. */
+  public heatLevel = 0;
+
   // Class state
   public activeClassId: string | null = null;
   /** An Draoi's sworn deity (null until the pact ceremony). */
@@ -573,7 +576,7 @@ export class Game {
           Balance.CONFIG.spawnRates.monsterBaseChance + this.dungeonLevel * Balance.CONFIG.spawnRates.monsterChancePerDungeonLevel,
         );
         const hauntedChance = this.haunted ? baseMonsterChance * Balance.CONFIG.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
-        const monsterChance = this.tutorialSafety ? 0 : hauntedChance * (this.activeOmen?.num('monsterChanceMult', 1) ?? 1);
+        const monsterChance = this.tutorialSafety ? 0 : hauntedChance * (this.activeOmen?.num('monsterChanceMult', 1) ?? 1) * this.heatMult('monsterChanceMult');
         if (Math.random() < monsterChance) {
           if (monsterInjected) return Cell.FLOOR;  // cap: one monster per block
           monsterInjected = true;
@@ -912,14 +915,15 @@ export class Game {
   private spawnMonster(key: string, tx: number, ty: number, elite?: boolean, nameOverride?: string): void {
     const def = MONSTERS[key];
     if (!def) return;
-    const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance);
+    const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance + this.heatAdd('eliteChanceBonus'));
     const diff = this.difficultyTuning();
     const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult * diff.monsterHpMult);
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
-    // Omens like the Morrígan's Ravens or Crom's Tithe harden every spawn.
+    // Omens like the Morrígan's Ravens or Crom's Tithe harden every spawn;
+    // New Game+ geasa stack on top of both omen and difficulty.
     const omenAtkMult = this.activeOmen?.num('monsterAtkMult', 1) ?? 1;
-    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult * diff.monsterAtkMult);
+    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult * diff.monsterAtkMult * this.heatMult('monsterAtkMult'));
     const name = nameOverride ?? (isElite ? `Elite ${def.name}` : def.name);
     const m = new Monster(
       tx, ty, def.char, name, hp, hp, atk, def.xpReward,
@@ -1680,7 +1684,7 @@ export class Game {
       const baseHp = Balance.CONFIG.boss.baseHpFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseHpPerDungeonLevel;
       const baseAtk = Balance.CONFIG.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseAtkPerDungeonLevel;
       const hp = Math.floor(baseHp * bossDef.hpMult * diff.monsterHpMult);
-      const atk = Math.floor(baseAtk * bossDef.atkMult * diff.monsterAtkMult);
+      const atk = Math.floor(baseAtk * bossDef.atkMult * diff.monsterAtkMult * this.heatMult('monsterAtkMult'));
       const boss = new Monster(tx, ty, bossDef.char, bossDef.name, hp, hp, atk, bossDef.xpReward, true);
       boss.combatLevel = Balance.CONFIG.boss.combatLevel;
       this.monsters.push(boss);
@@ -1768,7 +1772,7 @@ export class Game {
       this.lastLineClearMs = now;
       if (this.comboCount > this.biggestCombo) this.biggestCombo = this.comboCount;
 
-      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel) * (this.activeOmen?.num('goldMult', 1) ?? 1) * this.difficultyTuning().goldMult);
+      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel) * (this.activeOmen?.num('goldMult', 1) ?? 1) * this.difficultyTuning().goldMult * this.heatMult('goldMult'));
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
         goldAdded = Math.floor(goldAdded * mult);
@@ -2171,6 +2175,56 @@ export class Game {
       this.storyBeats.push(`chose ${preset.name.split(' — ')[0]!}`);
       this.cb.log(`${preset.name}. ${preset.desc}`, 'log-perk', preset.icon);
     }
+    this.pushUI();
+  }
+
+  // ── New Game+ heat ───────────────────────────────────────────────────────
+  // Winning unlocks the heat ladder: each heat level stacks one more
+  // permanent geis (handicap) from balance.json's ngplus.tiers onto the
+  // whole run, in exchange for bonus XP. Heat N applies every tier ≤ N.
+
+  /** Cumulative multiplicative heat param for `key` across the active tiers (identity 1). */
+  private heatMult(key: string): number {
+    let v = 1;
+    for (const t of Balance.CONFIG.ngplus.tiers) {
+      const p = t.params[key];
+      if (t.level <= this.heatLevel && typeof p === 'number') v *= p;
+    }
+    return v;
+  }
+
+  /** Cumulative additive heat param for `key` across the active tiers (identity 0). */
+  private heatAdd(key: string): number {
+    let v = 0;
+    for (const t of Balance.CONFIG.ngplus.tiers) {
+      const p = t.params[key];
+      if (t.level <= this.heatLevel && typeof p === 'number') v += p;
+    }
+    return v;
+  }
+
+  /** Percent gravity adjustment from the active heat geasa (negative = faster), summed with biome/omen/difficulty at both tick-rate call sites. */
+  public get heatGravityPct(): number {
+    return this.heatAdd('gravityPct');
+  }
+
+  /**
+   * Applies the chosen New Game+ heat. Called once at run start (only
+   * offered after a victory has unlocked the ladder); each active geis
+   * pays +`ngplus.xpBonusPerHeat` XP.
+   * @throws {TypeError} If `level` is not a finite number.
+   */
+  public applyHeat(level: number): void {
+    if (typeof level !== 'number' || !Number.isFinite(level)) throw new TypeError('Game.applyHeat: "level" must be a finite number');
+    const tiers = Balance.CONFIG.ngplus.tiers;
+    this.heatLevel = Math.max(0, Math.min(Math.floor(level), tiers.length));
+    if (this.heatLevel === 0) return;
+    this.xpMultiplier *= 1 + Balance.CONFIG.ngplus.xpBonusPerHeat * this.heatLevel;
+    for (const t of tiers) {
+      if (t.level <= this.heatLevel) this.cb.log(`${t.name} — ${t.desc}`, 'log-boss', t.icon);
+    }
+    this.cb.log(`Heat ${this.heatLevel}: +${Math.round(Balance.CONFIG.ngplus.xpBonusPerHeat * this.heatLevel * 100)}% XP for the burden.`, 'log-perk', 'special_sacred');
+    this.storyBeats.push(`took up ${this.heatLevel} ${this.heatLevel === 1 ? 'geis' : 'geasa'} of the victorious`);
     this.pushUI();
   }
 
@@ -3214,7 +3268,7 @@ export class Game {
     const gx = Math.floor(GameConfig.COLS / 2);
     const gDiff = this.difficultyTuning();
     const gHp = Math.floor(Balance.CONFIG.gorgoth.maxHp * gDiff.monsterHpMult);
-    const gAtk = Math.floor(Balance.CONFIG.gorgoth.atk * gDiff.monsterAtkMult);
+    const gAtk = Math.floor(Balance.CONFIG.gorgoth.atk * gDiff.monsterAtkMult * this.heatMult('monsterAtkMult'));
     const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', gHp, gHp, gAtk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
     boss.combatLevel = Balance.CONFIG.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
@@ -3619,7 +3673,7 @@ export class Game {
       floor: this.dungeonLevel,
       totalXpEarned: this.player.totalXpEarned,
       gold: this.gold,
-      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct + this.difficultyGravityPct),
+      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct + this.difficultyGravityPct + this.heatGravityPct),
       nextType: this.nextType,
       heldType: this.heldType,
       canHold: this.canHold,
@@ -3651,6 +3705,7 @@ export class Game {
       activeDifficulty: this.activeDifficultyId !== 'standard' && this.difficultyTuning().name !== ''
         ? { icon: this.difficultyTuning().icon, name: this.difficultyTuning().name.split(' — ')[0]! }
         : null,
+      heatLevel: this.heatLevel > 0 ? this.heatLevel : null,
       rangedAbility: this.player.rangedAbility
         ? {
             name:        this.player.rangedAbility.name,

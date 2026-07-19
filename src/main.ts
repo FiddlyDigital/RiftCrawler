@@ -762,6 +762,8 @@ class GameApp {
       onVictory: (floor, totalXpEarned, stats, story) => {
         this.stopTick();
         StorageService.clearRun();  // a won run is finished, not resumable
+        // Winning opens exactly one more geis: clear heat N → unlock heat N+1.
+        StorageService.unlockHeat(this.game.heatLevel + 1);
         audio.stopAmbient();
         audio.playLevelUp();
         const { highXp, history } = StorageService.recordRunEnd(this.game, 'Defeated Bres the Beautiful', stats);
@@ -841,21 +843,31 @@ class GameApp {
   // ── Class + Modifier picker then launch ───────────────────────────────────
 
   private launchWithModifier(onReady: () => void): void {
+    // 1) Difficulty → 2) (if unlocked) New Game+ heat → 3) class → 4) curse.
     this.ui.showDifficultyPick(Balance.CONFIG.difficulty.presets, StorageService.loadDifficulty(), (diffId) => {
       StorageService.saveDifficulty(diffId);
-      const classes: ClassDef[] = this.game.getRandomClasses(3);
-      this.ui.showClassSelection(classes, (classId) => {
-        this.game.applyClass(classId);
-        // Applied after the class so the difficulty's HP multiplier covers class bonuses.
-        this.game.applyDifficulty(diffId);
-        const mods = this.game.getRandomModifiers(3);
-        this.ui.showModifierPick(mods, (modId) => {
-          this.game.applyModifier(modId);
-          // The new run is now real — any previous run's snapshot is abandoned.
-          StorageService.clearRun();
-          onReady();
+      const afterHeat = (heatLevel: number): void => {
+        const classes: ClassDef[] = this.game.getRandomClasses(3);
+        this.ui.showClassSelection(classes, (classId) => {
+          this.game.applyClass(classId);
+          // Applied after the class so the difficulty's HP multiplier covers class bonuses.
+          this.game.applyDifficulty(diffId);
+          if (heatLevel > 0) this.game.applyHeat(heatLevel);
+          const mods = this.game.getRandomModifiers(3);
+          this.ui.showModifierPick(mods, (modId) => {
+            this.game.applyModifier(modId);
+            // The new run is now real — any previous run's snapshot is abandoned.
+            StorageService.clearRun();
+            onReady();
+          });
         });
-      });
+      };
+      const maxHeat = StorageService.loadMaxHeat();
+      if (maxHeat > 0) {
+        this.ui.showHeatPick(Balance.CONFIG.ngplus.tiers, maxHeat, Balance.CONFIG.ngplus.xpBonusPerHeat, afterHeat);
+      } else {
+        afterHeat(0);  // ladder not yet unlocked — skip straight to class pick
+      }
     });
   }
 

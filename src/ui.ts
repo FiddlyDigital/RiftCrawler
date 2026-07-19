@@ -7,6 +7,7 @@ import type { ModifierModal } from './components/modifier-modal';
 import type { ClassModal } from './components/class-modal';
 import type { DifficultyModal } from './components/difficulty-modal';
 import type { ControlsModal } from './components/controls-modal';
+import type { HeatModal } from './components/heat-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
 import type { OfferModal } from './components/offer-modal';
 import type { ShopModal } from './components/shop-modal';
@@ -15,7 +16,7 @@ import type { CodexModal } from './components/codex-modal';
 import type { GameOverModal } from './components/game-over-modal';
 import type { StartModal } from './components/start-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
-import type { DifficultyPreset } from './balance';
+import type { DifficultyPreset, HeatTier } from './balance';
 import type { RunRecord } from './types';
 
 /**
@@ -34,6 +35,7 @@ export class UIManager {
   private readonly classModal: ClassModal;
   private readonly difficultyModal: DifficultyModal;
   private readonly controlsModal: ControlsModal;
+  private readonly heatModal: HeatModal;
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
   private readonly toastBanner: HTMLElement;
@@ -61,6 +63,7 @@ export class UIManager {
     this.classModal        = document.querySelector('class-modal')!;
     this.difficultyModal   = document.querySelector('difficulty-modal')!;
     this.controlsModal     = document.querySelector('controls-modal')!;
+    this.heatModal         = document.querySelector('heat-modal')!;
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.toastBanner       = document.getElementById('toast-banner')!;
@@ -97,6 +100,7 @@ export class UIManager {
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
       difficultyBadge:  document.getElementById('difficulty-badge')!,
+      heatBadge:        document.getElementById('heat-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
       heldPreview:      document.getElementById('held-preview-box')!,
@@ -232,6 +236,12 @@ export class UIManager {
     } else {
       this.els['difficultyBadge']!.style.display = 'none';
     }
+    if (state.heatLevel !== null) {
+      this.els['heatBadge']!.style.display = '';
+      this.els['heatBadge']!.innerHTML = `${SpriteService.iconHTML('ui_warning', 12)}Heat ${state.heatLevel}`;
+    } else {
+      this.els['heatBadge']!.style.display = 'none';
+    }
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
       this.els['activeModifier']!.innerHTML = `${SpriteService.iconHTML(state.activeModifier.emoji, 12)}${HtmlUtils.escapeHtml(state.activeModifier.name)}`;
@@ -325,6 +335,11 @@ export class UIManager {
   /** Shows the keyboard-remap Controls screen; `onClose` fires when dismissed. */
   public showControls(onClose: () => void): void {
     this.controlsModal.showControls(onClose);
+  }
+
+  /** Shows the New Game+ heat picker (levels 0..`maxHeat`). */
+  public showHeatPick(tiers: HeatTier[], maxHeat: number, xpBonusPerHeat: number, onSelect: (level: number) => void): void {
+    this.heatModal.showHeatPick(tiers, maxHeat, xpBonusPerHeat, onSelect);
   }
 
   /** Mirrors the colorblind-marks setting into HUD color choices. */

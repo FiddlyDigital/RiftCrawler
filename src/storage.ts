@@ -16,6 +16,7 @@ const RUN_KEY = 'riftcrawler_run_v1';
 const DIFFICULTY_KEY = 'riftcrawler_difficulty_v1';
 const SCREEN_FX_KEY = 'riftcrawler_screen_fx';
 const COLORBLIND_KEY = 'riftcrawler_colorblind';
+const HEAT_KEY = 'riftcrawler_max_heat_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -283,6 +284,34 @@ export class StorageService {
   /** The persisted colorblind-marks toggle (defaults to `false`). */
   static loadColorblind(): boolean {
     try { return localStorage.getItem(COLORBLIND_KEY) === '1'; } catch { return false; }
+  }
+
+  /**
+   * The highest New Game+ heat level the player has ever *chosen to attempt*
+   * (0 until a victory unlocks heat 1). This is the ceiling the heat picker
+   * offers — it grows by one each time a run is won at the current max, so
+   * clearing heat N unlocks heat N+1.
+   */
+  static loadMaxHeat(): number {
+    try {
+      const v = Number(localStorage.getItem(HEAT_KEY) ?? 0);
+      return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    } catch { return 0; }
+  }
+
+  /**
+   * Raises the unlocked-heat ceiling to `level` if it's higher than what's
+   * stored (a no-op otherwise). Called on victory with the beaten run's
+   * heat + 1, so each win opens exactly one more geis.
+   * @throws {TypeError} If `level` is not a non-negative finite number.
+   */
+  static unlockHeat(level: number): number {
+    if (typeof level !== 'number' || !Number.isFinite(level) || level < 0) {
+      throw new TypeError('StorageService.unlockHeat: "level" must be a non-negative finite number');
+    }
+    const next = Math.max(StorageService.loadMaxHeat(), Math.floor(level));
+    try { localStorage.setItem(HEAT_KEY, String(next)); } catch { /* quota */ }
+    return next;
   }
 
   /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */

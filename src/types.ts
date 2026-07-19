@@ -445,6 +445,8 @@ export interface UIState {
   activeOmen: { icon: string; name: string } | null;
   /** The run's difficulty for the sidebar badge — null on the standard path (no badge noise for the default). */
   activeDifficulty: { icon: string; name: string } | null;
+  /** The run's New Game+ heat level for the sidebar badge — null on a heat-0 run. */
+  heatLevel: number | null;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
   /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */

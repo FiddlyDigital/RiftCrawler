@@ -85,6 +85,22 @@ export interface BalanceConfig {
   rescues: { rollChance: number; pieceThreshold: number; portionAtk: number; healerBaseCost: number; healerCostPerFloor: number; healerHpGain: number };
   spearOfLugh: { dmgMult: number; cooldownMax: number };
   difficulty: { presets: DifficultyPreset[] };
+  ngplus: { xpBonusPerHeat: number; tiers: HeatTier[] };
+}
+
+/** One New-Game+ heat tier (see `balance.json` → `ngplus.tiers`). Heat N applies every tier with `level <= N`. */
+export interface HeatTier {
+  level: number;
+  /** Sprite-map key for the picker card / badge. */
+  icon: string;
+  name: string;
+  desc: string;
+  /**
+   * The tier's handicap knobs, combined cumulatively across active tiers:
+   * `*Mult` keys multiply, the rest add. Consumed at the same choke points
+   * as the difficulty/omen multipliers.
+   */
+  params: Record<string, number>;
 }
 
 /** A run-start difficulty preset (see `balance.json` → `difficulty.presets`). */
@@ -115,8 +131,11 @@ export interface DifficultyPreset {
  * nothing in this class needs to change for balance tweaks.
  */
 export class Balance {
+  // JSON literal inference gives each ngplus/difficulty entry's params an
+  // exact optional-key type that clashes with Record<string, number>; hop
+  // through unknown (mirrors the omens.json loader in dataLoader.ts).
   /** Top-level tuning knobs (`data/balance.json`). */
-  static readonly CONFIG = balanceData as BalanceConfig;
+  static readonly CONFIG = balanceData as unknown as BalanceConfig;
 
   /** Combat/dice tuning (`data/combat.json`). */
   static readonly COMBAT = combatData as CombatBalance;
