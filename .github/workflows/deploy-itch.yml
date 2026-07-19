@@ -1,0 +1,104 @@
+name: Deploy to itch.io
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One itch push at a time; let an in-flight upload finish rather than cancelling
+# it (a half-cancelled butler push would leave the channel in an odd state).
+concurrency:
+  group: "itch"
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # itch target: <user>/<game>:<channel>. The `html5` channel must be marked
+  # "This file will be played in the browser" once in the itch dashboard —
+  # butler uploads the files but can't set that per-channel flag itself.
+  ITCH_TARGET: speakingsoftware/causeway-to-eriu:html5
+
+jobs:
+  deploy:
+    name: Build + push to itch.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same quality gates as the Pages deploy — a broken build must never
+      # reach players on either channel.
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Validate game data against schemas
+        run: npm run validate-data
+
+      - name: Unit tests with coverage thresholds
+        run: npm run test:coverage
+
+      # itch serves an HTML5 game from the root of the uploaded content, so the
+      # build uses a RELATIVE base (./) — unlike the Pages build's /RiftCrawler/
+      # path. A relative base also serves correctly at localhost root, so this
+      # single build is what gets smoke-tested AND shipped.
+      - name: Build (itch, relative base)
+        run: npm run build -- --base=./
+        env:
+          APP_VERSION: 1.0.${{ github.run_number }}
+
+      - name: Get Playwright version
+        id: pw-version
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+
+      - name: Install Playwright Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # The last gate before going live: boot the exact build we're about to
+      # ship in headless Chromium and play the first seconds of a real run.
+      - name: Smoke test the itch build
+        run: npm run smoke
+
+      # Official itch CLI, straight from itch's own broth server (no
+      # third-party action in the supply chain).
+      - name: Install butler
+        run: |
+          curl -sL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          ./butler push dist "$ITCH_TARGET" --userversion "1.0.${{ github.run_number }}"
+
+      - name: Deploy summary
+        run: |
+          echo "Pushed **v1.0.${{ github.run_number }}** to \`$ITCH_TARGET\` (commit ${GITHUB_SHA::7})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Play: https://speakingsoftware.itch.io/causeway-to-eriu" >> "$GITHUB_STEP_SUMMARY"
