@@ -382,6 +382,36 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.globalAlpha = 1.0;
 
+    // ── Causeway-Duel obstacle overlays (wall / switches / boons) ─────────
+    if (game.inCausewayDuel) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 300);
+      for (const w of game.duelWallTiles) {
+        // A solid, opaque slab so the sealed wall reads as impassable.
+        ctx.fillStyle = '#4a4560';
+        ctx.fillRect(w.x * TS + 1, w.y * TS + 1, TS - 2, TS - 2);
+        ctx.strokeStyle = '#6a6488'; ctx.lineWidth = 1;
+        ctx.strokeRect(w.x * TS + 1.5, w.y * TS + 1.5, TS - 3, TS - 3);
+      }
+      for (const s of game.duelSwitchTiles) {
+        if (s.lit) continue;  // lit switches become normal causeway
+        ctx.globalAlpha = 0.6 + 0.4 * pulse;
+        this.drawSprite('fx_arcane', s.x * TS + 2, s.y * TS + 2, TS - 4, TS - 4);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = '#3fb0a2'; ctx.lineWidth = 2;
+        ctx.strokeRect(s.x * TS + 1, s.y * TS + 1, TS - 2, TS - 2);
+      }
+      for (const b of game.duelBoonTiles) {
+        if (b.taken) continue;
+        const icon = b.kind === 'gold' ? 'item_gold_pouch' : b.kind === 'heal' ? 'special_sacred' : 'tile_altar';
+        ctx.globalAlpha = 0.7 + 0.3 * pulse;
+        this.drawSprite(icon, b.x * TS + 2, b.y * TS + 2, TS - 4, TS - 4);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = '#d9a441'; ctx.lineWidth = 2;
+        ctx.strokeRect(b.x * TS + 1, b.y * TS + 1, TS - 2, TS - 2);
+      }
+      ctx.lineWidth = 1;
+    }
+
     // ── Cleared-row white flash ───────────────────────────────────────────
     if (this.rowFlash) {
       const a = 0.5 * (this.rowFlash.frames / this.rowFlash.maxFrames);
@@ -430,7 +460,13 @@ export class Renderer {
         ctx.fillStyle = cell === Cell.MERCHANT ? '#1b0535' : cell === Cell.ALTAR ? '#1a0a2a' : cell === Cell.NPC || cell === Cell.SMITH ? '#182418' : cell === Cell.RESCUE ? '#2e2210' : cell === Cell.ELITE_GUARD ? '#301414' : game.blockColor;
         ctx.fillRect(tx * TS, ty * TS, TS - 1, TS - 1);
         ctx.globalAlpha = 1.0;
-        if (cell === Cell.BOSS) {
+        if (game.inCausewayDuel) {
+          // The duel's placement cursor: a pulsing gold outline so "your next
+          // stone" is unmistakable and clearly on your side of the field.
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200);
+          ctx.strokeStyle = '#f0c14b'; ctx.lineWidth = 2 + pulse;
+          ctx.globalAlpha = 0.7 + 0.3 * pulse;
+        } else if (cell === Cell.BOSS) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
         } else if (game.currentCursed) {
           // Colorblind mode adds a non-color cue: a dashed blue outline
@@ -443,6 +479,7 @@ export class Renderer {
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
         }
         ctx.strokeRect(tx * TS, ty * TS, TS, TS);
+        ctx.globalAlpha = 1.0;
         ctx.setLineDash([]);
         ctx.lineWidth = 1;
 

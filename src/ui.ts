@@ -100,6 +100,12 @@ export class UIManager {
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
       difficultyBadge:  document.getElementById('difficulty-badge')!,
+      duelCard:         document.getElementById('duel-card')!,
+      duelBossName:     document.getElementById('duel-boss-name')!,
+      duelBossHp:       document.getElementById('duel-boss-hp')!,
+      duelBridgeBar:    document.getElementById('duel-bridge-bar')!,
+      duelBridgeLabel:  document.getElementById('duel-bridge-label')!,
+      duelSwitchLine:   document.getElementById('duel-switch-line')!,
       heatBadge:        document.getElementById('heat-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
@@ -241,6 +247,28 @@ export class UIManager {
       this.els['heatBadge']!.innerHTML = `${SpriteService.iconHTML('ui_warning', 12)}Heat ${state.heatLevel}`;
     } else {
       this.els['heatBadge']!.style.display = 'none';
+    }
+
+    // Causeway Duel HUD panel
+    if (state.duel) {
+      const d = state.duel;
+      this.els['duelCard']!.style.display = '';
+      this.els['duelBossName']!.textContent = d.bossName;
+      this.els['duelBossHp']!.style.width = `${Math.max(0, Math.min(100, (d.bossHp / Math.max(1, d.bossMaxHp)) * 100))}%`;
+      // Bridge meter: full when the bridge is far (safe), draining toward the shore.
+      const progressed = d.bridgeSpan > 0 ? Math.min(1, d.bridgeGap / d.bridgeSpan) : 1;
+      this.els['duelBridgeBar']!.style.width = `${Math.round(progressed * 100)}%`;
+      const near = d.bridgeGap <= 4;
+      this.els['duelBridgeLabel']!.textContent = near ? `— ${d.bridgeGap} FROM YOUR SHORE!` : `${d.bridgeGap} rows off`;
+      this.els['duelBridgeLabel']!.style.color = near ? '#ff5252' : '#e08a72';
+      if (d.switchesLeft > 0) {
+        this.els['duelSwitchLine']!.style.display = '';
+        this.els['duelSwitchLine']!.textContent = `⚡ ${d.switchesLeft} switch${d.switchesLeft === 1 ? '' : 'es'} to light — the center wall is sealed`;
+      } else {
+        this.els['duelSwitchLine']!.style.display = 'none';
+      }
+    } else {
+      this.els['duelCard']!.style.display = 'none';
     }
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
