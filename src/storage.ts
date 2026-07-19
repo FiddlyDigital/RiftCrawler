@@ -13,6 +13,7 @@ const CODEX_KEY = 'riftcrawler_codex_v1';
 const STASH_KEY = 'riftcrawler_stash_v1';
 const TUTORIAL_KEY = 'riftcrawler_tutorial_done_v1';
 const RUN_KEY = 'riftcrawler_run_v1';
+const DIFFICULTY_KEY = 'riftcrawler_difficulty_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -238,6 +239,20 @@ export class StorageService {
   /** Discards the stored mid-run snapshot (run ended, or a fresh run began). */
   static clearRun(): void {
     try { localStorage.removeItem(RUN_KEY); } catch { /* unavailable */ }
+  }
+
+  /**
+   * Persists the last-chosen difficulty preset id (the picker marks it next run).
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  static saveDifficulty(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('StorageService.saveDifficulty: "id" must be a non-empty string');
+    try { localStorage.setItem(DIFFICULTY_KEY, id); } catch { /* quota */ }
+  }
+
+  /** The last-chosen difficulty preset id, or `null` if never chosen. */
+  static loadDifficulty(): string | null {
+    try { return localStorage.getItem(DIFFICULTY_KEY); } catch { return null; }
   }
 
   /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */

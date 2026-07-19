@@ -6,30 +6,67 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "player", "progression", "economy", "brands", "ammo", "altars",
-    "floors", "boss", "gorgoth", "crystalShards", "spawnRates", "eliteMonsters", "ghosts", "narrative",
-    "smiths", "omens", "spearOfLugh"
+    "player",
+    "progression",
+    "economy",
+    "brands",
+    "ammo",
+    "altars",
+    "floors",
+    "boss",
+    "gorgoth",
+    "crystalShards",
+    "spawnRates",
+    "eliteMonsters",
+    "ghosts",
+    "narrative",
+    "smiths",
+    "omens",
+    "spearOfLugh",
+    "difficulty"
   ],
   "properties": {
     "player": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["startingHp", "startingAtk", "xpToNextStart", "xpToNextGrowth", "combatLevelBands"],
+      "required": [
+        "startingHp",
+        "startingAtk",
+        "xpToNextStart",
+        "xpToNextGrowth",
+        "combatLevelBands"
+      ],
       "properties": {
-        "startingHp": { "type": "number" },
-        "startingAtk": { "type": "number" },
-        "xpToNextStart": { "type": "number" },
-        "xpToNextGrowth": { "type": "number" },
+        "startingHp": {
+          "type": "number"
+        },
+        "startingAtk": {
+          "type": "number"
+        },
+        "xpToNextStart": {
+          "type": "number"
+        },
+        "xpToNextGrowth": {
+          "type": "number"
+        },
         "combatLevelBands": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["minPlayerLevel"],
+            "required": [
+              "minPlayerLevel"
+            ],
             "properties": {
-              "minPlayerLevel": { "type": "number" },
-              "combatLevel": { "type": "number" },
-              "combatLevelFloor": { "type": "number" }
+              "minPlayerLevel": {
+                "type": "number"
+              },
+              "combatLevel": {
+                "type": "number"
+              },
+              "combatLevelFloor": {
+                "type": "number"
+              }
             }
           }
         }
@@ -38,40 +75,94 @@
     "progression": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tickBaseMs", "tickMinMs", "tickMsPerDungeonLevel", "lineClearScoreBase", "lineClearScoreOverflow"],
+      "required": [
+        "tickBaseMs",
+        "tickMinMs",
+        "tickMsPerDungeonLevel",
+        "lineClearScoreBase",
+        "lineClearScoreOverflow"
+      ],
       "properties": {
-        "tickBaseMs": { "type": "number" },
-        "tickMinMs": { "type": "number" },
-        "tickMsPerDungeonLevel": { "type": "number" },
-        "lineClearScoreBase": { "type": "array", "items": { "type": "number" } },
-        "lineClearScoreOverflow": { "type": "number" }
+        "tickBaseMs": {
+          "type": "number"
+        },
+        "tickMinMs": {
+          "type": "number"
+        },
+        "tickMsPerDungeonLevel": {
+          "type": "number"
+        },
+        "lineClearScoreBase": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "lineClearScoreOverflow": {
+          "type": "number"
+        }
       }
     },
     "economy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["geasaRerollBaseCost", "geasaRerollCostGrowth", "ogmRerollBaseCost", "ogmRerollCostGrowth", "shop"],
+      "required": [
+        "geasaRerollBaseCost",
+        "geasaRerollCostGrowth",
+        "ogmRerollBaseCost",
+        "ogmRerollCostGrowth",
+        "shop"
+      ],
       "properties": {
-        "geasaRerollBaseCost": { "type": "number" },
-        "geasaRerollCostGrowth": { "type": "number" },
-        "ogmRerollBaseCost": { "type": "number" },
-        "ogmRerollCostGrowth": { "type": "number" },
+        "geasaRerollBaseCost": {
+          "type": "number"
+        },
+        "geasaRerollCostGrowth": {
+          "type": "number"
+        },
+        "ogmRerollBaseCost": {
+          "type": "number"
+        },
+        "ogmRerollCostGrowth": {
+          "type": "number"
+        },
         "shop": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["descentModulo", "descentRemainder", "prices"],
+          "required": [
+            "descentModulo",
+            "descentRemainder",
+            "prices"
+          ],
           "properties": {
-            "descentModulo": { "type": "number" },
-            "descentRemainder": { "type": "number" },
+            "descentModulo": {
+              "type": "number"
+            },
+            "descentRemainder": {
+              "type": "number"
+            },
             "prices": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["heal", "maxhp", "atk", "ward"],
+              "required": [
+                "heal",
+                "maxhp",
+                "atk",
+                "ward"
+              ],
               "properties": {
-                "heal": { "$ref": "#/$defs/priceEntry" },
-                "maxhp": { "$ref": "#/$defs/priceEntry" },
-                "atk": { "$ref": "#/$defs/priceEntry" },
-                "ward": { "$ref": "#/$defs/priceEntry" }
+                "heal": {
+                  "$ref": "#/$defs/priceEntry"
+                },
+                "maxhp": {
+                  "$ref": "#/$defs/priceEntry"
+                },
+                "atk": {
+                  "$ref": "#/$defs/priceEntry"
+                },
+                "ward": {
+                  "$ref": "#/$defs/priceEntry"
+                }
               }
             }
           }
@@ -81,201 +172,491 @@
     "brands": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["maxLifetime"],
+      "required": [
+        "maxLifetime"
+      ],
       "properties": {
-        "maxLifetime": { "type": "number" }
+        "maxLifetime": {
+          "type": "number"
+        }
       }
     },
     "ammo": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replenishOnDescend", "maxAmmo"],
+      "required": [
+        "replenishOnDescend",
+        "maxAmmo"
+      ],
       "properties": {
-        "replenishOnDescend": { "type": "number" },
-        "maxAmmo": { "type": "number" }
+        "replenishOnDescend": {
+          "type": "number"
+        },
+        "maxAmmo": {
+          "type": "number"
+        }
       }
     },
     "altars": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["vaultTierMinFloorT3", "vaultTierMinFloorT2"],
+      "required": [
+        "vaultTierMinFloorT3",
+        "vaultTierMinFloorT2"
+      ],
       "properties": {
-        "vaultTierMinFloorT3": { "type": "number" },
-        "vaultTierMinFloorT2": { "type": "number" }
+        "vaultTierMinFloorT3": {
+          "type": "number"
+        },
+        "vaultTierMinFloorT2": {
+          "type": "number"
+        }
       }
     },
     "floors": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["bossFloorInterval", "floorEventInterval", "dungeonRoomChance"],
+      "required": [
+        "bossFloorInterval",
+        "floorEventInterval",
+        "dungeonRoomChance"
+      ],
       "properties": {
-        "bossFloorInterval": { "type": "number" },
-        "floorEventInterval": { "type": "number" },
-        "dungeonRoomChance": { "type": "number" }
+        "bossFloorInterval": {
+          "type": "number"
+        },
+        "floorEventInterval": {
+          "type": "number"
+        },
+        "dungeonRoomChance": {
+          "type": "number"
+        }
       }
     },
     "boss": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["baseHpFloor1", "baseHpPerDungeonLevel", "baseAtkFloor1", "baseAtkPerDungeonLevel", "combatLevel"],
+      "required": [
+        "baseHpFloor1",
+        "baseHpPerDungeonLevel",
+        "baseAtkFloor1",
+        "baseAtkPerDungeonLevel",
+        "combatLevel"
+      ],
       "properties": {
-        "baseHpFloor1": { "type": "number" },
-        "baseHpPerDungeonLevel": { "type": "number" },
-        "baseAtkFloor1": { "type": "number" },
-        "baseAtkPerDungeonLevel": { "type": "number" },
-        "combatLevel": { "type": "number" }
+        "baseHpFloor1": {
+          "type": "number"
+        },
+        "baseHpPerDungeonLevel": {
+          "type": "number"
+        },
+        "baseAtkFloor1": {
+          "type": "number"
+        },
+        "baseAtkPerDungeonLevel": {
+          "type": "number"
+        },
+        "combatLevel": {
+          "type": "number"
+        }
       }
     },
     "gorgoth": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["maxHp", "atk", "xpReward", "combatLevel"],
+      "required": [
+        "maxHp",
+        "atk",
+        "xpReward",
+        "combatLevel"
+      ],
       "properties": {
-        "maxHp": { "type": "number" },
-        "atk": { "type": "number" },
-        "xpReward": { "type": "number" },
-        "combatLevel": { "type": "number" }
+        "maxHp": {
+          "type": "number"
+        },
+        "atk": {
+          "type": "number"
+        },
+        "xpReward": {
+          "type": "number"
+        },
+        "combatLevel": {
+          "type": "number"
+        }
       }
     },
     "crystalShards": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["baseHp", "hpPerDungeonLevel", "baseAtk", "atkPerDungeonLevel"],
+      "required": [
+        "baseHp",
+        "hpPerDungeonLevel",
+        "baseAtk",
+        "atkPerDungeonLevel"
+      ],
       "properties": {
-        "baseHp": { "type": "number" },
-        "hpPerDungeonLevel": { "type": "number" },
-        "baseAtk": { "type": "number" },
-        "atkPerDungeonLevel": { "type": "number" }
+        "baseHp": {
+          "type": "number"
+        },
+        "hpPerDungeonLevel": {
+          "type": "number"
+        },
+        "baseAtk": {
+          "type": "number"
+        },
+        "atkPerDungeonLevel": {
+          "type": "number"
+        }
       }
     },
     "spawnRates": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "cursedPieceChance", "blessedPieceChance", "stairsForcedAfterBlocks", "stairsRandomChance",
-        "merchantChance", "maxTattooTilesPerFloor", "altarChance", "npcChance", "maxNpcTilesPerFloor", "trapWeights",
-        "monsterBaseChance", "monsterChancePerDungeonLevel", "monsterChanceCap",
-        "hauntedMonsterChanceMult", "monsterWeights", "oPieceAltarChance", "oPieceAltarChanceArchitect"
+        "cursedPieceChance",
+        "blessedPieceChance",
+        "stairsForcedAfterBlocks",
+        "stairsRandomChance",
+        "merchantChance",
+        "maxTattooTilesPerFloor",
+        "altarChance",
+        "npcChance",
+        "maxNpcTilesPerFloor",
+        "trapWeights",
+        "monsterBaseChance",
+        "monsterChancePerDungeonLevel",
+        "monsterChanceCap",
+        "hauntedMonsterChanceMult",
+        "monsterWeights",
+        "oPieceAltarChance",
+        "oPieceAltarChanceArchitect"
       ],
       "properties": {
-        "cursedPieceChance": { "type": "number" },
-        "blessedPieceChance": { "type": "number" },
-        "stairsForcedAfterBlocks": { "type": "number" },
-        "stairsRandomChance": { "type": "number" },
-        "merchantChance": { "type": "number" },
-        "maxTattooTilesPerFloor": { "type": "number" },
-        "altarChance": { "type": "number" },
-        "npcChance": { "type": "number" },
-        "maxNpcTilesPerFloor": { "type": "number" },
+        "cursedPieceChance": {
+          "type": "number"
+        },
+        "blessedPieceChance": {
+          "type": "number"
+        },
+        "stairsForcedAfterBlocks": {
+          "type": "number"
+        },
+        "stairsRandomChance": {
+          "type": "number"
+        },
+        "merchantChance": {
+          "type": "number"
+        },
+        "maxTattooTilesPerFloor": {
+          "type": "number"
+        },
+        "altarChance": {
+          "type": "number"
+        },
+        "npcChance": {
+          "type": "number"
+        },
+        "maxNpcTilesPerFloor": {
+          "type": "number"
+        },
         "trapWeights": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["spike", "smoke", "teleport"],
+          "required": [
+            "spike",
+            "smoke",
+            "teleport"
+          ],
           "properties": {
-            "spike": { "type": "number" },
-            "smoke": { "type": "number" },
-            "teleport": { "type": "number" }
+            "spike": {
+              "type": "number"
+            },
+            "smoke": {
+              "type": "number"
+            },
+            "teleport": {
+              "type": "number"
+            }
           }
         },
-        "monsterBaseChance": { "type": "number" },
-        "monsterChancePerDungeonLevel": { "type": "number" },
-        "monsterChanceCap": { "type": "number" },
-        "hauntedMonsterChanceMult": { "type": "number" },
+        "monsterBaseChance": {
+          "type": "number"
+        },
+        "monsterChancePerDungeonLevel": {
+          "type": "number"
+        },
+        "monsterChanceCap": {
+          "type": "number"
+        },
+        "hauntedMonsterChanceMult": {
+          "type": "number"
+        },
         "monsterWeights": {
           "type": "object",
-          "additionalProperties": { "type": "number" }
+          "additionalProperties": {
+            "type": "number"
+          }
         },
-        "oPieceAltarChance": { "type": "number" },
-        "oPieceAltarChanceArchitect": { "type": "number" }
+        "oPieceAltarChance": {
+          "type": "number"
+        },
+        "oPieceAltarChanceArchitect": {
+          "type": "number"
+        }
       }
     },
     "eliteMonsters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["spawnChance", "hpMult", "atkMult", "combatLevelBonus"],
+      "required": [
+        "spawnChance",
+        "hpMult",
+        "atkMult",
+        "combatLevelBonus"
+      ],
       "properties": {
-        "spawnChance": { "type": "number" },
-        "hpMult": { "type": "number" },
-        "atkMult": { "type": "number" },
-        "combatLevelBonus": { "type": "number" }
+        "spawnChance": {
+          "type": "number"
+        },
+        "hpMult": {
+          "type": "number"
+        },
+        "atkMult": {
+          "type": "number"
+        },
+        "combatLevelBonus": {
+          "type": "number"
+        }
       }
     },
     "ghosts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["encounterChance", "levelTolerance", "maxStored"],
+      "required": [
+        "encounterChance",
+        "levelTolerance",
+        "maxStored"
+      ],
       "properties": {
-        "encounterChance": { "type": "number" },
-        "levelTolerance": { "type": "number" },
-        "maxStored": { "type": "number" }
+        "encounterChance": {
+          "type": "number"
+        },
+        "levelTolerance": {
+          "type": "number"
+        },
+        "maxStored": {
+          "type": "number"
+        }
       }
     },
     "narrative": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["closeCallHpFraction"],
+      "required": [
+        "closeCallHpFraction"
+      ],
       "properties": {
-        "closeCallHpFraction": { "type": "number" }
+        "closeCallHpFraction": {
+          "type": "number"
+        }
       }
     },
     "smiths": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["floorInterval", "pieceThreshold", "warningThreshold"],
+      "required": [
+        "floorInterval",
+        "pieceThreshold",
+        "warningThreshold"
+      ],
       "properties": {
-        "floorInterval": { "type": "number" },
-        "pieceThreshold": { "type": "number" },
-        "warningThreshold": { "type": "number" }
+        "floorInterval": {
+          "type": "number"
+        },
+        "pieceThreshold": {
+          "type": "number"
+        },
+        "warningThreshold": {
+          "type": "number"
+        }
       }
     },
     "omens": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rollChance"],
+      "required": [
+        "rollChance"
+      ],
       "properties": {
-        "rollChance": { "type": "number", "minimum": 0, "maximum": 1 }
+        "rollChance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "well": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["baseCost", "costPerFloor", "baseXp", "xpPerFloor"],
+      "required": [
+        "baseCost",
+        "costPerFloor",
+        "baseXp",
+        "xpPerFloor"
+      ],
       "properties": {
-        "baseCost": { "type": "number" },
-        "costPerFloor": { "type": "number" },
-        "baseXp": { "type": "number" },
-        "xpPerFloor": { "type": "number" }
+        "baseCost": {
+          "type": "number"
+        },
+        "costPerFloor": {
+          "type": "number"
+        },
+        "baseXp": {
+          "type": "number"
+        },
+        "xpPerFloor": {
+          "type": "number"
+        }
       }
     },
     "waystation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tattooistChance", "stashRecoveryPct"],
+      "required": [
+        "tattooistChance",
+        "stashRecoveryPct"
+      ],
       "properties": {
-        "tattooistChance": { "type": "number", "minimum": 0, "maximum": 1 },
-        "stashRecoveryPct": { "type": "number", "minimum": 0, "maximum": 1 }
+        "tattooistChance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "stashRecoveryPct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "rescues": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rollChance", "pieceThreshold", "portionAtk", "healerBaseCost", "healerCostPerFloor", "healerHpGain"],
+      "required": [
+        "rollChance",
+        "pieceThreshold",
+        "portionAtk",
+        "healerBaseCost",
+        "healerCostPerFloor",
+        "healerHpGain"
+      ],
       "properties": {
-        "rollChance": { "type": "number", "minimum": 0, "maximum": 1 },
-        "pieceThreshold": { "type": "number" },
-        "portionAtk": { "type": "number" },
-        "healerBaseCost": { "type": "number" },
-        "healerCostPerFloor": { "type": "number" },
-        "healerHpGain": { "type": "number" }
+        "rollChance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "pieceThreshold": {
+          "type": "number"
+        },
+        "portionAtk": {
+          "type": "number"
+        },
+        "healerBaseCost": {
+          "type": "number"
+        },
+        "healerCostPerFloor": {
+          "type": "number"
+        },
+        "healerHpGain": {
+          "type": "number"
+        }
       }
     },
     "spearOfLugh": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["dmgMult", "cooldownMax"],
+      "required": [
+        "dmgMult",
+        "cooldownMax"
+      ],
       "properties": {
-        "dmgMult": { "type": "number" },
-        "cooldownMax": { "type": "number" }
+        "dmgMult": {
+          "type": "number"
+        },
+        "cooldownMax": {
+          "type": "number"
+        }
+      }
+    },
+    "difficulty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "presets"
+      ],
+      "properties": {
+        "presets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "icon",
+              "name",
+              "desc",
+              "gravityPct",
+              "playerHpMult",
+              "monsterAtkMult",
+              "monsterHpMult",
+              "goldMult",
+              "xpMult"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "desc": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gravityPct": {
+                "type": "number"
+              },
+              "playerHpMult": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "monsterAtkMult": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "monsterHpMult": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "goldMult": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "xpMult": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -283,10 +664,17 @@
     "priceEntry": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["base", "perFloor"],
+      "required": [
+        "base",
+        "perFloor"
+      ],
       "properties": {
-        "base": { "type": "number" },
-        "perFloor": { "type": "number" }
+        "base": {
+          "type": "number"
+        },
+        "perFloor": {
+          "type": "number"
+        }
       }
     }
   }

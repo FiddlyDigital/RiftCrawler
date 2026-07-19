@@ -443,6 +443,8 @@ export interface UIState {
   biomeName: string;
   /** The floor's active omen (per-floor modifier), for the sidebar badge — null on a plain floor. */
   activeOmen: { icon: string; name: string } | null;
+  /** The run's difficulty for the sidebar badge — null on the standard path (no badge noise for the default). */
+  activeDifficulty: { icon: string; name: string } | null;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
   /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */

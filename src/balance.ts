@@ -84,6 +84,28 @@ export interface BalanceConfig {
   waystation: { tattooistChance: number; stashRecoveryPct: number };
   rescues: { rollChance: number; pieceThreshold: number; portionAtk: number; healerBaseCost: number; healerCostPerFloor: number; healerHpGain: number };
   spearOfLugh: { dmgMult: number; cooldownMax: number };
+  difficulty: { presets: DifficultyPreset[] };
+}
+
+/** A run-start difficulty preset (see `balance.json` → `difficulty.presets`). */
+export interface DifficultyPreset {
+  id: string;
+  /** Sprite-map key for the picker card. */
+  icon: string;
+  name: string;
+  desc: string;
+  /** Percent adjustment to gravity tick speed (positive = slower/easier, matching `tickSlowPercent`). */
+  gravityPct: number;
+  /** Applied once to the hero's Max HP at run start. */
+  playerHpMult: number;
+  /** Applied to every monster/boss attack stat at spawn. */
+  monsterAtkMult: number;
+  /** Applied to every monster/boss max HP at spawn. */
+  monsterHpMult: number;
+  /** Applied to line-clear gold. */
+  goldMult: number;
+  /** Folded into the run's XP multiplier at run start. */
+  xpMult: number;
 }
 
 /**

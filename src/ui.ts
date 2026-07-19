@@ -5,6 +5,7 @@ import type { PauseModal, PauseMenuState, PauseMenuHandlers } from './components
 import type { BossWarningModal } from './components/boss-warning-modal';
 import type { ModifierModal } from './components/modifier-modal';
 import type { ClassModal } from './components/class-modal';
+import type { DifficultyModal } from './components/difficulty-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
 import type { OfferModal } from './components/offer-modal';
 import type { ShopModal } from './components/shop-modal';
@@ -13,6 +14,7 @@ import type { CodexModal } from './components/codex-modal';
 import type { GameOverModal } from './components/game-over-modal';
 import type { StartModal } from './components/start-modal';
 import type { LogClass, UIState, RunStats, BossDef, ModifierDef, InspectInfo, ClassDef, FloorEventDef, BoonDef, BrandDef, BodyPart, RerollCfg, ShopItem, CharacterSheetSection } from './types';
+import type { DifficultyPreset } from './balance';
 import type { RunRecord } from './types';
 
 /**
@@ -29,6 +31,7 @@ export class UIManager {
   private readonly modifierModal: ModifierModal;
   private readonly bossWarningModal: BossWarningModal;
   private readonly classModal: ClassModal;
+  private readonly difficultyModal: DifficultyModal;
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
   private readonly toastBanner: HTMLElement;
@@ -52,6 +55,7 @@ export class UIManager {
     this.modifierModal     = document.querySelector('modifier-modal')!;
     this.bossWarningModal  = document.querySelector('boss-warning-modal')!;
     this.classModal        = document.querySelector('class-modal')!;
+    this.difficultyModal   = document.querySelector('difficulty-modal')!;
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.toastBanner       = document.getElementById('toast-banner')!;
@@ -87,6 +91,7 @@ export class UIManager {
       statusRow:        document.getElementById('status-row')!,
       activeModifier:   document.getElementById('active-modifier-badge')!,
       activeClass:      document.getElementById('active-class-badge')!,
+      difficultyBadge:  document.getElementById('difficulty-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
       heldPreview:      document.getElementById('held-preview-box')!,
@@ -216,6 +221,12 @@ export class UIManager {
       .join('');
 
     // Active modifier badge
+    if (state.activeDifficulty) {
+      this.els['difficultyBadge']!.style.display = '';
+      this.els['difficultyBadge']!.innerHTML = `${SpriteService.iconHTML(state.activeDifficulty.icon, 12)}${HtmlUtils.escapeHtml(state.activeDifficulty.name)}`;
+    } else {
+      this.els['difficultyBadge']!.style.display = 'none';
+    }
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
       this.els['activeModifier']!.innerHTML = `${SpriteService.iconHTML(state.activeModifier.emoji, 12)}${HtmlUtils.escapeHtml(state.activeModifier.name)}`;
@@ -299,6 +310,11 @@ export class UIManager {
   /** Shows the run-start modifier (Rift Curse) picker. */
   public showModifierPick(mods: ModifierDef[], onSelect: (id: string) => void): void {
     this.modifierModal.showModifierPick(mods, onSelect);
+  }
+
+  /** Shows the run-start difficulty picker (`lastChosenId` marks last run's pick). */
+  public showDifficultyPick(presets: DifficultyPreset[], lastChosenId: string | null, onSelect: (id: string) => void): void {
+    this.difficultyModal.showDifficultyPick(presets, lastChosenId, onSelect);
   }
 
   /** Shows the run-start class picker. */

@@ -11,6 +11,7 @@ import { audio } from './audio';
 import { HapticsController } from './haptics';
 import { TutorialController, FIGHT_STEP_INDEX, type TutorialEvent } from './tutorial';
 import { CLASSES } from './content';
+import { Balance } from './balance';
 import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef, SavedRun } from './types';
 
 const DRAWER_EDGE_ZONE       = 24; // px from the right screen edge that starts an "open" gesture
@@ -376,7 +377,7 @@ class GameApp {
   private getTickMs(): number {
     return GameMath.tickMsForLevel(
       this.game.dungeonLevel,
-      this.game.player.tickSlowPercent + this.game.biomeGravityPct + this.game.omenGravityPct + (this.game.timeDilationTurns > 0 ? this.game.timeDilationSlowPct : 0),
+      this.game.player.tickSlowPercent + this.game.biomeGravityPct + this.game.omenGravityPct + this.game.difficultyGravityPct + (this.game.timeDilationTurns > 0 ? this.game.timeDilationSlowPct : 0),
     );
   }
 
@@ -798,15 +799,20 @@ class GameApp {
   // ── Class + Modifier picker then launch ───────────────────────────────────
 
   private launchWithModifier(onReady: () => void): void {
-    const classes: ClassDef[] = this.game.getRandomClasses(3);
-    this.ui.showClassSelection(classes, (classId) => {
-      this.game.applyClass(classId);
-      const mods = this.game.getRandomModifiers(3);
-      this.ui.showModifierPick(mods, (modId) => {
-        this.game.applyModifier(modId);
-        // The new run is now real — any previous run's snapshot is abandoned.
-        StorageService.clearRun();
-        onReady();
+    this.ui.showDifficultyPick(Balance.CONFIG.difficulty.presets, StorageService.loadDifficulty(), (diffId) => {
+      StorageService.saveDifficulty(diffId);
+      const classes: ClassDef[] = this.game.getRandomClasses(3);
+      this.ui.showClassSelection(classes, (classId) => {
+        this.game.applyClass(classId);
+        // Applied after the class so the difficulty's HP multiplier covers class bonuses.
+        this.game.applyDifficulty(diffId);
+        const mods = this.game.getRandomModifiers(3);
+        this.ui.showModifierPick(mods, (modId) => {
+          this.game.applyModifier(modId);
+          // The new run is now real — any previous run's snapshot is abandoned.
+          StorageService.clearRun();
+          onReady();
+        });
       });
     });
   }

@@ -82,13 +82,15 @@ try {
   step('start screen rendered');
 
   await page.click('#start-btn');
-  // Class pick, then curse pick (both modals style their options .modifier-btn,
-  // so scope each click to its host component).
+  // Difficulty pick, then class pick, then curse pick (all three modals style
+  // their options .modifier-btn, so scope each click to its host component).
+  await page.locator('difficulty-modal .modifier-btn').first().click({ timeout: 5000 });
+  await page.waitForTimeout(300);
   await page.locator('class-modal .modifier-btn').first().click({ timeout: 5000 });
   await page.waitForTimeout(300);
   await page.locator('modifier-modal .modifier-btn').first().click({ timeout: 5000 });
   await page.waitForTimeout(500);
-  step('run started (class + curse chosen)');
+  step('run started (difficulty + class + curse chosen)');
 
   // The canvas is live and sized.
   const canvasBox = await page.locator('#gameCanvas').boundingBox();

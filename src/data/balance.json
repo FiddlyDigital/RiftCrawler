@@ -45,10 +45,22 @@
       "descentModulo": 3,
       "descentRemainder": 2,
       "prices": {
-        "heal":  { "base": 350, "perFloor": 50 },
-        "maxhp": { "base": 600, "perFloor": 75 },
-        "atk":   { "base": 600, "perFloor": 75 },
-        "ward":  { "base": 450, "perFloor": 50 }
+        "heal": {
+          "base": 350,
+          "perFloor": 50
+        },
+        "maxhp": {
+          "base": 600,
+          "perFloor": 75
+        },
+        "atk": {
+          "base": 600,
+          "perFloor": 75
+        },
+        "ward": {
+          "base": 450,
+          "perFloor": 50
+        }
       }
     }
   },
@@ -91,7 +103,7 @@
     "cursedPieceChance": 0.08,
     "blessedPieceChance": 0.04,
     "stairsForcedAfterBlocks": 12,
-    "stairsRandomChance": 0.10,
+    "stairsRandomChance": 0.1,
     "merchantChance": 0.04,
     "maxTattooTilesPerFloor": 2,
     "altarChance": 0.035,
@@ -114,8 +126,8 @@
       "berserker_orc": 0.11,
       "plague_bat": 0.11
     },
-    "oPieceAltarChance": 0.40,
-    "oPieceAltarChanceArchitect": 0.80
+    "oPieceAltarChance": 0.4,
+    "oPieceAltarChanceArchitect": 0.8
   },
   "eliteMonsters": {
     "spawnChance": 0.15,
@@ -160,5 +172,45 @@
   "spearOfLugh": {
     "dmgMult": 3,
     "cooldownMax": 8
+  },
+  "difficulty": {
+    "presets": [
+      {
+        "id": "story",
+        "icon": "npc_seanchai",
+        "name": "Sl\u00ed an Sc\u00e9ala\u00ed \u2014 the Storyteller's Way",
+        "desc": "For the tale, not the trial. The stone falls slower, your hero is hardier, and the foes strike softer.",
+        "gravityPct": 40,
+        "playerHpMult": 1.3,
+        "monsterAtkMult": 0.75,
+        "monsterHpMult": 0.85,
+        "goldMult": 1,
+        "xpMult": 1
+      },
+      {
+        "id": "standard",
+        "icon": "sprite_player",
+        "name": "Sl\u00ed an Laoich \u2014 the Hero's Way",
+        "desc": "The descent as it was meant to be walked.",
+        "gravityPct": 0,
+        "playerHpMult": 1,
+        "monsterAtkMult": 1,
+        "monsterHpMult": 1,
+        "goldMult": 1,
+        "xpMult": 1
+      },
+      {
+        "id": "fomorian",
+        "icon": "sprite_boss_gorgoth",
+        "name": "Sl\u00ed na bhFomh\u00f3rach \u2014 the Fomorian Way",
+        "desc": "Faster stone, crueller foes, leaner purses \u2014 but hard roads teach: +15% XP.",
+        "gravityPct": -15,
+        "playerHpMult": 0.9,
+        "monsterAtkMult": 1.25,
+        "monsterHpMult": 1.2,
+        "goldMult": 0.75,
+        "xpMult": 1.15
+      }
+    ]
   }
 }

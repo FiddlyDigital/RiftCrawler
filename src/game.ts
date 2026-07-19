@@ -7,7 +7,7 @@ import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
 import { MonsterAiSystem } from './systems/monsterAI';
 import { SpriteService } from './sprites';
-import { Balance } from './balance';
+import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
 import { StorageService } from './storage';
 
@@ -133,6 +133,9 @@ export class Game {
   public noLineHeal = false;
   public haunted = false;
   public frozenRift = false;
+
+  // Difficulty state (chosen at run start, active for the whole run)
+  public activeDifficultyId = 'standard';
 
   // Class state
   public activeClassId: string | null = null;
@@ -910,12 +913,13 @@ export class Game {
     const def = MONSTERS[key];
     if (!def) return;
     const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance);
-    const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult);
+    const diff = this.difficultyTuning();
+    const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult * diff.monsterHpMult);
     const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
     const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
     // Omens like the Morrígan's Ravens or Crom's Tithe harden every spawn.
     const omenAtkMult = this.activeOmen?.num('monsterAtkMult', 1) ?? 1;
-    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult);
+    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult * diff.monsterAtkMult);
     const name = nameOverride ?? (isElite ? `Elite ${def.name}` : def.name);
     const m = new Monster(
       tx, ty, def.char, name, hp, hp, atk, def.xpReward,
@@ -1672,10 +1676,11 @@ export class Game {
 
     if (cell === Cell.BOSS) {
       const bossDef = this.previewBossForFloor(this.dungeonLevel);
+      const diff = this.difficultyTuning();
       const baseHp = Balance.CONFIG.boss.baseHpFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseHpPerDungeonLevel;
       const baseAtk = Balance.CONFIG.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseAtkPerDungeonLevel;
-      const hp = Math.floor(baseHp * bossDef.hpMult);
-      const atk = Math.floor(baseAtk * bossDef.atkMult);
+      const hp = Math.floor(baseHp * bossDef.hpMult * diff.monsterHpMult);
+      const atk = Math.floor(baseAtk * bossDef.atkMult * diff.monsterAtkMult);
       const boss = new Monster(tx, ty, bossDef.char, bossDef.name, hp, hp, atk, bossDef.xpReward, true);
       boss.combatLevel = Balance.CONFIG.boss.combatLevel;
       this.monsters.push(boss);
@@ -1763,7 +1768,7 @@ export class Game {
       this.lastLineClearMs = now;
       if (this.comboCount > this.biggestCombo) this.biggestCombo = this.comboCount;
 
-      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel) * (this.activeOmen?.num('goldMult', 1) ?? 1));
+      let goldAdded = Math.floor(GameMath.scoreForLines(rowsCleared, this.dungeonLevel) * (this.activeOmen?.num('goldMult', 1) ?? 1) * this.difficultyTuning().goldMult);
       if (this.comboCount > 0) {
         const mult = 1 + this.comboCount * 0.5;
         goldAdded = Math.floor(goldAdded * mult);
@@ -2123,6 +2128,49 @@ export class Game {
     this.player.char = cls.emoji;  // the hero looks like the card you picked
     this.activeClassId = id;
     this.cb.log(`Playing as ${cls.name}: ${cls.tagline}`, 'log-perk', cls.emoji);
+    this.pushUI();
+  }
+
+  // ── Difficulty selection ─────────────────────────────────────────────────
+
+  /** Identity tuning used when the active difficulty id is unknown (content changed under a save). */
+  private static readonly DIFFICULTY_FALLBACK: DifficultyPreset = {
+    id: 'standard', icon: '', name: '', desc: '',
+    gravityPct: 0, playerHpMult: 1, monsterAtkMult: 1, monsterHpMult: 1, goldMult: 1, xpMult: 1,
+  };
+
+  /** The active difficulty preset's tuning. */
+  private difficultyTuning(): DifficultyPreset {
+    return Balance.CONFIG.difficulty.presets.find(p => p.id === this.activeDifficultyId)
+      ?? Game.DIFFICULTY_FALLBACK;
+  }
+
+  /** Percent gravity adjustment from the active difficulty (positive = slower), summed with the biome/omen adjustments at both tick-rate call sites. */
+  public get difficultyGravityPct(): number {
+    return this.difficultyTuning().gravityPct;
+  }
+
+  /**
+   * Applies the chosen run difficulty. Called once at run start, after the
+   * class is applied so the Max-HP multiplier covers class bonuses too; the
+   * monster/gold/gravity multipliers are read live from the preset at their
+   * respective choke points for the rest of the run.
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  public applyDifficulty(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyDifficulty: "id" must be a non-empty string');
+    const preset = Balance.CONFIG.difficulty.presets.find(p => p.id === id);
+    if (!preset) return;
+    this.activeDifficultyId = id;
+    if (preset.playerHpMult !== 1) {
+      this.player.maxHp = Math.round(this.player.maxHp * preset.playerHpMult);
+      this.player.hp = Math.min(Math.round(this.player.hp * preset.playerHpMult), this.player.maxHp);
+    }
+    this.xpMultiplier *= preset.xpMult;
+    if (id !== 'standard') {
+      this.storyBeats.push(`chose ${preset.name.split(' — ')[0]!}`);
+      this.cb.log(`${preset.name}. ${preset.desc}`, 'log-perk', preset.icon);
+    }
     this.pushUI();
   }
 
@@ -3164,7 +3212,10 @@ export class Game {
     // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
     // so descending floors only ever helps you.
     const gx = Math.floor(GameConfig.COLS / 2);
-    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', Balance.CONFIG.gorgoth.maxHp, Balance.CONFIG.gorgoth.maxHp, Balance.CONFIG.gorgoth.atk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
+    const gDiff = this.difficultyTuning();
+    const gHp = Math.floor(Balance.CONFIG.gorgoth.maxHp * gDiff.monsterHpMult);
+    const gAtk = Math.floor(Balance.CONFIG.gorgoth.atk * gDiff.monsterAtkMult);
+    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', gHp, gHp, gAtk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
     boss.combatLevel = Balance.CONFIG.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
     boss.isGorgoth = true;
     this.monsters.push(boss);
@@ -3568,7 +3619,7 @@ export class Game {
       floor: this.dungeonLevel,
       totalXpEarned: this.player.totalXpEarned,
       gold: this.gold,
-      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct),
+      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct + this.difficultyGravityPct),
       nextType: this.nextType,
       heldType: this.heldType,
       canHold: this.canHold,
@@ -3597,6 +3648,9 @@ export class Game {
         : null,
       biomeName: biome.name,
       activeOmen: this.activeOmen ? { icon: this.activeOmen.icon, name: this.activeOmen.name } : null,
+      activeDifficulty: this.activeDifficultyId !== 'standard' && this.difficultyTuning().name !== ''
+        ? { icon: this.difficultyTuning().icon, name: this.difficultyTuning().name.split(' — ')[0]! }
+        : null,
       rangedAbility: this.player.rangedAbility
         ? {
             name:        this.player.rangedAbility.name,
