@@ -3549,29 +3549,51 @@ export class Game {
     this.currentCursed = false;
     this.currentBlessed = false;
     this.blockMatrix = shape.matrix.map(row => row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR));
-    this.blockX = Math.floor((GameConfig.COLS - this.blockMatrix[0]!.length) / 2);
-    this.blockY = 0;
+    // Deal the stone at the top of the player's OWN causeway (their build
+    // frontier), not the top of the board — the cursor lives on your side,
+    // exactly where it will land, instead of floating in the boss's territory.
+    const w = this.blockMatrix[0]!.length;
+    this.blockX = Math.max(0, Math.min(this.duelPlayerPeakColumn() - Math.floor(w / 2), GameConfig.COLS - w));
+    this.duelSnapPiece();
   }
 
-  /** Moves the cursor piece one column (kept fully on the board). */
+  /** The column carrying the player's highest (build-frontier) causeway tile — the home column until they've built. */
+  private duelPlayerPeakColumn(): number {
+    let bestX = this.duelHome.x, bestY = GameConfig.ROWS;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        if (this.duelOwner[x]![y] === 1 && y < bestY) { bestY = y; bestX = x; }
+      }
+    }
+    return bestX;
+  }
+
+  /** Snaps the cursor's row to where it would land — so the piece you steer is always shown resting on your causeway. */
+  private duelSnapPiece(): void {
+    this.blockY = Math.max(0, this.duelLandingY());
+  }
+
+  /** Moves the cursor piece one column (kept fully on the board), re-snapping it onto the causeway. */
   private duelSteerPiece(dir: number): void {
     if (this.duelResolved) return;
     const nx = this.blockX + dir;
     const cells = this.duelPieceCells(this.blockMatrix, nx, this.blockY);
     if (cells.length === this.pieceCellCount() && cells.every(c => c.x >= 0 && c.x < GameConfig.COLS)) {
       this.blockX = nx;
+      this.duelSnapPiece();
       this.cb.onAudio?.('blockMove');
       this.pushUI();
     }
   }
 
-  /** Rotates the cursor piece, nudging it back on-board if the rotation pushed it off an edge. */
+  /** Rotates the cursor piece, nudging it back on-board if the rotation pushed it off an edge, then re-snapping. */
   private duelRotatePiece(): void {
     if (this.duelResolved) return;
     const rotated = GameMath.rotateMatrix(this.blockMatrix);
     const width = rotated[0]!.length;
     this.blockX = Math.max(0, Math.min(this.blockX, GameConfig.COLS - width));
     this.blockMatrix = rotated;
+    this.duelSnapPiece();
     this.cb.onAudio?.('blockRotate');
     this.pushUI();
   }
@@ -3653,32 +3675,34 @@ export class Game {
    */
   private duelBossTurn(): void {
     if (this.duelResolved || !this.duelBoss) return;
-    const advance = 2;
-    let deepest = { x: this.duelBoss.x, y: this.duelBoss.y };
-    for (let step = 0; step < advance; step++) {
-      let best: { x: number; y: number; score: number } | null = null;
-      for (let x = 0; x < GameConfig.COLS; x++) {
-        for (let y = 0; y < GameConfig.ROWS; y++) {
-          if (this.duelOwner[x]![y] !== 2) continue;
-          // Descend straight down, or one column toward the hero (to go around).
-          for (const nx of [x, x + Math.sign(this.player.x - x)]) {
-            const ny = y + 1;
-            if (nx < 0 || nx >= GameConfig.COLS || ny >= GameConfig.ROWS) continue;
-            if (this.duelOwner[nx]![ny] !== 0) continue;
-            const score = ny * 10 - Math.abs(nx - this.player.x);  // deeper first, then nearer the hero
-            if (!best || score > best.score) best = { x: nx, y: ny, score };
-          }
-        }
+    // The bridge's leading edge: the deepest boss tile, nearest the hero's column.
+    let edge = { x: this.duelBoss.x, y: this.duelBoss.y };
+    let bestScore = -Infinity;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) {
+        if (this.duelOwner[x]![y] !== 2) continue;
+        const score = y * 10 - Math.abs(x - this.player.x);
+        if (score > bestScore) { bestScore = score; edge = { x, y }; }
       }
-      if (!best) break;  // fully walled off — the player has blocked the bridge
-      this.duelClaim([{ x: best.x, y: best.y }], 2, Game.DUEL_BOSS_COLOR);
-      deepest = { x: best.x, y: best.y };
-      if (this.duelAtShore(best.x, best.y)) { this.duelBoss.x = best.x; this.duelBoss.y = best.y; this.duelLose(); return; }
     }
-    // The boss walks down to its new frontier — coming to meet the hero.
-    if (!this.getMonsterAt(deepest.x, deepest.y) || this.getMonsterAt(deepest.x, deepest.y) === this.duelBoss) {
-      this.duelBoss.x = deepest.x; this.duelBoss.y = deepest.y;
+    // Extend a 2-wide causeway two rows down, angling toward the hero's column,
+    // so it reads as a bridge being built — not a one-tile thread.
+    const rows = 2;
+    for (let i = 0; i < rows; i++) {
+      const ny = edge.y + 1;
+      if (ny >= GameConfig.ROWS) break;
+      let nx = Math.max(0, Math.min(edge.x + Math.sign(this.player.x - edge.x), GameConfig.COLS - 1));
+      if (this.duelOwner[nx]![ny] !== 0) nx = edge.x;      // angled cell blocked → straight down
+      if (this.duelOwner[nx]![ny] !== 0) break;            // fully walled off — the player blocked the bridge
+      const claimed = [{ x: nx, y: ny }];
+      const wideX = nx + (nx < this.player.x ? 1 : -1);    // widen toward the hero for a bridge look
+      if (wideX >= 0 && wideX < GameConfig.COLS && this.duelOwner[wideX]![ny] === 0) claimed.push({ x: wideX, y: ny });
+      this.duelClaim(claimed, 2, Game.DUEL_BOSS_COLOR);
+      edge = { x: nx, y: ny };
+      if (this.duelAtShore(nx, ny)) { this.duelBoss.x = nx; this.duelBoss.y = ny; this.duelLose(); return; }
     }
+    // The boss walks its pawn to the new leading edge — coming to meet the hero.
+    this.duelBoss.x = edge.x; this.duelBoss.y = edge.y;
   }
 
   /** Boss slain in the duel — the causeway is broken; stairs rise so the run can go on. */
