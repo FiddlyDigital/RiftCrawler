@@ -447,6 +447,18 @@ export interface UIState {
   activeDifficulty: { icon: string; name: string } | null;
   /** The run's New Game+ heat level for the sidebar badge — null on a heat-0 run. */
   heatLevel: number | null;
+  /** Live Causeway-Duel status for the HUD panel — null when not in a duel. */
+  duel: {
+    bossName: string;
+    bossHp: number;
+    bossMaxHp: number;
+    /** Rows the boss's bridge still has to descend to reach the shore (lower = more urgent). */
+    bridgeGap: number;
+    /** Total rows from the boss's start to the shore, for the threat meter's scale. */
+    bridgeSpan: number;
+    /** Switch-islands left to flip before the center wall opens (0 = open / none). */
+    switchesLeft: number;
+  } | null;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
   /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */

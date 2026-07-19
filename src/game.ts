@@ -231,8 +231,19 @@ export class Game {
   private duelHome = { x: 0, y: 0 };
   /** Set once the duel has been decided, so late inputs can't re-trigger win/loss. */
   private duelResolved = false;
+  /** Switch-islands: routing the player's causeway to one flips it; all lit opens the center wall. */
+  private duelSwitches: Array<{ x: number; y: number; lit: boolean }> = [];
+  /** Center-wall tiles that block the two halves from connecting until every switch is lit. */
+  private duelWall: Array<{ x: number; y: number }> = [];
+  /** Off-the-line reward islands — routing the player's causeway onto one grants its boon. */
+  private duelBoons: Array<{ x: number; y: number; kind: 'geis' | 'gold' | 'heal'; taken: boolean }> = [];
+  /** Turns elapsed in the current duel (player placements). */
+  private duelTurns = 0;
   private static readonly DUEL_PLAYER_COLOR = '#2f5c8a';
   private static readonly DUEL_BOSS_COLOR = '#5c2530';
+  private static readonly DUEL_WALL_COLOR = '#3a3550';
+  private static readonly DUEL_SWITCH_COLOR = '#2a4a44';
+  private static readonly DUEL_BOON_COLOR = '#3a2e10';
 
   // Bealtaine Fires ritual state (the 'bealtaine' special omen)
   /** Braziers standing on the floor this level — walk into an unlit one to light it. */
@@ -676,6 +687,12 @@ export class Game {
   /** Whether an entity can stand on `(x, y)` — floor, stairs, or an interactable tile (tattoo artist / altar). */
   public isValidMove(x: number, y: number): boolean {
     if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return false;
+    // In a duel the hero can't walk the sealed wall or an unclaimed obstacle
+    // island — those are built up to, not strolled across.
+    if (this.inCausewayDuel) {
+      const o = this.duelOwner[x]?.[y];
+      if (o === Game.DUEL_WALL || o === Game.DUEL_SWITCH || o === Game.DUEL_BOON) return false;
+    }
     return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isTattooTile(x, y) || this.isAltarTile(x, y);
   }
 
@@ -3483,6 +3500,116 @@ export class Game {
     }
   }
 
+  // Duel obstacle owner codes (in duelOwner, all non-zero so they block builds).
+  private static readonly DUEL_WALL = 3;
+  private static readonly DUEL_SWITCH = 4;
+  private static readonly DUEL_BOON = 5;
+
+  /**
+   * Lays the mid-field furniture for a duel: a sealed center wall the boss
+   * can't cross, two switch-islands the player must route their causeway to
+   * (lighting both opens the wall), and two boon-islands above the wall worth
+   * a detour. Scales lightly with depth but is deliberately fixed-shape so the
+   * puzzle reads clearly.
+   */
+  private duelSetupObstacles(): void {
+    const wallY = Math.floor(GameConfig.ROWS * 0.55);  // ~row 13
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      this.duelOwner[x]![wallY] = Game.DUEL_WALL;
+      this.map[x]![wallY] = Tile.FLOOR;
+      this.colors[x]![wallY] = Game.DUEL_WALL_COLOR;
+      this.duelWall.push({ x, y: wallY });
+    }
+    // Switch-islands sit just below the wall, off to either side — reaching
+    // them means routing the causeway laterally, not just straight up.
+    for (const sx of [1, GameConfig.COLS - 2]) {
+      const sy = wallY + 2;
+      this.duelOwner[sx]![sy] = Game.DUEL_SWITCH;
+      this.map[sx]![sy] = Tile.FLOOR;
+      this.colors[sx]![sy] = Game.DUEL_SWITCH_COLOR;
+      this.duelSwitches.push({ x: sx, y: sy, lit: false });
+    }
+    // Boon-islands hang above the wall — a detour on the climb to the boss.
+    const boonKinds: Array<'geis' | 'gold' | 'heal'> = ['geis', 'heal'];
+    [1, GameConfig.COLS - 2].forEach((bx, i) => {
+      const by = wallY - 3;
+      this.duelOwner[bx]![by] = Game.DUEL_BOON;
+      this.map[bx]![by] = Tile.FLOOR;
+      this.colors[bx]![by] = Game.DUEL_BOON_COLOR;
+      this.duelBoons.push({ x: bx, y: by, kind: boonKinds[i % boonKinds.length]!, taken: false });
+    });
+  }
+
+  /** Wall tiles still sealed (for the renderer). */
+  public get duelWallTiles(): ReadonlyArray<{ x: number; y: number }> { return this.duelWall; }
+  /** Switch-islands (for the renderer). */
+  public get duelSwitchTiles(): ReadonlyArray<{ x: number; y: number; lit: boolean }> { return this.duelSwitches; }
+  /** Unclaimed boon-islands (for the renderer). */
+  public get duelBoonTiles(): ReadonlyArray<{ x: number; y: number; kind: string; taken: boolean }> { return this.duelBoons; }
+
+  /**
+   * After a player placement, light any switch-island the causeway now abuts
+   * (opening the wall once all are lit) and collect any boon-island reached.
+   */
+  private duelCheckObstacles(): void {
+    const abutsPlayer = (x: number, y: number): boolean =>
+      [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].some(([nx, ny]) =>
+        nx! >= 0 && nx! < GameConfig.COLS && ny! >= 0 && ny! < GameConfig.ROWS && this.duelOwner[nx!]![ny!] === 1);
+
+    for (const sw of this.duelSwitches) {
+      if (sw.lit || !abutsPlayer(sw.x, sw.y)) continue;
+      sw.lit = true;
+      this.duelClaim([{ x: sw.x, y: sw.y }], 1, '#3fb0a2');  // lit switch becomes walkable player ground
+      this.cb.log('An ogham switch flares to life — the wards on the wall weaken.', 'log-perk', 'fx_arcane');
+      this.cb.onRingPulse?.(sw.x, sw.y, '63,176,162');
+      this.cb.onAudio?.('pactSworn');
+    }
+    if (this.duelSwitches.length > 0 && this.duelWall.length > 0 && this.duelSwitches.every(s => s.lit)) {
+      this.duelOpenWall();
+    }
+
+    for (const boon of this.duelBoons) {
+      if (boon.taken || !abutsPlayer(boon.x, boon.y)) continue;
+      boon.taken = true;
+      this.duelClaim([{ x: boon.x, y: boon.y }], 1, Game.DUEL_PLAYER_COLOR);
+      this.duelGrantBoon(boon.kind, boon.x, boon.y);
+    }
+  }
+
+  /** Opens the sealed center wall once every switch is lit. */
+  private duelOpenWall(): void {
+    for (const w of this.duelWall) {
+      this.duelOwner[w.x]![w.y] = 0;
+      this.map[w.x]![w.y] = Tile.VOID;
+      this.colors[w.x]![w.y] = null;
+    }
+    this.duelWall = [];
+    this.cb.log('The center wall grinds open — the way to the enemy causeway is clear!', 'log-boss', 'special_sacred');
+    this.cb.onToast?.('The wall opens — climb to the bridge and break it!', 'special_sacred');
+    this.cb.onAudio?.('bossWarn');
+  }
+
+  /** Grants a reached boon-island's reward inline (no modal — the duel keeps flowing). */
+  private duelGrantBoon(kind: 'geis' | 'gold' | 'heal', x: number, y: number): void {
+    if (kind === 'gold') {
+      const g = 200 + this.dungeonLevel * 40;
+      this.gold += g;
+      this.cb.log(`A cache on the causeway — ${g} gold!`, 'log-perk', 'item_gold_pouch');
+      this.cb.onParticleBurst?.(x, y, 8, '#d9a441', 'item_gold_pouch');
+    } else if (kind === 'heal') {
+      const healed = this.player.heal(Math.round(this.player.maxHp * 0.4));
+      this.cb.log(`A well-spring on the causeway — +${healed} HP.`, 'log-success', 'special_sacred');
+      this.cb.onParticleBurst?.(x, y, 8, '#69f0ae');
+    } else {
+      const pool = Boon.BY_TIER[this.dungeonLevel >= 10 ? 3 : 2];
+      const boon = pool[Math.floor(Math.random() * pool.length)]!;
+      this.player.addBoon(boon);
+      this.cb.log(`A Geis-stone stands on the causeway — you gain ${boon.name}!`, 'log-perk', boon.char);
+      this.cb.onParticleBurst?.(x, y, 10, '#b98fc4', boon.char);
+    }
+    this.cb.onRingPulse?.(x, y, '217,164,65');
+  }
+
   /**
    * Starts a Causeway Duel: clears the board, seeds the player's home tile at
    * the bottom and the boss's at the top, spawns the boss, and deals the
@@ -3500,6 +3627,10 @@ export class Game {
     this.altarTiles = [];
     this.tattooTiles = [];
     this.duelOwner = Array.from({ length: GameConfig.COLS }, () => Array<number>(GameConfig.ROWS).fill(0));
+    this.duelSwitches = [];
+    this.duelWall = [];
+    this.duelBoons = [];
+    this.duelTurns = 0;
 
     const midX = Math.floor(GameConfig.COLS / 2);
     const homeY = GameConfig.ROWS - 1, topY = 0;
@@ -3531,6 +3662,7 @@ export class Game {
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
     }
+    this.duelSetupObstacles();
     this.currentType = this.randomShapeKey();
     this.nextType = this.randomShapeKey();
     this.duelDealPiece();
@@ -3650,13 +3782,26 @@ export class Game {
     if (cells.some(c => c.y < 0) || cells.some(c => this.duelOwner[c.x]![c.y] !== 0)) { reject(); return; }
     if (!this.duelCellsTouch(cells, 1)) { reject(); return; }
     this.duelClaim(cells, 1, Game.DUEL_PLAYER_COLOR);
+    this.duelTurns++;
     this.cb.onBlockLand?.(cells);
     this.cb.onAudio?.('blockLand');
+    this.duelCheckObstacles();  // light switches / open wall / collect boons the causeway now reaches
     this.duelDealPiece();
     this.duelBossTurn();
     this.updateVisibility();
     this.pushUI();
     this.cb.onAction();
+  }
+
+  /** The deepest (largest-y) row the boss's causeway has reached, for the HUD threat meter. */
+  private duelBossDeepestRow(): number {
+    let deepest = 0;
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = GameConfig.ROWS - 1; y >= 0; y--) {
+        if (this.duelOwner[x]?.[y] === 2) { if (y > deepest) deepest = y; break; }
+      }
+    }
+    return deepest;
   }
 
   /** Whether `(x, y)` is the home tile or orthogonally abutting it — the shore the bridge lands on. */
@@ -4043,6 +4188,16 @@ export class Game {
         ? { icon: this.difficultyTuning().icon, name: this.difficultyTuning().name.split(' — ')[0]! }
         : null,
       heatLevel: this.heatLevel > 0 ? this.heatLevel : null,
+      duel: this.inCausewayDuel && this.duelBoss
+        ? {
+            bossName: this.duelBoss.name,
+            bossHp: Math.max(0, Math.round(this.duelBoss.hp)),
+            bossMaxHp: this.duelBoss.maxHp,
+            bridgeGap: Math.max(0, (GameConfig.ROWS - 1) - this.duelBossDeepestRow()),
+            bridgeSpan: GameConfig.ROWS - 1,
+            switchesLeft: this.duelSwitches.filter(s => !s.lit).length,
+          }
+        : null,
       rangedAbility: this.player.rangedAbility
         ? {
             name:        this.player.rangedAbility.name,

@@ -32,6 +32,11 @@ type DuelInternals = {
   duelResolved: boolean;
   duelBossTurn: () => void;
   duelPlacePiece: () => void;
+  duelCheckObstacles: () => void;
+  duelClaim: (cells: Array<{ x: number; y: number }>, owner: number, color: string) => void;
+  duelSwitches: Array<{ x: number; y: number; lit: boolean }>;
+  duelWall: Array<{ x: number; y: number }>;
+  duelBoons: Array<{ x: number; y: number; kind: string; taken: boolean }>;
   blockMatrix: unknown[];
 };
 const priv = (g: Game): DuelInternals => g as unknown as DuelInternals;
@@ -117,6 +122,40 @@ describe('Causeway Duel', () => {
     expect(priv(game).duelResolved).toBe(true);
     expect(game.player.hp).toBe(0);
     expect(cb.deaths.some(r => r.includes('causeway'))).toBe(true);
+  });
+
+  it('sets up a sealed center wall, two switch-islands, and two boon-islands', () => {
+    game.startCausewayDuel();
+    expect(priv(game).duelWall.length).toBe(10);       // full-width wall
+    expect(priv(game).duelSwitches.length).toBe(2);
+    expect(priv(game).duelBoons.length).toBe(2);
+    // the hero cannot walk a sealed wall tile
+    const w = priv(game).duelWall[0]!;
+    expect(game.isValidMove(w.x, w.y)).toBe(false);
+  });
+
+  it('lighting every switch opens the wall', () => {
+    game.startCausewayDuel();
+    expect(priv(game).duelWall.length).toBeGreaterThan(0);
+    // Claim a player tile orthogonally adjacent to each switch, then run the check.
+    for (const sw of priv(game).duelSwitches) {
+      priv(game).duelClaim([{ x: sw.x, y: sw.y + 1 }], 1, '#fff');
+    }
+    priv(game).duelCheckObstacles();
+    expect(priv(game).duelSwitches.every(s => s.lit)).toBe(true);
+    expect(priv(game).duelWall.length).toBe(0);  // wall opened
+  });
+
+  it('reaching a boon-island grants its reward and consumes it', () => {
+    game.startCausewayDuel();
+    const boon = priv(game).duelBoons[0]!;
+    const goldBefore = game.gold, hpBefore = game.player.hp, boonsBefore = game.player.boons.length;
+    priv(game).duelClaim([{ x: boon.x, y: boon.y + 1 }], 1, '#fff');  // causeway abuts the island
+    priv(game).duelCheckObstacles();
+    expect(priv(game).duelBoons[0]!.taken).toBe(true);
+    // a reward of some kind landed (gold up, or healed, or a new geis)
+    const rewarded = game.gold > goldBefore || game.player.hp > hpBefore || game.player.boons.length > boonsBefore;
+    expect(rewarded).toBe(true);
   });
 
   it('a headless boss floor with the duel opt-in enters a duel instead of the normal encounter', () => {

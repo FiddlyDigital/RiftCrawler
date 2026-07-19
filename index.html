@@ -48,6 +48,18 @@
     <div id="sidebar-panel">
       <div id="sidebar-game-title">CAUSEWAY TO ÉRIU</div>
 
+      <!-- Causeway Duel status (only during a boss duel) -->
+      <div class="sidebar-card" id="duel-card" style="display:none;border-color:#c1443c;">
+        <div class="card-title" style="color:#e08a72;">⚔ Causeway Duel</div>
+        <div id="duel-boss-name" style="font-size:11px;font-weight:bold;color:#e8e3d2;">Boss</div>
+        <div style="font-size:8px;color:#888;margin-top:3px;">BOSS HP</div>
+        <div class="hp-bar-container"><div id="duel-boss-hp" class="hp-bar-fill" style="background:linear-gradient(90deg,#c1443c,#e08a72);"></div></div>
+        <div style="font-size:8px;color:#888;margin-top:5px;">THE BRIDGE <span id="duel-bridge-label" style="color:#e08a72;"></span></div>
+        <div class="hp-bar-container"><div id="duel-bridge-bar" class="hp-bar-fill" style="background:linear-gradient(90deg,#7a5a2a,#e0a050);"></div></div>
+        <div id="duel-switch-line" style="display:none;font-size:9px;color:#3fb0a2;margin-top:5px;"></div>
+        <div style="font-size:8px;color:#666;margin-top:5px;line-height:1.4;">Place stones to build UP. Reach the boss's bridge and cut them down before it lands on your shore.</div>
+      </div>
+
       <!-- Hero status -->
       <div class="sidebar-card">
         <div class="card-title">Hero Status</div>
