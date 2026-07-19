@@ -38,6 +38,8 @@ class GameApp {
 
   private soundOn: boolean;
   private reducedMotion: boolean;
+  private screenEffects: boolean;
+  private colorblind: boolean;
   private manualPaused = false;
   private masterVolume: number;
 
@@ -137,6 +139,11 @@ class GameApp {
     this.reducedMotion = StorageService.loadReducedMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
     this.renderer.setReducedMotion(this.reducedMotion);
     HapticsController.setEnabled(!this.reducedMotion);
+    this.screenEffects = StorageService.loadScreenEffects();
+    this.renderer.setScreenEffects(this.screenEffects);
+    this.colorblind = StorageService.loadColorblind();
+    this.renderer.setColorblind(this.colorblind);
+    this.ui.setColorblind(this.colorblind);
     this.masterVolume = StorageService.loadVolume();
     audio.setVolume(this.masterVolume);
 
@@ -423,17 +430,52 @@ class GameApp {
     if (this.manualPaused) this.refreshPauseMenu();
   }
 
+  private toggleScreenEffects(): void {
+    this.screenEffects = !this.screenEffects;
+    this.renderer.setScreenEffects(this.screenEffects);
+    StorageService.saveScreenEffects(this.screenEffects);
+    this.ui.log(`Shake & flash ${this.screenEffects ? 'on' : 'off'}`, 'log-neutral');
+    if (this.manualPaused) this.refreshPauseMenu();
+  }
+
+  private toggleColorblind(): void {
+    this.colorblind = !this.colorblind;
+    this.renderer.setColorblind(this.colorblind);
+    this.ui.setColorblind(this.colorblind);
+    StorageService.saveColorblind(this.colorblind);
+    this.ui.log(`Colorblind marks ${this.colorblind ? 'on' : 'off'}`, 'log-neutral');
+    if (this.manualPaused) this.refreshPauseMenu();
+  }
+
+  /** Swaps the pause menu for the keyboard-remap screen; returns to the pause menu on close. */
+  private openControls(): void {
+    this.ui.hidePauseMenu();
+    this.ui.showControls(() => {
+      if (this.manualPaused) this.refreshPauseMenu();
+    });
+  }
+
   private refreshPauseMenu(): void {
     // Opening the menu doubles as a version check: if a new deploy is found,
     // onNeedRefresh re-renders this menu with the Update App button visible.
     void this.swRegistration?.update();
-    this.ui.showPauseMenu({ soundOn: this.soundOn, reducedMotion: this.reducedMotion, volumePct: Math.round(this.masterVolume * 100), updateAvailable: this.updateAvailable }, {
-      onResume:       () => this.closePauseMenu(),
-      onToggleMute:   () => this.toggleMute(),
-      onToggleMotion: () => this.toggleReducedMotion(),
-      onCycleVolume:  () => this.cycleVolume(),
-      onRestart:      () => this.restartRun(),
-      onForceRefresh: () => this.applyUpdate(),
+    this.ui.showPauseMenu({
+      soundOn: this.soundOn,
+      reducedMotion: this.reducedMotion,
+      screenEffects: this.screenEffects,
+      colorblind: this.colorblind,
+      volumePct: Math.round(this.masterVolume * 100),
+      updateAvailable: this.updateAvailable,
+    }, {
+      onResume:            () => this.closePauseMenu(),
+      onToggleMute:        () => this.toggleMute(),
+      onToggleMotion:      () => this.toggleReducedMotion(),
+      onToggleFx:          () => this.toggleScreenEffects(),
+      onToggleColorblind:  () => this.toggleColorblind(),
+      onOpenControls:      () => this.openControls(),
+      onCycleVolume:       () => this.cycleVolume(),
+      onRestart:           () => this.restartRun(),
+      onForceRefresh:      () => this.applyUpdate(),
     });
   }
 

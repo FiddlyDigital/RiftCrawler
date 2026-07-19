@@ -4,6 +4,10 @@ import { BaseModal } from './base-modal';
 export interface PauseMenuState {
   soundOn: boolean;
   reducedMotion: boolean;
+  /** Impact shake + damage flash (independent of reduced motion, which disables far more). */
+  screenEffects: boolean;
+  /** Colorblind-safe cursed/blessed piece marking (blue dashed vs gold). */
+  colorblind: boolean;
   volumePct: number;
   /** True when a new service worker is installed and waiting — reveals the Update App row. */
   updateAvailable: boolean;
@@ -13,6 +17,9 @@ export interface PauseMenuHandlers {
   onResume: () => void;
   onToggleMute: () => void;
   onToggleMotion: () => void;
+  onToggleFx: () => void;
+  onToggleColorblind: () => void;
+  onOpenControls: () => void;
   onCycleVolume: () => void;
   onRestart: () => void;
   /** Nukes the service worker + caches and reloads — the "the PWA is stuck on an old version" escape hatch. */
@@ -29,6 +36,9 @@ export class PauseModal extends BaseModal {
         <button class="settings-row" id="pause-mute"><span>🔊 Sound</span><span id="pause-mute-state" class="settings-val">On</span></button>
         <button class="settings-row" id="pause-volume"><span>🔉 Volume</span><span id="pause-volume-state" class="settings-val">100%</span></button>
         <button class="settings-row" id="pause-motion"><span>🎬 Reduced Motion</span><span id="pause-motion-state" class="settings-val">Off</span></button>
+        <button class="settings-row" id="pause-fx"><span>💥 Shake &amp; Flash</span><span id="pause-fx-state" class="settings-val">On</span></button>
+        <button class="settings-row" id="pause-colorblind"><span>👁 Colorblind Marks</span><span id="pause-colorblind-state" class="settings-val">Off</span></button>
+        <button class="settings-row kbd-only" id="pause-controls"><span>⌨ Controls</span><span class="settings-val">Remap…</span></button>
         <button class="restart-btn" id="pause-restart" style="background-color:#3a1414;color:#ffab91;margin-top:4px;">↻ New Run</button>
         <button class="settings-row" id="pause-refresh" style="display:none;border-color:#d9a441;color:#ffd54f;"><span>⟳ Update App</span><span class="settings-val">New version!</span></button>
       </div>
@@ -51,13 +61,20 @@ export class PauseModal extends BaseModal {
     if (!handlers) throw new TypeError('PauseModal.showPauseMenu: "handlers" must not be null/undefined');
     const muteState = this.querySelector('#pause-mute-state');
     const motionState = this.querySelector('#pause-motion-state');
+    const fxState = this.querySelector('#pause-fx-state');
+    const cbState = this.querySelector('#pause-colorblind-state');
     const volumeState = this.querySelector('#pause-volume-state');
     if (muteState) muteState.textContent = state.soundOn ? 'On' : 'Off';
     if (motionState) motionState.textContent = state.reducedMotion ? 'On' : 'Off';
+    if (fxState) fxState.textContent = state.screenEffects ? 'On' : 'Off';
+    if (cbState) cbState.textContent = state.colorblind ? 'On' : 'Off';
     if (volumeState) volumeState.textContent = `${state.volumePct}%`;
     this.bind('pause-resume', handlers.onResume);
     this.bind('pause-mute', handlers.onToggleMute);
     this.bind('pause-motion', handlers.onToggleMotion);
+    this.bind('pause-fx', handlers.onToggleFx);
+    this.bind('pause-colorblind', handlers.onToggleColorblind);
+    this.bind('pause-controls', handlers.onOpenControls);
     this.bind('pause-volume', handlers.onCycleVolume);
     this.bind('pause-restart', handlers.onRestart);
     // Only shown while a new version is actually waiting; two-tap confirm,

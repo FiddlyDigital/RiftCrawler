@@ -6,6 +6,7 @@ import type { BossWarningModal } from './components/boss-warning-modal';
 import type { ModifierModal } from './components/modifier-modal';
 import type { ClassModal } from './components/class-modal';
 import type { DifficultyModal } from './components/difficulty-modal';
+import type { ControlsModal } from './components/controls-modal';
 import type { FloorEventModal } from './components/floor-event-modal';
 import type { OfferModal } from './components/offer-modal';
 import type { ShopModal } from './components/shop-modal';
@@ -32,6 +33,7 @@ export class UIManager {
   private readonly bossWarningModal: BossWarningModal;
   private readonly classModal: ClassModal;
   private readonly difficultyModal: DifficultyModal;
+  private readonly controlsModal: ControlsModal;
   private readonly floorEventModal: FloorEventModal;
   private readonly inspectTooltip: HTMLElement;
   private readonly toastBanner: HTMLElement;
@@ -44,6 +46,8 @@ export class UIManager {
   private readonly codexModal: CodexModal;
   private readonly els: Record<string, HTMLElement>;
   private lastXpEarned = -1;
+  /** Mirrors the renderer's colorblind mode for HUD color choices (cursed badge). */
+  private colorblind = false;
   private lastCharacterSheet: CharacterSheetSection[] = [];
   private inspectDismissTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly fullLog: { text: string; cls: LogClass; icon?: string }[] = [];
@@ -56,6 +60,7 @@ export class UIManager {
     this.bossWarningModal  = document.querySelector('boss-warning-modal')!;
     this.classModal        = document.querySelector('class-modal')!;
     this.difficultyModal   = document.querySelector('difficulty-modal')!;
+    this.controlsModal     = document.querySelector('controls-modal')!;
     this.floorEventModal   = document.querySelector('floor-event-modal')!;
     this.inspectTooltip    = document.getElementById('inspect-tooltip')!;
     this.toastBanner       = document.getElementById('toast-banner')!;
@@ -197,7 +202,7 @@ export class UIManager {
     const psBadge = this.els['pieceStateBadge']!;
     if (state.pieceState === 'cursed') {
       psBadge.style.display = '';
-      psBadge.style.color = '#ef5350';
+      psBadge.style.color = this.colorblind ? '#42a5f5' : '#ef5350';
       psBadge.innerHTML = `${SpriteService.iconHTML('status_poison', 12)}CURSED PIECE`;
     } else if (state.pieceState === 'blessed') {
       psBadge.style.display = '';
@@ -315,6 +320,16 @@ export class UIManager {
   /** Shows the run-start difficulty picker (`lastChosenId` marks last run's pick). */
   public showDifficultyPick(presets: DifficultyPreset[], lastChosenId: string | null, onSelect: (id: string) => void): void {
     this.difficultyModal.showDifficultyPick(presets, lastChosenId, onSelect);
+  }
+
+  /** Shows the keyboard-remap Controls screen; `onClose` fires when dismissed. */
+  public showControls(onClose: () => void): void {
+    this.controlsModal.showControls(onClose);
+  }
+
+  /** Mirrors the colorblind-marks setting into HUD color choices. */
+  public setColorblind(on: boolean): void {
+    this.colorblind = on;
   }
 
   /** Shows the run-start class picker. */

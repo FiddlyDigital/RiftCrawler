@@ -14,6 +14,8 @@ const STASH_KEY = 'riftcrawler_stash_v1';
 const TUTORIAL_KEY = 'riftcrawler_tutorial_done_v1';
 const RUN_KEY = 'riftcrawler_run_v1';
 const DIFFICULTY_KEY = 'riftcrawler_difficulty_v1';
+const SCREEN_FX_KEY = 'riftcrawler_screen_fx';
+const COLORBLIND_KEY = 'riftcrawler_colorblind';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -253,6 +255,34 @@ export class StorageService {
   /** The last-chosen difficulty preset id, or `null` if never chosen. */
   static loadDifficulty(): string | null {
     try { return localStorage.getItem(DIFFICULTY_KEY); } catch { return null; }
+  }
+
+  /**
+   * Persists the impact shake + damage flash toggle.
+   * @throws {TypeError} If `on` is not a boolean.
+   */
+  static saveScreenEffects(on: boolean): void {
+    if (typeof on !== 'boolean') throw new TypeError('StorageService.saveScreenEffects: "on" must be a boolean');
+    try { localStorage.setItem(SCREEN_FX_KEY, on ? '1' : '0'); } catch { /* quota */ }
+  }
+
+  /** The persisted shake/flash toggle (defaults to `true`). */
+  static loadScreenEffects(): boolean {
+    try { return localStorage.getItem(SCREEN_FX_KEY) !== '0'; } catch { return true; }
+  }
+
+  /**
+   * Persists the colorblind-marks toggle.
+   * @throws {TypeError} If `on` is not a boolean.
+   */
+  static saveColorblind(on: boolean): void {
+    if (typeof on !== 'boolean') throw new TypeError('StorageService.saveColorblind: "on" must be a boolean');
+    try { localStorage.setItem(COLORBLIND_KEY, on ? '1' : '0'); } catch { /* quota */ }
+  }
+
+  /** The persisted colorblind-marks toggle (defaults to `false`). */
+  static loadColorblind(): boolean {
+    try { return localStorage.getItem(COLORBLIND_KEY) === '1'; } catch { return false; }
   }
 
   /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */

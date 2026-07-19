@@ -7,6 +7,7 @@ import './boss-warning-modal';
 import './modifier-modal';
 import './class-modal';
 import './difficulty-modal';
+import './controls-modal';
 import './floor-event-modal';
 import './offer-modal';
 import './shop-modal';

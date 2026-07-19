@@ -1,6 +1,7 @@
 import type { Game } from './game';
 import { GameConfig } from './config';
 import { HapticsController } from './haptics';
+import { KeyBindings } from './keybinds';
 
 type GameGetter = () => Game;
 type InspectCallback = (gx: number, gy: number, clientX: number, clientY: number) => void;
@@ -34,8 +35,9 @@ export class InputBinder {
   }
 
   /**
-   * Binds WASD/arrow keys, action keys (wait/ranged/spell-cycle), and Tetris
-   * controls (jkli/x/h) to the game.
+   * Binds the keyboard to the game through the remappable {@link KeyBindings}
+   * layer (defaults: WASD/arrows for the hero, JLIKX/H for the block,
+   * Space/Q/E for wait/ability/spell).
    * @throws {TypeError} If `getGame` is not a function.
    */
   static bindKeyboard(getGame: GameGetter): void {
@@ -43,22 +45,8 @@ export class InputBinder {
     window.addEventListener('keydown', (e) => {
       const game = getGame();
       if (game.player.hp <= 0) return;
-
-      switch (e.key) {
-        case 'w': case 'ArrowUp':    InputBinder.heroMove(game, 0, -1);  break;
-        case 's': case 'ArrowDown':  InputBinder.heroMove(game, 0, 1);   break;
-        case 'a': case 'ArrowLeft':  InputBinder.heroMove(game, -1, 0);  break;
-        case 'd': case 'ArrowRight': InputBinder.heroMove(game, 1, 0);   break;
-        case ' ':                    game.handleHeroWait();        break;
-        case 'q': case 'Q':          game.handleRangedAttack();    break;
-        case 'e': case 'E':          game.handleCycleSpell();      break;
-        case 'j':                    game.handleBlockLeft();       break;
-        case 'l':                    game.handleBlockRight();      break;
-        case 'i':                    game.handleBlockRotate();     break;
-        case 'k':                    game.handleBlockDrop();       break;
-        case 'x':                    game.handleBlockSoftDrop();   break;
-        case 'h': case 'H':          game.handleBlockHold();       break;
-      }
+      const action = KeyBindings.actionForKey(e.key);
+      if (action) InputBinder.fireGameAction(game, action);
     });
   }
 
@@ -129,7 +117,8 @@ export class InputBinder {
     });
   }
 
-  private static fireGamepadAction(game: Game, action: string): void {
+  /** Dispatches a named game action — the shared vocabulary of the keyboard, gamepad, and on-screen button bindings. */
+  private static fireGameAction(game: Game, action: string): void {
     switch (action) {
       case 'hero-up':        InputBinder.heroMove(game, 0, -1);  break;
       case 'hero-down':      InputBinder.heroMove(game, 0,  1);  break;
@@ -142,7 +131,8 @@ export class InputBinder {
       case 'block-right':    game.handleBlockRight();      break;
       case 'block-rotate':   game.handleBlockRotate();     break;
       case 'block-drop':     game.handleBlockDrop();       break;
-      case 'block-softdrop': game.handleBlockSoftDrop();  break;
+      case 'block-softdrop': game.handleBlockSoftDrop();   break;
+      case 'block-hold':     game.handleBlockHold();       break;
     }
   }
 
@@ -198,7 +188,7 @@ export class InputBinder {
     }
 
     function fireAction(action: string): void {
-      InputBinder.fireGamepadAction(getGame(), action);
+      InputBinder.fireGameAction(getGame(), action);
     }
 
     function poll(): void {
