@@ -120,8 +120,11 @@ body {
   max-width: calc(100% - 100px);
   background: rgba(10,10,18,.82); border: 1px solid var(--accent-color);
   border-radius: 6px; padding: 6px 14px; box-sizing: border-box;
-  font-family: var(--font-pixel); font-size: 11px; color: var(--text-color);
-  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font-pixel); font-size: 11px; line-height: 1.35; color: var(--text-color);
+  /* Wrap onto as many lines as the message needs instead of truncating it —
+     long omen/pact/rescue toasts were being cut off with an ellipsis. Break
+     even an unbroken long token so it can never overflow the banner. */
+  text-align: center; white-space: normal; overflow-wrap: anywhere;
   opacity: 0; pointer-events: none;
   transition: opacity .35s ease, transform .35s ease;
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
