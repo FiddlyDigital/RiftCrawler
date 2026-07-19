@@ -213,8 +213,26 @@ export class Game {
     return this.activeClassId === 'draoi' && this.activePatronId === null && this.dungeonLevel >= 2;
   }
 
-  /** Whether the Tetris layer is currently frozen (the Gorgoth duel, or a waystation rest floor). */
-  private get tetrisSuspended(): boolean { return this.gorgothSummoned || this.inWaystation; }
+  /** Whether the Tetris layer is currently frozen (the Gorgoth duel, a waystation rest floor, or a Causeway Duel — which runs its own placement layer). */
+  private get tetrisSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel; }
+
+  // ── Causeway Duel (boss-floor play state) ────────────────────────────────
+  // A no-gravity, turn-based duel on the shared grid: the player grows a
+  // causeway up from the home row while the boss grows one down; climb yours
+  // to kill the boss (stairs then appear), or lose if the boss's causeway
+  // reaches your home row. See docs/causeway-duel.md.
+  /** Whether a Causeway Duel is currently in progress. */
+  public inCausewayDuel = false;
+  /** Tile ownership during a duel: 0 unclaimed, 1 player, 2 boss. */
+  private duelOwner: number[][] = [];
+  /** The boss entity for the active duel (descends its causeway toward the hero; killing it wins the floor). */
+  private duelBoss: Monster | null = null;
+  /** The hero's home tile (the shore). The bridge "lands" — and the run is lost — when a boss tile reaches it. */
+  private duelHome = { x: 0, y: 0 };
+  /** Set once the duel has been decided, so late inputs can't re-trigger win/loss. */
+  private duelResolved = false;
+  private static readonly DUEL_PLAYER_COLOR = '#2f5c8a';
+  private static readonly DUEL_BOSS_COLOR = '#5c2530';
 
   // Bealtaine Fires ritual state (the 'bealtaine' special omen)
   /** Braziers standing on the floor this level — walk into an unlit one to light it. */
@@ -2037,7 +2055,7 @@ export class Game {
     StatusEffectSystem.applyAuraStun(this);
     HazardSystem.processHazards(this);
     this.processSpecialTiles();
-    this.moveGravity();
+    if (!this.tetrisSuspended) this.moveGravity();  // no falling stone in the Gorgoth duel, a waystation, or a Causeway Duel
     MonsterAiSystem.processMonsterTurns(this);
     this.checkCloseCall();
     this.tickRangedCooldown();
@@ -2401,11 +2419,13 @@ export class Game {
 
       if (monster.hp <= 0) {
         const bx = monster.x, by = monster.y;
+        const wasDuelBoss = this.inCausewayDuel && monster === this.duelBoss;
         CombatSystem.killMonster(monster, this);
         if (monster.isBoss && this.activeBossOnDeath) {
           this.activeBossOnDeath(this, bx, by);
           this.activeBossOnDeath = null;
         }
+        if (wasDuelBoss) { this.duelWin(); return; }
       }
       this.advanceTurn(); return;
     }
@@ -2713,8 +2733,10 @@ export class Game {
     // his monster entry via resetDungeonState() while gorgothSummoned stayed
     // true, stopping tetrominoes forever with no boss left to fight).
     if (this.map[this.player.x]![this.player.y] === Tile.STAIRS && !this.gorgothSummoned) {
+      // A won duel's stairs end the duel and open the usual delve-or-rest choice.
+      if (this.inCausewayDuel) { this.inCausewayDuel = false; this.openStairsChoice(); }
       // The mound's own exit stairs go straight down — you already rested.
-      if (this.inWaystation) this.descendFloor();
+      else if (this.inWaystation) this.descendFloor();
       else this.openStairsChoice();
     } else {
       this.advanceTurn();
@@ -2760,14 +2782,33 @@ export class Game {
     });
   }
 
+  /**
+   * Opt-in (spike): when this flag is set, boss floors run as a Causeway Duel
+   * instead of the normal boss-rider encounter. Off by default — set
+   * `localStorage.riftcrawler_duel_boss = '1'` to try it. Wrapped so tests and
+   * non-browser contexts (no localStorage) are safe.
+   */
+  private duelBossFloorsEnabled(): boolean {
+    try { return typeof localStorage !== 'undefined' && localStorage.getItem('riftcrawler_duel_boss') === '1'; }
+    catch { return false; }
+  }
+
   /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (omen, smith, pending-event roll). */
   private descendFloor(): void {
     this.inWaystation = false;
     this.dungeonLevel++;
     this.floorsDescended++;
-    if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) this.announceBossFloor();
+    const bossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
     this.cb.onAudio?.('descend');
     this.updateBiome();
+    // Spike opt-in: a boss floor becomes a Causeway Duel.
+    if (bossFloor && this.duelBossFloorsEnabled()) {
+      this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
+      this.resetDungeonState();
+      this.startCausewayDuel();
+      return;
+    }
+    if (bossFloor) this.announceBossFloor();
     this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
     this.resetDungeonState();
     // Between-floor choices are people now, not popups: on interval descents a
@@ -3343,13 +3384,17 @@ export class Game {
 
   /** Shifts the falling piece one column left, if unobstructed. */
   public handleBlockLeft(): void {
-    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
+    if (this.player.hp <= 0 || this.paused) return;
+    if (this.inCausewayDuel) { this.duelSteerPiece(-1); return; }
+    if (this.tetrisSuspended) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
   /** Shifts the falling piece one column right, if unobstructed. */
   public handleBlockRight(): void {
-    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
+    if (this.player.hp <= 0 || this.paused) return;
+    if (this.inCausewayDuel) { this.duelSteerPiece(1); return; }
+    if (this.tetrisSuspended) return;
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
@@ -3361,21 +3406,27 @@ export class Game {
    * bitten while lining up a drop.
    */
   public handleBlockRotate(): void {
-    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
+    if (this.player.hp <= 0 || this.paused) return;
+    if (this.inCausewayDuel) { this.duelRotatePiece(); return; }
+    if (this.tetrisSuspended) return;
     const rotated = GameMath.rotateMatrix(this.blockMatrix);
     if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); }
   }
 
   /** Drops the falling piece one row, locking it in place if it can't descend further. */
   public handleBlockSoftDrop(): void {
-    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
+    if (this.player.hp <= 0 || this.paused) return;
+    if (this.inCausewayDuel) { this.duelPlacePiece(); return; }  // soft-drop doubles as "place" in a duel
+    if (this.tetrisSuspended) return;
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) { this.blockY++; this.advanceTurn(); }
     else { this.lockBlock(); this.advanceTurn(); }
   }
 
   /** Instantly drops the falling piece to the floor and locks it, with an afterimage trail along its travel path. */
   public handleBlockDrop(): void {
-    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
+    if (this.player.hp <= 0 || this.paused) return;
+    if (this.inCausewayDuel) { this.duelPlacePiece(); return; }
+    if (this.tetrisSuspended) return;
     const startY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
     // Afterimage streaks along the travel path — one per occupied column,
@@ -3399,6 +3450,269 @@ export class Game {
     }
     this.lockBlock();
     this.advanceTurn();
+  }
+
+  // ── Causeway Duel implementation ─────────────────────────────────────────
+
+  /** The board cells occupied by `matrix` placed at `(bx, by)`, clamped to the grid. */
+  private duelPieceCells(matrix: CellValue[][], bx: number, by: number): Array<{ x: number; y: number }> {
+    const cells: Array<{ x: number; y: number }> = [];
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r]!.length; c++) {
+        if (matrix[r]![c] === Cell.EMPTY) continue;
+        const x = bx + c, y = by + r;
+        if (x >= 0 && x < GameConfig.COLS && y >= 0 && y < GameConfig.ROWS) cells.push({ x, y });
+      }
+    }
+    return cells;
+  }
+
+  /** Whether any of `cells` is orthogonally adjacent to a tile owned by `owner` (1 = player, 2 = boss). */
+  private duelCellsTouch(cells: Array<{ x: number; y: number }>, owner: number): boolean {
+    return cells.some(({ x, y }) =>
+      [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].some(([nx, ny]) =>
+        nx! >= 0 && nx! < GameConfig.COLS && ny! >= 0 && ny! < GameConfig.ROWS && this.duelOwner[nx!]![ny!] === owner),
+    );
+  }
+
+  /** Claims `cells` for `owner`, laying them as walkable causeway tiles in the given color. */
+  private duelClaim(cells: Array<{ x: number; y: number }>, owner: number, color: string): void {
+    for (const { x, y } of cells) {
+      this.duelOwner[x]![y] = owner;
+      this.map[x]![y] = Tile.FLOOR;
+      this.colors[x]![y] = color;
+    }
+  }
+
+  /**
+   * Starts a Causeway Duel: clears the board, seeds the player's home tile at
+   * the bottom and the boss's at the top, spawns the boss, and deals the
+   * first piece. Reachable on a boss floor (and, for now, a debug entry).
+   */
+  public startCausewayDuel(): void {
+    this.inCausewayDuel = true;
+    this.duelResolved = false;
+    this.map = this.emptyMap();
+    this.colors = this.emptyColors();
+    this.monsters = [];
+    this.hazards = [];
+    this.specialTiles = [];
+    this.npcTiles = [];
+    this.altarTiles = [];
+    this.tattooTiles = [];
+    this.duelOwner = Array.from({ length: GameConfig.COLS }, () => Array<number>(GameConfig.ROWS).fill(0));
+
+    const midX = Math.floor(GameConfig.COLS / 2);
+    const homeY = GameConfig.ROWS - 1, topY = 0;
+    // Player home tile (bottom, the shore) and the hero on it.
+    this.duelClaim([{ x: midX, y: homeY }], 1, Game.DUEL_PLAYER_COLOR);
+    this.duelHome = { x: midX, y: homeY };
+    this.player.x = midX; this.player.y = homeY;
+    // Boss home tile (top) and the boss standing on it.
+    this.duelClaim([{ x: midX, y: topY }], 2, Game.DUEL_BOSS_COLOR);
+    const bossDef = this.previewBossForFloor(this.dungeonLevel);
+    const diff = this.difficultyTuning();
+    const baseHp = Balance.CONFIG.boss.baseHpFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseHpPerDungeonLevel;
+    const baseAtk = Balance.CONFIG.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseAtkPerDungeonLevel;
+    const boss = new Monster(midX, topY, bossDef.char, bossDef.name,
+      Math.floor(baseHp * bossDef.hpMult * diff.monsterHpMult),
+      Math.floor(baseHp * bossDef.hpMult * diff.monsterHpMult),
+      Math.floor(baseAtk * bossDef.atkMult * diff.monsterAtkMult * this.heatMult('monsterAtkMult')),
+      bossDef.xpReward, true);
+    boss.combatLevel = Balance.CONFIG.boss.combatLevel;
+    this.duelBoss = boss;
+    this.monsters.push(boss);
+    // The duel owns the boss outright — biome half-HP/death hooks (some of
+    // which pause for a cinematic or spawn adds) would fight the duel flow.
+    this.activeBossOnHalfHp = null;
+    this.activeBossOnDeath = null;  // duelWin handles the death path
+    this.bossHalfHpTriggered = true;
+
+    // No fog in a duel — the whole causeway is in view.
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
+    }
+    this.currentType = this.randomShapeKey();
+    this.nextType = this.randomShapeKey();
+    this.duelDealPiece();
+    this.cb.log(`${bossDef.name} raises a causeway from the dark — build yours to meet it, and cut them down before the bridge lands!`, 'log-boss', 'ui_warning');
+    this.cb.onToast?.('CAUSEWAY DUEL — build up, break through, before the bridge reaches you!', 'ui_warning');
+    this.cb.onAudio?.('bossWarn');
+    this.pushUI();
+  }
+
+  /** Deals the next placement piece as a free-floating cursor at the top-centre. */
+  private duelDealPiece(): void {
+    this.currentType = this.nextType;
+    this.nextType = this.randomShapeKey();
+    const shape = SHAPES[this.currentType];
+    this.blockColor = Game.DUEL_PLAYER_COLOR;
+    this.currentCursed = false;
+    this.currentBlessed = false;
+    this.blockMatrix = shape.matrix.map(row => row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR));
+    this.blockX = Math.floor((GameConfig.COLS - this.blockMatrix[0]!.length) / 2);
+    this.blockY = 0;
+  }
+
+  /** Moves the cursor piece one column (kept fully on the board). */
+  private duelSteerPiece(dir: number): void {
+    if (this.duelResolved) return;
+    const nx = this.blockX + dir;
+    const cells = this.duelPieceCells(this.blockMatrix, nx, this.blockY);
+    if (cells.length === this.pieceCellCount() && cells.every(c => c.x >= 0 && c.x < GameConfig.COLS)) {
+      this.blockX = nx;
+      this.cb.onAudio?.('blockMove');
+      this.pushUI();
+    }
+  }
+
+  /** Rotates the cursor piece, nudging it back on-board if the rotation pushed it off an edge. */
+  private duelRotatePiece(): void {
+    if (this.duelResolved) return;
+    const rotated = GameMath.rotateMatrix(this.blockMatrix);
+    const width = rotated[0]!.length;
+    this.blockX = Math.max(0, Math.min(this.blockX, GameConfig.COLS - width));
+    this.blockMatrix = rotated;
+    this.cb.onAudio?.('blockRotate');
+    this.pushUI();
+  }
+
+  /** Total filled cells in the current piece (used to detect off-board clipping while steering). */
+  private pieceCellCount(): number {
+    let n = 0;
+    for (const row of this.blockMatrix) for (const c of row) if (c !== Cell.EMPTY) n++;
+    return n;
+  }
+
+  /**
+   * The row offset at which the cursor piece rests when placed: it climbs to
+   * sit directly on top of the tallest player-owned column it spans (so the
+   * causeway grows *upward* toward the boss rather than pooling at the floor).
+   * Columns with no player support fall through to the board floor, which the
+   * connectivity check then rejects unless a neighbour bridges them in.
+   */
+  private duelLandingY(): number {
+    const matrix = this.blockMatrix, bx = this.blockX;
+    const colBottom = new Map<number, number>();  // piece column → its lowest filled local row
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r]!.length; c++) {
+        if (matrix[r]![c] !== Cell.EMPTY) colBottom.set(c, Math.max(colBottom.get(c) ?? -1, r));
+      }
+    }
+    let by = Infinity;  // rest on the FIRST support hit descending = the tallest = smallest offset
+    for (const [c, lb] of colBottom) {
+      const boardCol = bx + c;
+      if (boardCol < 0 || boardCol >= GameConfig.COLS) continue;
+      let frontierY = GameConfig.ROWS;  // no player tile in this column → the board floor
+      for (let y = 0; y < GameConfig.ROWS; y++) { if (this.duelOwner[boardCol]![y] === 1) { frontierY = y; break; } }
+      by = Math.min(by, frontierY - 1 - lb);
+    }
+    return Number.isFinite(by) ? by : 0;
+  }
+
+  /**
+   * Places the cursor piece: it climbs to rest on top of the player's causeway
+   * (see {@link duelLandingY}), and the placement only takes if it connects to
+   * the player's own tiles and stays on-board without overlapping. A valid
+   * placement claims the tiles and hands the turn to the boss.
+   */
+  private duelPlacePiece(): void {
+    if (this.duelResolved) return;
+    const by = this.duelLandingY();
+    const cells = this.duelPieceCells(this.blockMatrix, this.blockX, by);
+    const reject = (): void => {
+      this.cb.log('The stone will not hold there — build out from your own causeway.', 'log-neutral', 'ui_warning');
+      this.cb.onToast?.('Place it touching your own causeway.', 'ui_warning');
+    };
+    if (cells.length === 0) return;
+    // In-bounds (a rotation near the ceiling can push it off the top) and no overlap.
+    if (cells.some(c => c.y < 0) || cells.some(c => this.duelOwner[c.x]![c.y] !== 0)) { reject(); return; }
+    if (!this.duelCellsTouch(cells, 1)) { reject(); return; }
+    this.duelClaim(cells, 1, Game.DUEL_PLAYER_COLOR);
+    this.cb.onBlockLand?.(cells);
+    this.cb.onAudio?.('blockLand');
+    this.duelDealPiece();
+    this.duelBossTurn();
+    this.updateVisibility();
+    this.pushUI();
+    this.cb.onAction();
+  }
+
+  /** Whether `(x, y)` is the home tile or orthogonally abutting it — the shore the bridge lands on. */
+  private duelAtShore(x: number, y: number): boolean {
+    return y >= GameConfig.ROWS - 1
+      || (Math.abs(x - this.duelHome.x) + Math.abs(y - this.duelHome.y)) === 1;
+  }
+
+  /**
+   * The boss's placement turn: it extends its causeway `advance` tiles down —
+   * each step choosing the free cell just below an existing boss tile that is
+   * deepest and nearest the hero's column, so the bridge routes *around*
+   * obstacles toward the shore rather than stalling behind them. The boss walks
+   * its pawn to the new frontier; reaching the shore lands the bridge and loses
+   * the run.
+   */
+  private duelBossTurn(): void {
+    if (this.duelResolved || !this.duelBoss) return;
+    const advance = 2;
+    let deepest = { x: this.duelBoss.x, y: this.duelBoss.y };
+    for (let step = 0; step < advance; step++) {
+      let best: { x: number; y: number; score: number } | null = null;
+      for (let x = 0; x < GameConfig.COLS; x++) {
+        for (let y = 0; y < GameConfig.ROWS; y++) {
+          if (this.duelOwner[x]![y] !== 2) continue;
+          // Descend straight down, or one column toward the hero (to go around).
+          for (const nx of [x, x + Math.sign(this.player.x - x)]) {
+            const ny = y + 1;
+            if (nx < 0 || nx >= GameConfig.COLS || ny >= GameConfig.ROWS) continue;
+            if (this.duelOwner[nx]![ny] !== 0) continue;
+            const score = ny * 10 - Math.abs(nx - this.player.x);  // deeper first, then nearer the hero
+            if (!best || score > best.score) best = { x: nx, y: ny, score };
+          }
+        }
+      }
+      if (!best) break;  // fully walled off — the player has blocked the bridge
+      this.duelClaim([{ x: best.x, y: best.y }], 2, Game.DUEL_BOSS_COLOR);
+      deepest = { x: best.x, y: best.y };
+      if (this.duelAtShore(best.x, best.y)) { this.duelBoss.x = best.x; this.duelBoss.y = best.y; this.duelLose(); return; }
+    }
+    // The boss walks down to its new frontier — coming to meet the hero.
+    if (!this.getMonsterAt(deepest.x, deepest.y) || this.getMonsterAt(deepest.x, deepest.y) === this.duelBoss) {
+      this.duelBoss.x = deepest.x; this.duelBoss.y = deepest.y;
+    }
+  }
+
+  /** Boss slain in the duel — the causeway is broken; stairs rise so the run can go on. */
+  public duelWin(): void {
+    if (this.duelResolved) return;
+    this.duelResolved = true;
+    this.duelBoss = null;
+    this.blockMatrix = [];
+    // Raise the stairs on a causeway tile next to the hero (preferring the one
+    // just below, the way they climbed) so they step onto it deliberately —
+    // standing on stairs spawned underfoot wouldn't re-trigger the descent.
+    const hx = this.player.x, hy = this.player.y;
+    const spot = [[0, 1], [0, -1], [-1, 0], [1, 0], [0, 0]]
+      .map(([dx, dy]) => ({ x: hx + dx!, y: hy + dy! }))
+      .find(({ x, y }) => x >= 0 && x < GameConfig.COLS && y >= 0 && y < GameConfig.ROWS
+        && (this.duelOwner[x]![y] === 1 || (x === hx && y === hy)))
+      ?? { x: hx, y: hy };
+    this.map[spot.x]![spot.y] = Tile.STAIRS;
+    this.colors[spot.x]![spot.y] = '#6d3f7a';
+    this.cb.log('The enemy causeway crumbles into the dark — the way on is open.', 'log-boss', 'item_trophy');
+    this.cb.onToast?.('The bridge is broken! Take the stairs on.', 'special_sacred');
+    this.cb.onParticleBurst?.(this.player.x, this.player.y, 14, '#d9a441', 'item_trophy');
+    this.storyBeats.push('broke a Fomorian causeway in single combat');
+    this.pushUI();
+  }
+
+  /** The boss's causeway reached the home row — the bridge is complete and the run ends. */
+  private duelLose(): void {
+    if (this.duelResolved) return;
+    this.duelResolved = true;
+    this.cb.log('The bridge lands. The invasion crosses over you — the causeway to Ériu is complete.', 'log-boss', 'ui_warning');
+    this.player.hp = 0;
+    this.cb.onDeath('THE BRIDGE LANDS', 'the Fomorian causeway reached the shore', this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('death'));
   }
 
   // ── Lookups ──────────────────────────────────────────────────────────────
