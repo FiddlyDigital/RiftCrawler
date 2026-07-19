@@ -448,9 +448,14 @@ export class UIManager {
     this.offerModal.showAltarModal(tier, choices, ownedBoons, onChoice, titleOverride, reroll);
   }
 
-  /** Shows the start-screen modal. */
-  public showStart(highScore: number, onBegin: () => void, onBeginTutorial?: () => void): void {
-    this.startModal.showStart(highScore, onBegin, onBeginTutorial);
+  /** Shows the start-screen modal (with a Continue card when a resumable mid-run save exists). */
+  public showStart(
+    highScore: number,
+    onBegin: () => void,
+    onBeginTutorial?: () => void,
+    resume?: { floor: number; classLabel: string; onResume: () => void },
+  ): void {
+    this.startModal.showStart(highScore, onBegin, onBeginTutorial, resume);
   }
 
   /** Hides the start-screen modal. */

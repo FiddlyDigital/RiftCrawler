@@ -1,4 +1,4 @@
-import type { RunRecord, RunStats, GhostRecord, CodexKind, CodexState } from './types';
+import { SAVE_VERSION, type RunRecord, type RunStats, type GhostRecord, type CodexKind, type CodexState, type SavedRun } from './types';
 import type { Game } from './game';
 import { Balance } from './balance';
 
@@ -12,6 +12,7 @@ const MOTION_KEY = 'riftcrawler_reduced_motion';
 const CODEX_KEY = 'riftcrawler_codex_v1';
 const STASH_KEY = 'riftcrawler_stash_v1';
 const TUTORIAL_KEY = 'riftcrawler_tutorial_done_v1';
+const RUN_KEY = 'riftcrawler_run_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -212,6 +213,31 @@ export class StorageService {
     if (total <= 0) return 0;
     try { localStorage.removeItem(STASH_KEY); } catch { /* quota */ }
     return Math.floor(total * Balance.CONFIG.waystation.stashRecoveryPct);
+  }
+
+  /**
+   * Persists the mid-run snapshot (see `Game.serialize`). Overwrites any
+   * previous snapshot — there is exactly one resumable run at a time.
+   * @throws {TypeError} If `run` is null/undefined.
+   */
+  static saveRun(run: SavedRun): void {
+    if (run === null || run === undefined) throw new TypeError('StorageService.saveRun: "run" must not be null/undefined');
+    try { localStorage.setItem(RUN_KEY, JSON.stringify(run)); } catch { /* quota */ }
+  }
+
+  /** The stored mid-run snapshot, or `null` if none exists / it predates the current {@link SAVE_VERSION} / it can't be parsed. */
+  static loadRun(): SavedRun | null {
+    try {
+      const raw = localStorage.getItem(RUN_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as SavedRun;
+      return parsed.version === SAVE_VERSION ? parsed : null;
+    } catch { return null; }
+  }
+
+  /** Discards the stored mid-run snapshot (run ended, or a fresh run began). */
+  static clearRun(): void {
+    try { localStorage.removeItem(RUN_KEY); } catch { /* unavailable */ }
   }
 
   /** The lore codex: every boss/NPC/biome/patron discovered across all past runs. */

@@ -482,6 +482,64 @@ export interface GhostRecord {
   date: string;
 }
 
+// ── Mid-run save/resume ──────────────────────────────────────────────────────
+
+/**
+ * Bump when the serialized shape changes incompatibly — older saves are
+ * silently discarded rather than half-restored.
+ */
+export const SAVE_VERSION = 1;
+
+/** A serialized live {@link Monster} — enough to reconstruct it exactly. */
+export interface SavedMonsterState {
+  x: number; y: number; char: string; name: string;
+  hp: number; maxHp: number; atk: number; xpReward: number;
+  isBoss: boolean; behaviorType: string; attackRange: number; moveSpeed: number;
+  statusInflict?: MonsterDef['statusInflict'];
+  statuses: StatusEffect[];
+  isElite: boolean; isGorgoth: boolean; stepCharge: number; combatLevel: number;
+}
+
+/**
+ * A serialized `Player`. `scalars` carries every plain data field verbatim
+ * (numbers/booleans/plain arrays like `statuses`); content-referencing fields
+ * (boons/brands) are stored by id and re-resolved against the loaded data on
+ * restore, so a content update between sessions degrades to "that boon is
+ * gone" rather than a crash.
+ */
+export interface SavedPlayerState {
+  scalars: Record<string, unknown>;
+  boons: Array<{ id: string; stacks: number }>;
+  brands: Array<{ slot: BodyPart; id: string }>;
+  /** Plain-data ability objects (patron spells / class ability / Spear of Lugh) — JSON-safe as-is. */
+  spellbook: RangedAbility[];
+  rangedAbility: RangedAbility | null;
+}
+
+/**
+ * A complete mid-run snapshot, written by `Game.serialize()` and consumed by
+ * `Game.applySave()`. Like {@link SavedPlayerState}, `scalars` carries every
+ * plain data field (grids, counters, tile lists) verbatim; everything that
+ * references live objects, content definitions, or functions is stored in a
+ * re-resolvable form alongside it.
+ */
+export interface SavedRun {
+  version: number;
+  savedAt: number;
+  scalars: Record<string, unknown>;
+  player: SavedPlayerState;
+  monsters: SavedMonsterState[];
+  /** Indices into `monsters` for the live rescue-piece captors. */
+  rescueGuardIdx: number[];
+  omenId: string | null;
+  pendingFloorEventId: string | null;
+  rescuedIds: string[];
+  spearPartsHeld: string[];
+  metFlavorNpcIds: string[];
+  /** This floor's rolled ghost haunting (the cross-run ghost *file* is reloaded from storage instead). */
+  activeGhost: GhostRecord | null;
+}
+
 /** The lore-codex category a discovery belongs to. */
 export type CodexKind = 'boss' | 'npc' | 'biome' | 'patron';
 

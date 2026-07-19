@@ -10,7 +10,8 @@ import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
 import { HapticsController } from './haptics';
 import { TutorialController, FIGHT_STEP_INDEX, type TutorialEvent } from './tutorial';
-import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef } from './types';
+import { CLASSES } from './content';
+import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef, SavedRun } from './types';
 
 const DRAWER_EDGE_ZONE       = 24; // px from the right screen edge that starts an "open" gesture
 const DRAWER_SWIPE_THRESHOLD = 50; // px of horizontal movement to count as a swipe
@@ -59,6 +60,10 @@ class GameApp {
   private tutorial: TutorialController | null = null;
   /** Set by the start screen's "How to Play" button — forces the tutorial on the next run even if already seen. */
   private tutorialRequested = false;
+
+  // ── Mid-run autosave ─────────────────────────────────────────────────────
+  /** Last autosave timestamp — throttles the per-turn snapshot writes. */
+  private lastAutosaveMs = 0;
 
   // ── PWA update detection ─────────────────────────────────────────────────
   /** True once a new service worker is installed and waiting — surfaces the pause-menu "Update App" button. */
@@ -153,8 +158,14 @@ class GameApp {
     // make this a no-op on the start screen, over modals, or when already paused;
     // resume stays a deliberate tap on the pause menu.
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.openPauseMenu();
+      if (document.hidden) {
+        this.autosaveNow();  // the OS may kill a backgrounded PWA — bank the run first
+        this.openPauseMenu();
+      }
     });
+    // Last-chance snapshot as the page is being torn down (tab close,
+    // navigation, PWA swipe-away on platforms that fire it).
+    window.addEventListener('pagehide', () => this.autosaveNow());
 
     // ── Sidebar drawer (mobile) ────────────────────────────────────────────
     // On mobile the sidebar becomes a slide-in drawer over the canvas; on desktop
@@ -240,10 +251,17 @@ class GameApp {
         this.maybeStartTutorial();
       });
     };
-    this.ui.showStart(StorageService.getHighXp(), beginRun, () => {
-      this.tutorialRequested = true;
-      beginRun();
-    });
+    const savedRun = StorageService.loadRun();
+    const saveInfo = savedRun ? GameApp.describeSave(savedRun) : null;
+    this.ui.showStart(
+      StorageService.getHighXp(),
+      beginRun,
+      () => {
+        this.tutorialRequested = true;
+        beginRun();
+      },
+      savedRun && saveInfo ? { ...saveInfo, onResume: () => this.resumeRun(savedRun) } : undefined,
+    );
 
     document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePauseMenu());
 
@@ -286,6 +304,71 @@ class GameApp {
     this.stopTick();
     this.game.active = false;  // the renderer's RAF loop checks this and stops itself
     this.ui.showCrash(info.message);
+  }
+
+  // ── Mid-run save/resume ─────────────────────────────────────────────────
+
+  /**
+   * Whether the run is in a snapshot-safe moment: live, started (class
+   * picked), past the tutorial, and not inside a dialog/cinematic pause —
+   * a modal's pending callback state can't be serialized, so those moments
+   * keep the last pre-modal snapshot instead. The player-initiated pause
+   * menu is fine (nothing is in flight).
+   */
+  private canSnapshot(): boolean {
+    const g = this.game;
+    if (g === undefined) return false;
+    return g.active && !g.won && g.player.hp > 0 && g.activeClassId !== null
+      && !g.tutorialSafety && (!g.paused || this.manualPaused);
+  }
+
+  /** Writes the mid-run snapshot immediately, if the game is in a snapshot-safe moment. */
+  private autosaveNow(): void {
+    if (!this.canSnapshot()) return;
+    try {
+      StorageService.saveRun(this.game.serialize());
+      this.lastAutosaveMs = Date.now();
+    } catch { /* quota/serialization — the previous snapshot stands */ }
+  }
+
+  /** Throttled autosave, riding the per-turn UI push (at most one write per couple of seconds). */
+  private maybeAutosave(): void {
+    if (Date.now() - this.lastAutosaveMs < 2000) return;
+    this.autosaveNow();
+  }
+
+  /** Start-screen "Continue" card copy for a stored snapshot, or `null` if it's unreadable. */
+  private static describeSave(save: SavedRun): { floor: number; classLabel: string } | null {
+    const floor = save.scalars['dungeonLevel'];
+    if (typeof floor !== 'number') return null;
+    const classId = save.scalars['activeClassId'];
+    const cls = typeof classId === 'string' ? CLASSES.find(c => c.id === classId) : undefined;
+    const level = save.player.scalars['playerLevel'];
+    const levelLabel = typeof level === 'number' ? ` · Lv.${level}` : '';
+    return { floor, classLabel: `${cls?.name ?? 'Wanderer'}${levelLabel}` };
+  }
+
+  /** Restores the stored mid-run snapshot and resumes play from it. */
+  private resumeRun(save: SavedRun): void {
+    audio.init();
+    if (StorageService.loadMute()) audio.toggle();
+    this.startGame(true, true);
+    try {
+      this.game.applySave(save);
+    } catch (err) {
+      // A save from incompatible content (or a corrupted write) — discard it
+      // and fall back to the normal fresh-run flow.
+      console.error('Resume failed — starting fresh.', err);
+      StorageService.clearRun();
+      this.ui.showToast('The saved run could not be restored — the rift begins anew.', 'ui_warning');
+      this.restartRun();
+      return;
+    }
+    this.game.paused = false;
+    this.startTick();
+    audio.startAmbient();
+    audio.playDescend();
+    this.ui.log(`The rift remembers — you return to floor ${this.game.dungeonLevel}.`, 'log-success');
   }
 
   // ── Tick management ─────────────────────────────────────────────────────
@@ -588,11 +671,11 @@ class GameApp {
 
   // ── Game factory ─────────────────────────────────────────────────────────
 
-  private startGame(startPaused = false): void {
+  private startGame(startPaused = false, forRestore = false): void {
     this.stopTick();
     this.game = new Game({
       log:      (text, cls, icon)    => this.ui.log(text, cls, icon),
-      updateUI: (state)              => this.ui.updateStats(state),
+      updateUI: (state)              => { this.ui.updateStats(state); this.maybeAutosave(); },
       onAction: ()                   => { this.tutorial?.notify('tick', this.game); this.resetTick(); },
       onParticle: (x, y, text, col, fontSize, icon) => this.renderer.spawnParticle(x, y, text, col, fontSize, icon),
       onParticleBurst: (x, y, count, col, icon)     => this.renderer.spawnBurst(x, y, count, col, icon),
@@ -613,6 +696,7 @@ class GameApp {
       onDeath: (title, reason, floor, totalXpEarned, stats, story) => {
         this.tutorial?.stop();
         this.stopTick();
+        StorageService.clearRun();  // a fallen run can't be resumed
         audio.stopAmbient();
         audio.playDeath();
         const { highXp, history } = StorageService.recordRunEnd(this.game, reason, stats);
@@ -634,6 +718,7 @@ class GameApp {
 
       onVictory: (floor, totalXpEarned, stats, story) => {
         this.stopTick();
+        StorageService.clearRun();  // a won run is finished, not resumable
         audio.stopAmbient();
         audio.playLevelUp();
         const { highXp, history } = StorageService.recordRunEnd(this.game, 'Defeated Bres the Beautiful', stats);
@@ -698,7 +783,7 @@ class GameApp {
           this.startTick();
         }, undefined, reroll);
       },
-    });
+    }, { forRestore });
 
     // Fallen characters from previous runs — the first floor never rolls a
     // ghost (this loads just after the constructor's initial floor setup), but
@@ -719,6 +804,8 @@ class GameApp {
       const mods = this.game.getRandomModifiers(3);
       this.ui.showModifierPick(mods, (modId) => {
         this.game.applyModifier(modId);
+        // The new run is now real — any previous run's snapshot is abandoned.
+        StorageService.clearRun();
         onReady();
       });
     });

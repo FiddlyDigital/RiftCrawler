@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec } from './types';
+import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, RESCUES, Omen, EffectResolver, type ClassDef, type PatronDef, type RescueDef } from './content';
 import { StatusEffectSystem } from './systems/statusEffects';
@@ -308,9 +308,13 @@ export class Game {
   /**
    * Starts a fresh run: builds an empty floor, places the hero on the
    * starting platform, and spawns the first falling piece.
+   *
+   * With `opts.forRestore`, stops after allocating the grids/entities —
+   * no starting platform, first piece, log lines, or stash inheritance —
+   * leaving a blank shell for {@link applySave} to fill in.
    * @throws {TypeError} If `callbacks` is null/undefined.
    */
-  constructor(callbacks: GameCallbacks) {
+  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean }) {
     if (callbacks === null || callbacks === undefined) {
       throw new TypeError('Game: "callbacks" must not be null/undefined');
     }
@@ -321,6 +325,7 @@ export class Game {
     this.explored = this.emptyBoolGrid(false);
     this.player = new Player(4, 23);
     this.monsters = [];
+    if (opts?.forRestore) return;
     this.generateStartPlatform();
     this.currentType = this.randomShapeKey();
     this.nextType = this.randomShapeKey();
@@ -3180,16 +3185,7 @@ export class Game {
 
     // Half-HP: roar and raise two of the Returned beside him — but only the
     // first time he crosses the threshold this run (persists across summons).
-    this.activeBossOnHalfHp = (g) => {
-      g.gorgothHalfTriggered = true;
-      g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
-      for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
-        const ax = boss.x + dx, ay = boss.y + dy;
-        if (ax >= 0 && ax < GameConfig.COLS && ay >= 0 && ay < GameConfig.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
-          g.spawnMonster(g.getRandomMonsterKey(), ax, ay);
-        }
-      }
-    };
+    this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
     this.activeBossOnDeath = null;  // victory is fired from killMonster (covers every death path)
     this.bossHalfHpTriggered = this.gorgothHalfTriggered;
 
@@ -3211,6 +3207,24 @@ export class Game {
       () => { this.paused = false; },
     );
     this.pushUI();
+  }
+
+  /**
+   * Bres's half-HP mechanic (roar + two Fomorian adds beside him), built as
+   * a factory so both {@link summonGorgoth} and a mid-duel save restore can
+   * attach it around the live boss instance.
+   */
+  private makeGorgothOnHalfHp(boss: Monster): (game: Game) => void {
+    return (g) => {
+      g.gorgothHalfTriggered = true;
+      g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
+      for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
+        const ax = boss.x + dx, ay = boss.y + dy;
+        if (ax >= 0 && ax < GameConfig.COLS && ay >= 0 && ay < GameConfig.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
+          g.spawnMonster(g.getRandomMonsterKey(), ax, ay);
+        }
+      }
+    };
   }
 
   /** Gorgoth defeated — the run is won. Idempotent. */
@@ -3439,6 +3453,103 @@ export class Game {
         ],
       },
     ];
+  }
+
+  // ── Mid-run save/resume ──────────────────────────────────────────────────
+
+  /**
+   * Fields excluded from the generic scalar sweep in {@link serialize}:
+   * the host callbacks, live entity/content-instance references (serialized
+   * in re-resolvable forms instead), function-valued boss hooks (reattached
+   * by id/name on restore), Sets (stored as arrays), session-relative
+   * timestamps, and tutorial state (owned by the live TutorialController —
+   * a save is never taken mid-tutorial). Everything else — grids, counters,
+   * tile lists, flags — round-trips verbatim, so newly added plain fields
+   * are persisted without touching the save code.
+   */
+  private static readonly SAVE_SKIP = new Set([
+    'cb', 'player', 'monsters', 'rescueGuards',
+    'activeOmen', 'pendingFloorEvent',
+    'activeBossOnHalfHp', 'activeBossOnDeath',
+    'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
+    'activeGhost', 'availableGhosts',
+    'lastLineClearMs', 'tutorialSafety',
+  ]);
+
+  /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
+  public serialize(): SavedRun {
+    const scalars: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this)) {
+      if (!Game.SAVE_SKIP.has(k)) scalars[k] = v;
+    }
+    return {
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      scalars,
+      player: this.player.serialize(),
+      monsters: this.monsters.map(m => m.serialize()),
+      rescueGuardIdx: this.rescueGuards.map(g => this.monsters.indexOf(g)).filter(i => i >= 0),
+      omenId: this.activeOmen?.id ?? null,
+      pendingFloorEventId: this.pendingFloorEvent?.id ?? null,
+      rescuedIds: [...this.rescuedIds],
+      spearPartsHeld: [...this.spearPartsHeld],
+      metFlavorNpcIds: [...this.metFlavorNpcIds],
+      activeGhost: this.activeGhost,
+    };
+  }
+
+  /**
+   * Restores a {@link serialize} snapshot onto a shell built with
+   * `new Game(cb, { forRestore: true })`. Content references (omen, pending
+   * floor event, boons/brands, boss mechanics) are re-resolved against the
+   * currently loaded data; a reference whose id no longer exists degrades to
+   * "absent" rather than crashing — except the falling piece's shape, without
+   * which the run can't continue.
+   * @throws {Error} If the save's version doesn't match, or its piece shapes no longer exist.
+   */
+  public applySave(save: SavedRun): void {
+    if (save.version !== SAVE_VERSION) {
+      throw new Error(`Game.applySave: save version ${save.version} is not ${SAVE_VERSION}`);
+    }
+    Object.assign(this, save.scalars);
+    if (!SHAPES[this.currentType] || !SHAPES[this.nextType] || (this.heldType !== null && !SHAPES[this.heldType])) {
+      throw new Error('Game.applySave: a saved piece shape no longer exists in shapes.json');
+    }
+    this.player.applySave(save.player, {
+      boon:  id => Boon.ALL.find(b => b.id === id),
+      brand: id => Brand.ALL.find(b => b.id === id),
+    });
+    this.monsters = save.monsters.map(m => Monster.fromSave(m));
+    this.rescueGuards = save.rescueGuardIdx
+      .map(i => this.monsters[i])
+      .filter((m): m is Monster => m !== undefined);
+    this.activeOmen = save.omenId === null ? null : Omen.ALL.find(o => o.id === save.omenId) ?? null;
+    this.pendingFloorEvent = save.pendingFloorEventId === null
+      ? null
+      : FloorEvent.ALL.find(f => f.id === save.pendingFloorEventId) ?? null;
+    this.rescuedIds = new Set(save.rescuedIds);
+    this.spearPartsHeld = new Set(save.spearPartsHeld as Array<'shaft' | 'bolts' | 'head'>);
+    this.metFlavorNpcIds = new Set(save.metFlavorNpcIds);
+    this.activeGhost = save.activeGhost;
+    // Boss mechanics are functions — reattach them from the live content
+    // definitions around the restored boss instance.
+    const boss = this.monsters.find(m => m.isBoss);
+    if (boss?.isGorgoth) {
+      this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
+      this.activeBossOnDeath = null;
+    } else if (boss) {
+      const def = BOSSES.find(b => b.name === boss.name);
+      this.activeBossOnHalfHp = def?.onHalfHp ?? null;
+      this.activeBossOnDeath  = def?.onDeath  ?? null;
+    }
+    // Session-relative state restarts clean: the combo window is long gone,
+    // and a snapshot is only ever taken of a live, unblocked, post-tutorial game.
+    this.lastLineClearMs = 0;
+    this.comboCount = 0;
+    this.active = true;
+    this.paused = false;
+    this.tutorialSafety = false;
+    this.pushUI();
   }
 
   // ── UI push ──────────────────────────────────────────────────────────────

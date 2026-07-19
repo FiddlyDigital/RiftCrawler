@@ -1,7 +1,7 @@
 import { GameConfig } from './config';
 import { SpriteService } from './sprites';
 import { Balance } from './balance';
-import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart } from './types';
+import type { StatusEffect, MonsterDef, RangedAbility, BoonDef, BrandDef, BodyPart, SavedPlayerState, SavedMonsterState } from './types';
 
 /**
  * Small stat-math helpers shared by the player/monster/combat/status systems.
@@ -220,6 +220,56 @@ export class Player {
     if (count % def.setSize === 0) def.onSetComplete(this);
   }
 
+  /**
+   * Fields excluded from the generic scalar sweep in {@link serialize} —
+   * everything referencing content definitions (which carry functions) is
+   * stored by id instead and re-resolved on restore.
+   */
+  private static readonly SAVE_SKIP = new Set(['boons', 'brands', 'spellbook', 'rangedAbility']);
+
+  /**
+   * Snapshots the player for the mid-run save. Every plain data field is
+   * swept generically (so new stat fields are persisted without touching
+   * this method); content-referencing fields are stored by id.
+   */
+  serialize(): SavedPlayerState {
+    const scalars: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this)) {
+      if (!Player.SAVE_SKIP.has(k)) scalars[k] = v;
+    }
+    return {
+      scalars,
+      boons: this.boons.map(b => ({ id: b.id, stacks: b.stacks })),
+      brands: this.brands.map(b => ({ slot: b.slot, id: b.brand.id })),
+      spellbook: this.spellbook,
+      rangedAbility: this.rangedAbility,
+    };
+  }
+
+  /**
+   * Restores a {@link serialize} snapshot onto this player. Stat effects are
+   * already baked into the saved numbers, so boon/brand `onAdd`/`onEquip`
+   * hooks are deliberately NOT re-fired; the defs are re-resolved via the
+   * provided lookups purely so tooltips/recomputes keep working. A boon or
+   * brand whose id no longer exists in the content is dropped silently.
+   */
+  applySave(
+    s: SavedPlayerState,
+    resolve: { boon: (id: string) => BoonDef | undefined; brand: (id: string) => BrandDef | undefined },
+  ): void {
+    Object.assign(this, s.scalars);
+    this.boons = s.boons.flatMap(b => {
+      const def = resolve.boon(b.id);
+      return def ? [{ id: b.id, stacks: b.stacks, def }] : [];
+    });
+    this.brands = s.brands.flatMap(b => {
+      const def = resolve.brand(b.id);
+      return def ? [{ slot: b.slot, brand: def }] : [];
+    });
+    this.spellbook = s.spellbook;
+    this.rangedAbility = s.rangedAbility;
+  }
+
   private recomputeVoidPrism(): void {
     const prism = this.boons.find(b => b.id === 'void_prism');
     if (!prism) return;
@@ -275,6 +325,34 @@ export class Monster {
 
   get isStunned(): boolean {
     return this.statuses.some(s => s.type === 'stun');
+  }
+
+  /** Snapshots this monster for the mid-run save. */
+  serialize(): SavedMonsterState {
+    return {
+      x: this.x, y: this.y, char: this.char, name: this.name,
+      hp: this.hp, maxHp: this.maxHp, atk: this.atk, xpReward: this.xpReward,
+      isBoss: this.isBoss, behaviorType: this.behaviorType,
+      attackRange: this.attackRange, moveSpeed: this.moveSpeed,
+      ...(this.statusInflict !== undefined ? { statusInflict: this.statusInflict } : {}),
+      statuses: this.statuses,
+      isElite: this.isElite, isGorgoth: this.isGorgoth,
+      stepCharge: this.stepCharge, combatLevel: this.combatLevel,
+    };
+  }
+
+  /** Reconstructs a live monster from a {@link serialize} snapshot. */
+  static fromSave(s: SavedMonsterState): Monster {
+    const m = new Monster(
+      s.x, s.y, s.char, s.name, s.hp, s.maxHp, s.atk, s.xpReward,
+      s.isBoss, s.behaviorType, s.attackRange, s.moveSpeed, s.statusInflict,
+    );
+    m.statuses = s.statuses;
+    m.isElite = s.isElite;
+    m.isGorgoth = s.isGorgoth;
+    m.stepCharge = s.stepCharge;
+    m.combatLevel = s.combatLevel;
+    return m;
   }
 }
 
