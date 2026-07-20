@@ -3915,6 +3915,17 @@ export class Game {
     }
   }
 
+  /**
+   * Called from {@link CombatSystem.killMonster} for every monster death so the
+   * duel ends the instant its boss falls — no matter how (melee, a ranged spell
+   * like the Spear of Lugh, thorns, or line-clear AoE). Without this, a non-melee
+   * kill would leave the duel unresolved: no stairs, and the boss's causeway would
+   * keep advancing to the shore for a false game-over.
+   */
+  public notifyMonsterKilled(m: Monster): void {
+    if (this.inCausewayDuel && m === this.duelBoss) this.duelWin();
+  }
+
   /** Boss slain in the duel — the causeway is broken; stairs rise so the run can go on. */
   public duelWin(): void {
     if (this.duelResolved) return;

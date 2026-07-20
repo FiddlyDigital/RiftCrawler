@@ -328,5 +328,9 @@ export class CombatSystem {
         game.cb.log(`Defeated ${m.name}!`, 'log-success');
       }
     }
+    // Every death routes through here, so this is the one place that reliably
+    // ends a Causeway Duel when its boss falls — covering ranged/AoE kills the
+    // melee combat branch never sees.
+    game.notifyMonsterKilled(m);
   }
 }

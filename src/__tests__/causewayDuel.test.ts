@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Game } from '../game';
+import { CombatSystem } from '../systems/combat';
 import { Tile } from '../types';
 import type { GameCallbacks, LogClass, BossDef } from '../types';
 
@@ -111,6 +112,24 @@ describe('Causeway Duel', () => {
     let stairs = 0;
     for (let x = 0; x < 10; x++) for (let y = 0; y < 25; y++) if (game.map[x]![y] === Tile.STAIRS) stairs++;
     expect(stairs).toBeGreaterThan(0);
+  });
+
+  it('a non-melee kill (ranged/AoE, routed through killMonster) also ends the duel and raises stairs', () => {
+    game.startCausewayDuel();
+    const boss = priv(game).duelBoss!;
+    // Simulate a Spear-of-Lugh / AoE finish: drop the boss and route it through
+    // the shared death path rather than a melee bump.
+    boss.hp = 0;
+    CombatSystem.killMonster(boss, game);
+    expect(priv(game).duelResolved).toBe(true);
+    expect(priv(game).duelBoss).toBeNull();
+    // stairs exist, and the boss can no longer advance its causeway
+    let stairs = 0;
+    for (let x = 0; x < 10; x++) for (let y = 0; y < 25; y++) if (game.map[x]![y] === Tile.STAIRS) stairs++;
+    expect(stairs).toBeGreaterThan(0);
+    const bossTilesBefore = priv(game).duelOwner.flat().filter(o => o === 2).length;
+    priv(game).duelBossTurn();  // must be a no-op now — the duel is resolved
+    expect(priv(game).duelOwner.flat().filter(o => o === 2).length).toBe(bossTilesBefore);
   });
 
   it('the run is lost when the boss causeway reaches the shore (adjacent to the home tile)', () => {
