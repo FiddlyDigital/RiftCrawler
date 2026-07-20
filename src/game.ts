@@ -689,12 +689,9 @@ export class Game {
   /** Whether an entity can stand on `(x, y)` — floor, stairs, or an interactable tile (tattoo artist / altar). */
   public isValidMove(x: number, y: number): boolean {
     if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return false;
-    // In a duel the hero can't walk the sealed wall or an unclaimed obstacle
-    // island — those are built up to, not strolled across.
-    if (this.inCausewayDuel) {
-      const o = this.duelOwner[x]?.[y];
-      if (o === Game.DUEL_WALL || o === Game.DUEL_SWITCH || o === Game.DUEL_BOON) return false;
-    }
+    // In a duel the hero can't walk the sealed wall, but switch- and boon-islands
+    // are walked *onto* to activate them (build your causeway up, then step on).
+    if (this.inCausewayDuel && this.duelOwner[x]?.[y] === Game.DUEL_WALL) return false;
     return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isTattooTile(x, y) || this.isAltarTile(x, y);
   }
 
@@ -2479,6 +2476,24 @@ export class Game {
       return;
     }
 
+    // Causeway-Duel islands — walk onto one to activate it.
+    if (this.inCausewayDuel) {
+      const sw = this.duelSwitches.find(s => s.x === nx && s.y === ny && !s.lit);
+      if (sw) {
+        this.player.x = nx; this.player.y = ny;
+        this.duelLightSwitch(sw);
+        this.advanceTurn();
+        return;
+      }
+      const boon = this.duelBoons.find(b => b.x === nx && b.y === ny && !b.taken);
+      if (boon) {
+        this.player.x = nx; this.player.y = ny;
+        this.duelTakeBoon(boon);
+        this.advanceTurn();
+        return;
+      }
+    }
+
     // Tattoo Artist tile — consumed on use (like an altar)
     if (this.isTattooTile(nx, ny)) {
       this.player.x = nx; this.player.y = ny;
@@ -3550,32 +3565,30 @@ export class Game {
   public get duelBoonTiles(): ReadonlyArray<{ x: number; y: number; kind: string; taken: boolean }> { return this.duelBoons; }
 
   /**
-   * After a player placement, light any switch-island the causeway now abuts
-   * (opening the wall once all are lit) and collect any boon-island reached.
+   * The hero stepped onto an unlit ogham switch: light it, claim it as walkable
+   * player ground, and open the wall once every switch is lit. Switches follow
+   * the game's established "activate on step" verb (like braziers/altars) — you
+   * build your causeway up to one, then walk your hero onto it.
    */
-  private duelCheckObstacles(): void {
-    const abutsPlayer = (x: number, y: number): boolean =>
-      [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].some(([nx, ny]) =>
-        nx! >= 0 && nx! < GameConfig.COLS && ny! >= 0 && ny! < GameConfig.ROWS && this.duelOwner[nx!]![ny!] === 1);
+  private duelLightSwitch(sw: { x: number; y: number; lit: boolean }): void {
+    sw.lit = true;
+    this.duelClaim([{ x: sw.x, y: sw.y }], 1, '#3fb0a2');  // lit switch becomes walkable player ground
+    this.cb.log('An ogham switch flares underfoot — the wards on the wall weaken.', 'log-perk', 'fx_arcane');
+    this.cb.onRingPulse?.(sw.x, sw.y, '63,176,162');
+    this.cb.onParticleBurst?.(sw.x, sw.y, 8, '#3fb0a2', 'fx_arcane');
+    this.cb.onAudio?.('pactSworn');
+    if (this.duelWall.length > 0 && this.duelSwitches.every(s => s.lit)) this.duelOpenWall();
+  }
 
-    for (const sw of this.duelSwitches) {
-      if (sw.lit || !abutsPlayer(sw.x, sw.y)) continue;
-      sw.lit = true;
-      this.duelClaim([{ x: sw.x, y: sw.y }], 1, '#3fb0a2');  // lit switch becomes walkable player ground
-      this.cb.log('An ogham switch flares to life — the wards on the wall weaken.', 'log-perk', 'fx_arcane');
-      this.cb.onRingPulse?.(sw.x, sw.y, '63,176,162');
-      this.cb.onAudio?.('pactSworn');
-    }
-    if (this.duelSwitches.length > 0 && this.duelWall.length > 0 && this.duelSwitches.every(s => s.lit)) {
-      this.duelOpenWall();
-    }
-
-    for (const boon of this.duelBoons) {
-      if (boon.taken || !abutsPlayer(boon.x, boon.y)) continue;
-      boon.taken = true;
-      this.duelClaim([{ x: boon.x, y: boon.y }], 1, Game.DUEL_PLAYER_COLOR);
-      this.duelGrantBoon(boon.kind, boon.x, boon.y);
-    }
+  /**
+   * The hero stepped onto a boon-island: grant its reward and claim it as
+   * walkable player ground. Boons sit on the enemy side of the wall, so
+   * reaching one means opening the wall and venturing into contested territory.
+   */
+  private duelTakeBoon(boon: { x: number; y: number; kind: 'geis' | 'gold' | 'heal'; taken: boolean }): void {
+    boon.taken = true;
+    this.duelClaim([{ x: boon.x, y: boon.y }], 1, Game.DUEL_PLAYER_COLOR);
+    this.duelGrantBoon(boon.kind, boon.x, boon.y);
   }
 
   /** Opens the sealed center wall once every switch is lit. */
@@ -3642,8 +3655,9 @@ export class Game {
     this.duelClaim([{ x: midX, y: homeY }], 1, Game.DUEL_PLAYER_COLOR);
     this.duelHome = { x: midX, y: homeY };
     this.player.x = midX; this.player.y = homeY;
-    // Boss home tile (top) and the boss standing on it.
-    this.duelClaim([{ x: midX, y: topY }], 2, Game.DUEL_BOSS_COLOR);
+    // Boss home base (top) — a 3-wide root so its tetromino bridge reads as a
+    // broad landing being built out, not a thread. The boss stands on the centre.
+    this.duelClaim([{ x: midX - 1, y: topY }, { x: midX, y: topY }, { x: midX + 1, y: topY }], 2, Game.DUEL_BOSS_COLOR);
     const bossDef = this.previewBossForFloor(this.dungeonLevel);
     const diff = this.difficultyTuning();
     const baseHp = Balance.CONFIG.boss.baseHpFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseHpPerDungeonLevel;
@@ -3789,7 +3803,6 @@ export class Game {
     this.duelTurns++;
     this.cb.onBlockLand?.(cells);
     this.cb.onAudio?.('blockLand');
-    this.duelCheckObstacles();  // light switches / open wall / collect boons the causeway now reaches
     this.duelDealPiece();
     this.duelBossTurn();
     this.updateVisibility();
@@ -3815,14 +3828,6 @@ export class Game {
   }
 
   /**
-   * The boss's placement turn: it extends its causeway `advance` tiles down —
-   * each step choosing the free cell just below an existing boss tile that is
-   * deepest and nearest the hero's column, so the bridge routes *around*
-   * obstacles toward the shore rather than stalling behind them. The boss walks
-   * its pawn to the new frontier; reaching the shore lands the bridge and loses
-   * the run.
-   */
-  /**
    * The lane the boss steers its bridge toward: the column that reaches the
    * shore with the least resistance — fewest player tiles blocking the way
    * down and nearest the home. So if the hero walls off the centre, the boss
@@ -3839,44 +3844,67 @@ export class Game {
     return bestX;
   }
 
+  /**
+   * The boss's placement turn: it is dealt a random tetromino (exactly like the
+   * hero) and drops it as a connected extension of its own causeway, biased to
+   * reach as deep as possible toward the open shore lane. The boss pawn walks to
+   * the new leading edge — reaching the shore lands the bridge and loses the run.
+   * Because the boss builds in tetromino chunks rather than flooding the board,
+   * it leaves flanking columns open for the hero to climb (e.g. to the boons).
+   */
   private duelBossTurn(): void {
     if (this.duelResolved || !this.duelBoss) return;
     const laneX = this.duelBossLaneColumn();  // the open lane to the shore
-    // The bridge's leading edge: the deepest boss tile, nearest the target lane.
-    let edge = { x: this.duelBoss.x, y: this.duelBoss.y };
-    let bestScore = -Infinity;
+    const shapeKey = this.randomShapeKey();
+    const frontier = this.duelBossDeepestRow();  // the boss's current leading row
+    // How broad the bridge is near its leading edge. When it has narrowed to a
+    // thread the boss widens before pushing on, so the causeway advances as a
+    // chunky mass of tetrominoes rather than a single-file column.
+    let edgeWidth = 0;
     for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        if (this.duelOwner[x]![y] !== 2) continue;
-        const score = y * 10 - Math.abs(x - laneX);
-        if (score > bestScore) { bestScore = score; edge = { x, y }; }
-      }
+      for (let y = frontier - 1; y <= frontier; y++) if (y >= 0 && this.duelOwner[x]![y] === 2) { edgeWidth++; break; }
     }
-    // Extend a 2-wide causeway two rows down, angling toward the open lane,
-    // so it reads as a bridge being built — and routes around the player's walls.
-    const rows = 2;
-    for (let i = 0; i < rows; i++) {
-      const ny = edge.y + 1;
-      if (ny >= GameConfig.ROWS) break;
-      let nx = Math.max(0, Math.min(edge.x + Math.sign(laneX - edge.x), GameConfig.COLS - 1));
-      if (this.duelOwner[nx]![ny] !== 0) nx = edge.x;      // angled cell blocked → straight down
-      // If straight down is also blocked, try to sidestep either way to keep advancing.
-      if (this.duelOwner[nx]![ny] !== 0) {
-        const side = [edge.x - 1, edge.x + 1].find(sx => sx >= 0 && sx < GameConfig.COLS && this.duelOwner[sx]![ny] === 0);
-        if (side === undefined) break;                     // truly walled off — the player blocked the bridge
-        nx = side;
+    const wantWiden = edgeWidth < 3;
+    // Search every rotation × board position for the best legal placement: it
+    // must connect to boss territory and not overlap anything. Scoring rewards
+    // making at least one row of downward progress, then hugging the target lane
+    // and building a chunky, varied bridge — so it reads as tetromino blocks
+    // being laid, not a thin line racing straight for the shore.
+    let best: { cells: Array<{ x: number; y: number }>; score: number } | null = null;
+    let matrix: CellValue[][] = SHAPES[shapeKey].matrix.map(row => row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR));
+    for (let rot = 0; rot < 4; rot++) {
+      const w = matrix[0]!.length, h = matrix.length;
+      for (let bx = 0; bx <= GameConfig.COLS - w; bx++) {
+        for (let by = 0; by <= GameConfig.ROWS - h; by++) {
+          const cells = this.duelPieceCells(matrix, bx, by);
+          if (cells.length === 0) continue;
+          if (cells.some(c => this.duelOwner[c.x]![c.y] !== 0)) continue;  // overlap / wall / island
+          if (!this.duelCellsTouch(cells, 2)) continue;                    // must grow from the boss causeway
+          const deepest = Math.max(...cells.map(c => c.y));
+          const deepens = deepest > frontier;
+          const fillsEdge = deepest >= frontier - 1;  // adds mass at/just above the leading edge
+          // When the edge is a thread, prefer widening it; once broad, push down.
+          const progress = wantWiden
+            ? (fillsEdge && !deepens ? 1000 : deepens ? 200 : 0)
+            : (deepens ? 1000 : (fillsEdge ? 300 : 0));
+          const nearLane = -Math.min(...cells.map(c => Math.abs(c.x - laneX)));  // gentle pull toward the lane
+          const score = progress + deepest * 2 + nearLane + cells.length + Math.random() * 6;
+          if (!best || score > best.score) best = { cells, score };
+        }
       }
-      const claimed = [{ x: nx, y: ny }];
-      const wideX = nx + (nx < laneX ? 1 : -1);            // widen toward the lane for a bridge look
-      if (wideX >= 0 && wideX < GameConfig.COLS && this.duelOwner[wideX]![ny] === 0) claimed.push({ x: wideX, y: ny });
-      this.duelClaim(claimed, 2, Game.DUEL_BOSS_COLOR);
-      edge = { x: nx, y: ny };
-      if (this.duelAtShore(nx, ny)) { this.duelBoss.x = nx; this.duelBoss.y = ny; this.duelLose(); return; }
+      matrix = GameMath.rotateMatrix(matrix);
     }
-    // The boss walks its pawn to the new leading edge — coming to meet the hero.
+    if (!best) return;  // truly walled off this turn — the player has blocked every landing
+
+    this.duelClaim(best.cells, 2, Game.DUEL_BOSS_COLOR);
+    this.cb.onBlockLand?.(best.cells);
+    this.cb.onAudio?.('blockLand');
+    // The boss pawn advances to the deepest new cell (breaking ties toward the lane).
+    const edge = best.cells.reduce((a, c) =>
+      (c.y > a.y || (c.y === a.y && Math.abs(c.x - laneX) < Math.abs(a.x - laneX))) ? c : a, best.cells[0]!);
     this.duelBoss.x = edge.x; this.duelBoss.y = edge.y;
     this.cb.onRingPulse?.(edge.x, edge.y, '150,40,55');  // the bridge grinds a length longer
-    this.cb.onAudio?.('blockMove');
+    if (best.cells.some(c => this.duelAtShore(c.x, c.y))) { this.duelLose(); return; }
     // One-time alarm once the bridge is closing on the shore.
     const gap = (GameConfig.ROWS - 1) - this.duelBossDeepestRow();
     if (!this.duelNearShoreWarned && gap <= 4 && this.duelWall.length === 0) {
@@ -4235,7 +4263,10 @@ export class Game {
             name: activePatron ? `${activeCls.name} — ${activePatron.name}` : activeCls.name,
           }
         : null,
-      biomeName: biome.name,
+      // During a duel the boss's own causeway is the focus — the duel card names
+      // the boss, so the generic biome badge ("Bres's Causeway") is suppressed to
+      // avoid attributing the enemy bridge to the wrong name.
+      biomeName: this.inCausewayDuel ? '' : biome.name,
       activeOmen: this.activeOmen ? { icon: this.activeOmen.icon, name: this.activeOmen.name } : null,
       activeDifficulty: this.activeDifficultyId !== 'standard' && this.difficultyTuning().name !== ''
         ? { icon: this.difficultyTuning().icon, name: this.difficultyTuning().name.split(' — ')[0]! }

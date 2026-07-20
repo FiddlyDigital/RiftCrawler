@@ -26,13 +26,15 @@ Turn-based, no gravity, on the shared 10×25 grid:
    Placed cells become your causeway (walkable floor).
 3. **Between placements** you may walk your hero along your own causeway
    (normal orthogonal movement + combat).
-4. **Boss turn** — the boss AI places a random piece adjacent to *its*
-   territory, biased to grow toward your home row, and advances one step
-   along its causeway toward you.
+4. **Boss turn** — the boss is dealt its own random tetromino and drops it as a
+   connected extension of *its* causeway (exactly like you do), biased to grow
+   toward your home row. It keeps its leading edge broad before pushing on, so
+   the bridge advances as a chunky mass of real tetromino blocks — not a thread —
+   and leaves flanking columns open for you to climb.
 5. **Meet** — once your territory and the boss's touch, the path is open. Walk
    up and attack the boss with the normal combat system.
 6. **Resolve** — boss HP → 0: spawn stairs (descend / back to the mound).
-   Boss advance reaches your home row: you lose (Bres crosses).
+   Boss advance reaches your home row: you lose (the bridge lands).
 
 ## Reused vs. new
 
@@ -54,16 +56,21 @@ Turn-based, no gravity, on the shared 10×25 grid:
 ## The trimmings (all shipped)
 
 - **Center wall + switch-islands** — a sealed full-width barrier splits the two
-  halves. Two switch-islands sit below it; route your causeway to abut each one
-  to light it, and lighting both dissolves the wall so you can climb to the
-  bridge.
-- **Boon-islands** off the main line — two islands above the wall carry rewards
-  (a tier-scaled Geis, a heal, or gold). Detour your causeway to touch one and
-  it's granted, at a tempo cost that lets the boss gain ground.
-- **Characterful boss AI** — the boss no longer marches a straight column. Each
-  turn it picks the *lane* that minimises `player-blockers×3 + distance-to-home`
-  (`duelBossLaneColumn()`), so it routes around walls you build and probes for
-  the shortest open path to your shore.
+  halves. Two switch-islands sit below it; build your causeway up to one and
+  **walk your hero onto it** to light it (the game's standard "activate on step"
+  verb, shared with braziers and altars). Lighting both dissolves the wall so
+  you can climb to the bridge.
+- **Boon-islands** on the *enemy* side of the wall — two islands above the
+  barrier carry rewards (a tier-scaled Geis, a heal, or gold). They're only
+  reachable once the wall is open and you venture into contested territory:
+  route your causeway across the gap and **step your hero onto the island** to
+  claim it, at the tempo cost of climbing past the descending boss.
+- **Characterful boss AI** — the boss builds from a 3-wide root with its own
+  random tetrominoes. Each turn it picks the *lane* that minimises
+  `player-blockers×3 + distance-to-home` (`duelBossLaneColumn()`) to route around
+  walls you build, then chooses the placement that best widens-then-deepens its
+  bridge toward that lane — so the causeway grows as a broad, jagged mass of real
+  blocks heading for the shortest open path to your shore.
 - **Save / resume** — mid-duel state survives a snapshot round trip. `duelBoss`
   is skipped in the raw scalar sweep and re-linked to the live restored
   `Monster` on load; owner grid, switches, wall, and boons all persist.
@@ -71,6 +78,8 @@ Turn-based, no gravity, on the shared 10×25 grid:
   one-time "the bridge nears your shore" warning when the boss closes in; sound
   cues on boss advance, boon pickup, and wall-open; and richer particle / ring /
   glow flourishes on both the win (stairs rise) and the loss (the bridge lands).
+  The generic biome badge is suppressed during a duel so the enemy causeway is
+  attributed to the actual boss (in the duel card), not the floor's biome name.
 
 ## Boss floors
 
