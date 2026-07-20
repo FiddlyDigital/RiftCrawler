@@ -38,7 +38,7 @@ Turn-based, no gravity, on the shared 10×25 grid:
 
 | Reused (no change) | New |
 |---|---|
-| Grid, tiles, colors | A duel board-state flag (a new value of the `tetrisSuspended` family) |
+| Grid, tiles, colors | A duel board-state flag (a new value of the `blockBuildingSuspended` family) |
 | Hero movement + combat + boss `Monster`s | Connected-placement validity check (adjacency, not gravity) |
 | Stairs, descend / waystation flow | Boss placement AI (grow-toward-player heuristic) |
 | Piece shapes + rotation math | Meet-in-the-middle detection |

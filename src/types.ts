@@ -101,7 +101,7 @@ export const Cell = {
 export type CellValue = (typeof Cell)[keyof typeof Cell];
 
 /** CSS class applied to a single log-panel line, controlling its color/emphasis. */
-export type LogClass = 'log-neutral' | 'log-damage' | 'log-success' | 'log-tetris' | 'log-boss' | 'log-combo' | 'log-perk';
+export type LogClass = 'log-neutral' | 'log-damage' | 'log-success' | 'log-blockbuilding' | 'log-boss' | 'log-combo' | 'log-perk';
 
 /** A status effect that can be applied to the player or a monster. */
 export type StatusType = 'poison' | 'stun';

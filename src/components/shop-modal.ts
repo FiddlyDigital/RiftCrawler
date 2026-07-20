@@ -14,7 +14,7 @@ export class ShopModal extends BaseModal {
     </div>`;
   }
 
-  /** Shows the shop modal for the given stock, with a live-updating gold balance as items are purchased. `titleOverride`/`subtitleOverride` let a one-off encounter (e.g. the Tetris-clear reward) replace the regular peddler's framing. */
+  /** Shows the shop modal for the given stock, with a live-updating gold balance as items are purchased. `titleOverride`/`subtitleOverride` let a one-off encounter (e.g. the 4line-clear reward) replace the regular peddler's framing. */
   public showShop(
     stock: ShopItem[], gold: number, buy: (id: string) => { gold: number; ok: boolean }, onClose: () => void,
     titleOverride?: string, subtitleOverride?: string,

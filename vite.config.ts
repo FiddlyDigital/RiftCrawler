@@ -36,7 +36,7 @@ export default defineConfig({
       manifest: {
         name: 'Causeway to Ériu',
         short_name: 'Causeway',
-        description: 'A mobile-first tetris-roguelike hybrid dungeon crawler',
+        description: 'A mobile-first block-building/roguelike hybrid dungeon crawler',
         theme_color: '#08090a',
         background_color: '#08090a',
         display: 'standalone',
@@ -65,7 +65,7 @@ export default defineConfig({
           },
           {
             src: 'screenshots/mobile-1.png', sizes: '780x1688', type: 'image/png',
-            form_factor: 'narrow', label: 'A run in progress on mobile — Tetris layer above, hero layer below',
+            form_factor: 'narrow', label: 'A run in progress on mobile — block-building layer above, hero layer below',
           },
         ],
       },

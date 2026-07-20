@@ -64,8 +64,8 @@ describe('Causeway Duel', () => {
     expect(priv(game).duelBoss).not.toBeNull();
     expect(priv(game).duelBoss!.isBoss).toBe(true);
     expect(priv(game).blockMatrix.length).toBeGreaterThan(0);  // a placement piece is dealt
-    // the Tetris layer is suspended so no gravity drives the cursor
-    expect((game as unknown as { tetrisSuspended: boolean }).tetrisSuspended).toBe(true);
+    // the Blockbuilding layer is suspended so no gravity drives the cursor
+    expect((game as unknown as { blockBuildingSuspended: boolean }).blockBuildingSuspended).toBe(true);
   });
 
   it('a placement only takes when it connects to the player causeway; a disconnected one is rejected', () => {

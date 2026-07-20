@@ -101,7 +101,7 @@ export class AudioEngine {
     this.osc(560, 0.09, 'square', 0.1,  0.14);
   }
 
-  /** Bigger fanfare for a tetris (4-line clear); a plainer chime otherwise. */
+  /** Bigger fanfare for a 4-line clear; a plainer chime otherwise. */
   public playLineClear(count: number): void {
     if (count >= 4) {
       [300, 400, 600, 900].forEach((f, i) => this.osc(f, 0.14, 'square', 0.22, i * 0.07));
