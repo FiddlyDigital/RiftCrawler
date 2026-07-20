@@ -241,6 +241,8 @@ export class Game {
   private duelTurns = 0;
   /** One-time flag so the "bridge nears your shore" warning fires only once. */
   private duelNearShoreWarned = false;
+  /** Set when the duel is won but the delve-or-rest choice is waiting for another modal (e.g. a level-up boon pick) to close first. */
+  private duelDescentPending = false;
   private static readonly DUEL_PLAYER_COLOR = '#2f5c8a';
   private static readonly DUEL_BOSS_COLOR = '#5c2530';
   private static readonly DUEL_WALL_COLOR = '#3a3550';
@@ -2041,6 +2043,7 @@ export class Game {
   /** One timer-driven simulation tick: status effects, hazards, gravity, monster turns. Called on the game loop's interval; a no-op while paused or dead. */
   public autoTick(): void {
     if (this.player.hp <= 0 || this.paused) return;
+    this.settleDuel();  // end a won duel / open its descent choice the moment the boss is gone
     StatusEffectSystem.applyStatusEffects(this);
     StatusEffectSystem.applyRegen(this);
     StatusEffectSystem.applyAuraStun(this);
@@ -2068,6 +2071,7 @@ export class Game {
   /** The action-driven counterpart to {@link autoTick} — runs the same per-turn resolution, then notifies the host to reset its tick timer. */
   private advanceTurn(): void {
     if (this.player.hp <= 0) return;
+    this.settleDuel();  // end a won duel / open its descent choice the moment the boss is gone
     StatusEffectSystem.applyStatusEffects(this);
     StatusEffectSystem.applyRegen(this);
     StatusEffectSystem.applyAuraStun(this);
@@ -2139,6 +2143,9 @@ export class Game {
       this.paused = false;
       this.pushUI();
       this.cb.onAction?.();
+      // If this level-up was the boss-kill that won a duel, the delve-or-rest
+      // choice has been waiting on this modal — open it now, without a tick's delay.
+      this.tryFinishDuelDescent();
     });
   }
 
@@ -3926,36 +3933,56 @@ export class Game {
     if (this.inCausewayDuel && m === this.duelBoss) this.duelWin();
   }
 
-  /** Boss slain in the duel — the causeway is broken; stairs rise so the run can go on. */
+  /**
+   * Boss slain in the duel — the causeway is broken. Rather than dropping a
+   * stairs tile the hero must find and step onto (fragile: a ranged/magic kill
+   * from the shore left the "stairs" underfoot or off the built path), the duel
+   * ends outright and the usual delve-or-rest choice opens automatically. If a
+   * level-up boon pick is already on screen (a boss kill almost always levels
+   * you), the choice waits for it to close — see {@link settleDuel}.
+   */
   public duelWin(): void {
     if (this.duelResolved) return;
     this.duelResolved = true;
     this.duelBoss = null;
     this.blockMatrix = [];
-    // Raise the stairs on a tile *next to* the hero, never underfoot — standing
-    // on stairs spawned under you wouldn't re-trigger the descent. Prefer a tile
-    // the hero already owns; otherwise carve a fresh landing out of an adjacent
-    // cell (claiming it as player ground) so a kill from anywhere — even a ranged
-    // shot from the shore, with no causeway built up — still leaves reachable stairs.
-    const hx = this.player.x, hy = this.player.y;
-    const neighbors = [[0, 1], [0, -1], [-1, 0], [1, 0]]
-      .map(([dx, dy]) => ({ x: hx + dx!, y: hy + dy! }))
-      .filter(({ x, y }) => x >= 0 && x < GameConfig.COLS && y >= 0 && y < GameConfig.ROWS);
-    const spot = neighbors.find(({ x, y }) => this.duelOwner[x]![y] === 1)      // an owned tile beside you
-      ?? neighbors.find(({ x, y }) => this.duelOwner[x]![y] !== Game.DUEL_WALL)  // else any non-wall neighbour
-      ?? neighbors[0] ?? { x: hx, y: hy };
-    this.duelOwner[spot.x]![spot.y] = 1;  // ensure the landing is walkable player ground
-    this.map[spot.x]![spot.y] = Tile.STAIRS;
-    this.colors[spot.x]![spot.y] = '#6d3f7a';
     this.cb.log('The enemy causeway crumbles into the dark — the way on is open.', 'log-boss', 'item_trophy');
-    this.cb.onToast?.('The bridge is broken! Take the stairs on.', 'special_sacred');
-    // A victory flourish: a golden burst and pulse over the hero + the fallen edge.
+    this.cb.onToast?.('The bridge is broken! The way on opens…', 'special_sacred');
+    // A victory flourish over the hero.
     this.cb.onParticleBurst?.(this.player.x, this.player.y, 18, '#d9a441', 'item_trophy');
     this.cb.onRingPulse?.(this.player.x, this.player.y, '217,164,65');
     this.cb.onImpactGlow?.(this.player.x, this.player.y, '217,164,65', 24);
     this.cb.onAudio?.('bountyFulfilled');
     this.storyBeats.push('broke a Fomorian causeway in single combat');
+    this.duelDescentPending = true;
     this.pushUI();
+    this.tryFinishDuelDescent();
+  }
+
+  /**
+   * Opens the delve-or-rest choice for a won duel, but only once nothing else is
+   * modal (a boss kill usually pops a level-up boon pick first, which pauses).
+   * Retried every tick/turn by {@link settleDuel} until it can fire.
+   */
+  private tryFinishDuelDescent(): void {
+    if (!this.duelDescentPending || this.paused) return;
+    this.duelDescentPending = false;
+    this.inCausewayDuel = false;
+    this.openStairsChoice();
+  }
+
+  /**
+   * Per-tick safety net for the Causeway Duel: ends the duel the instant its
+   * boss is gone by ANY death path (melee, a ranged spell, poison, thorns) —
+   * not just the melee branch that used to own the win — and then opens the
+   * descent choice as soon as no other modal is in the way. Cheap and idempotent.
+   */
+  private settleDuel(): void {
+    if (this.inCausewayDuel && !this.duelResolved && this.duelBoss
+        && (this.duelBoss.hp <= 0 || !this.monsters.includes(this.duelBoss))) {
+      this.duelWin();
+    }
+    if (this.duelDescentPending) this.tryFinishDuelDescent();
   }
 
   /** The boss's causeway reached the home row — the bridge is complete and the run ends. */

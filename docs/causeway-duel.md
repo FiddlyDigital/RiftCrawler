@@ -33,8 +33,10 @@ Turn-based, no gravity, on the shared 10×25 grid:
    and leaves flanking columns open for you to climb.
 5. **Meet** — once your territory and the boss's touch, the path is open. Walk
    up and attack the boss with the normal combat system.
-6. **Resolve** — boss HP → 0: spawn stairs (descend / back to the mound).
-   Boss advance reaches your home row: you lose (the bridge lands).
+6. **Resolve** — boss HP → 0 (by *any* means — melee, a ranged spell, poison):
+   the duel ends outright and the delve-or-rest choice opens automatically, no
+   stairs tile to find. Boss advance reaches your home row: you lose (the bridge
+   lands).
 
 ## Reused vs. new
 

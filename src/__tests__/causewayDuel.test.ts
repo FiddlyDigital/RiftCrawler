@@ -96,7 +96,7 @@ describe('Causeway Duel', () => {
     expect(bossTiles).toBeGreaterThan(1);
   });
 
-  it('killing the duel boss ends the duel and raises victory stairs next to the hero', () => {
+  it('killing the duel boss (melee) ends the duel and auto-opens the descent choice', () => {
     game.startCausewayDuel();
     const boss = priv(game).duelBoss!;
     // Place the hero adjacent to the boss on an owned tile, then one-shot it.
@@ -108,13 +108,14 @@ describe('Causeway Duel', () => {
     let guard = 0;
     while (priv(game).duelBoss && guard++ < 50) game.handleHeroMove(0, -1);  // attack upward
     expect(priv(game).duelResolved).toBe(true);
-    // a stairs tile now exists on the board
-    let stairs = 0;
-    for (let x = 0; x < 10; x++) for (let y = 0; y < 25; y++) if (game.map[x]![y] === Tile.STAIRS) stairs++;
-    expect(stairs).toBeGreaterThan(0);
+    expect(priv(game).duelBoss).toBeNull();
+    // The descent choice fires once the level-up boon pick (from the kill) closes.
+    game.paused = false;
+    (game as unknown as { settleDuel: () => void }).settleDuel();
+    expect(game.inCausewayDuel).toBe(false);
   });
 
-  it('a non-melee kill (ranged/AoE) from the shore ends the duel AND leaves reachable stairs', () => {
+  it('a non-melee kill (ranged/AoE) from the shore also ends the duel and opens the descent choice', () => {
     game.startCausewayDuel();
     const boss = priv(game).duelBoss!;
     // The hero stands on the home tile with NO causeway built up — as if they
@@ -123,23 +124,16 @@ describe('Causeway Duel', () => {
     game.player.x = 5; game.player.y = 24;
     boss.hp = 0;
     CombatSystem.killMonster(boss, game);
+    // The duel resolves immediately — the boss can't keep building its causeway.
     expect(priv(game).duelResolved).toBe(true);
     expect(priv(game).duelBoss).toBeNull();
-
-    // The stairs must be on a tile the hero can step onto — never underfoot,
-    // which wouldn't re-trigger the descent (the exact "no stairs appeared" bug).
-    const heroStairs = game.map[game.player.x]![game.player.y] === Tile.STAIRS;
-    expect(heroStairs).toBe(false);
-    const adj = [[0, 1], [0, -1], [-1, 0], [1, 0]]
-      .map(([dx, dy]) => ({ x: game.player.x + dx!, y: game.player.y + dy! }))
-      .filter(({ x, y }) => x >= 0 && x < 10 && y >= 0 && y < 25);
-    const reachable = adj.find(({ x, y }) => game.map[x]![y] === Tile.STAIRS && game.isValidMove(x, y));
-    expect(reachable).toBeTruthy();
-
-    // Stepping onto them exits the duel. (The boss kill grants a level-up that
-    // pauses for its boon modal; the player dismisses it before stepping.)
+    const bossTiles = priv(game).duelOwner.flat().filter(o => o === 2).length;
+    priv(game).duelBossTurn();
+    expect(priv(game).duelOwner.flat().filter(o => o === 2).length).toBe(bossTiles);
+    // No stairs tile to hunt for; the delve-or-rest choice opens once the
+    // level-up boon pick closes — the duel ends outright.
     game.paused = false;
-    game.handleHeroMove(reachable!.x - game.player.x, reachable!.y - game.player.y);
+    (game as unknown as { settleDuel: () => void }).settleDuel();
     expect(game.inCausewayDuel).toBe(false);
   });
 
