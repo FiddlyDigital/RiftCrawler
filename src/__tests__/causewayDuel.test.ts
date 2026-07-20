@@ -114,22 +114,33 @@ describe('Causeway Duel', () => {
     expect(stairs).toBeGreaterThan(0);
   });
 
-  it('a non-melee kill (ranged/AoE, routed through killMonster) also ends the duel and raises stairs', () => {
+  it('a non-melee kill (ranged/AoE) from the shore ends the duel AND leaves reachable stairs', () => {
     game.startCausewayDuel();
     const boss = priv(game).duelBoss!;
-    // Simulate a Spear-of-Lugh / AoE finish: drop the boss and route it through
-    // the shared death path rather than a melee bump.
+    // The hero stands on the home tile with NO causeway built up — as if they
+    // shot the boss dead from the shore. Route the death through the shared
+    // killMonster path (as every ranged/AoE ability does).
+    game.player.x = 5; game.player.y = 24;
     boss.hp = 0;
     CombatSystem.killMonster(boss, game);
     expect(priv(game).duelResolved).toBe(true);
     expect(priv(game).duelBoss).toBeNull();
-    // stairs exist, and the boss can no longer advance its causeway
-    let stairs = 0;
-    for (let x = 0; x < 10; x++) for (let y = 0; y < 25; y++) if (game.map[x]![y] === Tile.STAIRS) stairs++;
-    expect(stairs).toBeGreaterThan(0);
-    const bossTilesBefore = priv(game).duelOwner.flat().filter(o => o === 2).length;
-    priv(game).duelBossTurn();  // must be a no-op now — the duel is resolved
-    expect(priv(game).duelOwner.flat().filter(o => o === 2).length).toBe(bossTilesBefore);
+
+    // The stairs must be on a tile the hero can step onto — never underfoot,
+    // which wouldn't re-trigger the descent (the exact "no stairs appeared" bug).
+    const heroStairs = game.map[game.player.x]![game.player.y] === Tile.STAIRS;
+    expect(heroStairs).toBe(false);
+    const adj = [[0, 1], [0, -1], [-1, 0], [1, 0]]
+      .map(([dx, dy]) => ({ x: game.player.x + dx!, y: game.player.y + dy! }))
+      .filter(({ x, y }) => x >= 0 && x < 10 && y >= 0 && y < 25);
+    const reachable = adj.find(({ x, y }) => game.map[x]![y] === Tile.STAIRS && game.isValidMove(x, y));
+    expect(reachable).toBeTruthy();
+
+    // Stepping onto them exits the duel. (The boss kill grants a level-up that
+    // pauses for its boon modal; the player dismisses it before stepping.)
+    game.paused = false;
+    game.handleHeroMove(reachable!.x - game.player.x, reachable!.y - game.player.y);
+    expect(game.inCausewayDuel).toBe(false);
   });
 
   it('the run is lost when the boss causeway reaches the shore (adjacent to the home tile)', () => {

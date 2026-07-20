@@ -3932,15 +3932,19 @@ export class Game {
     this.duelResolved = true;
     this.duelBoss = null;
     this.blockMatrix = [];
-    // Raise the stairs on a causeway tile next to the hero (preferring the one
-    // just below, the way they climbed) so they step onto it deliberately —
-    // standing on stairs spawned underfoot wouldn't re-trigger the descent.
+    // Raise the stairs on a tile *next to* the hero, never underfoot — standing
+    // on stairs spawned under you wouldn't re-trigger the descent. Prefer a tile
+    // the hero already owns; otherwise carve a fresh landing out of an adjacent
+    // cell (claiming it as player ground) so a kill from anywhere — even a ranged
+    // shot from the shore, with no causeway built up — still leaves reachable stairs.
     const hx = this.player.x, hy = this.player.y;
-    const spot = [[0, 1], [0, -1], [-1, 0], [1, 0], [0, 0]]
+    const neighbors = [[0, 1], [0, -1], [-1, 0], [1, 0]]
       .map(([dx, dy]) => ({ x: hx + dx!, y: hy + dy! }))
-      .find(({ x, y }) => x >= 0 && x < GameConfig.COLS && y >= 0 && y < GameConfig.ROWS
-        && (this.duelOwner[x]![y] === 1 || (x === hx && y === hy)))
-      ?? { x: hx, y: hy };
+      .filter(({ x, y }) => x >= 0 && x < GameConfig.COLS && y >= 0 && y < GameConfig.ROWS);
+    const spot = neighbors.find(({ x, y }) => this.duelOwner[x]![y] === 1)      // an owned tile beside you
+      ?? neighbors.find(({ x, y }) => this.duelOwner[x]![y] !== Game.DUEL_WALL)  // else any non-wall neighbour
+      ?? neighbors[0] ?? { x: hx, y: hy };
+    this.duelOwner[spot.x]![spot.y] = 1;  // ensure the landing is walkable player ground
     this.map[spot.x]![spot.y] = Tile.STAIRS;
     this.colors[spot.x]![spot.y] = '#6d3f7a';
     this.cb.log('The enemy causeway crumbles into the dark — the way on is open.', 'log-boss', 'item_trophy');
