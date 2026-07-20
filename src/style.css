@@ -331,7 +331,7 @@ canvas {
 .log-neutral { color: #8a9ba8; }
 .log-damage  { color: #e26d5a; }
 .log-success { color: #6fbf73; }
-.log-tetris  { color: #b98fc4; font-weight: bold; }
+.log-blockbuilding  { color: #b98fc4; font-weight: bold; }
 .log-boss    { color: #e04848; font-weight: bold; }
 .log-combo   { color: #d98e2b; font-weight: bold; }
 .log-perk    { color: #8d6fd4; font-weight: bold; }

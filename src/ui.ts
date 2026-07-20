@@ -187,7 +187,7 @@ export class UIManager {
     heldBox.style.opacity = state.canHold ? '1' : '0.35';
 
     // Floor-milestone dial — one segment per pending threshold, so the player
-    // can see exactly what more Tetris buys on this floor.
+    // can see exactly what more Blockbuilding buys on this floor.
     const fp = state.floorProgress;
     const fpSegments: string[] = [];
     const fpSidebar: string[] = [];

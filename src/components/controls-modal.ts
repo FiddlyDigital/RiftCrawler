@@ -35,7 +35,7 @@ export class ControlsModal extends BaseModal {
         const head = document.createElement('div');
         head.style.cssText = 'font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin:6px 0 2px 0;';
         head.style.color = group === 'hero' ? 'var(--hero-accent, #7fd488)' : 'var(--block-accent, #64b5f6)';
-        head.textContent = group === 'hero' ? 'Hero (Rogue)' : 'Block (Tetris)';
+        head.textContent = group === 'hero' ? 'Hero (Rogue)' : 'Block (Shapes)';
         container.appendChild(head);
       }
       const row = document.createElement('button');

@@ -39,7 +39,7 @@
     "id": "architect",
     "emoji": "class_architect",
     "name": "The Architect",
-    "tagline": "Master the Tetris layer. Every clear is your weapon.",
+    "tagline": "Master the Block-building layer. Every clear is your weapon.",
     "statChips": ["+15 Max HP", "−2 ATK", "×2 line-clear XP", "D8 combat dice", "Q: Consecrate — bless all floor in sight"],
     "tPieceCdReduction": 4,
     "effects": [

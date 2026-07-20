@@ -1,5 +1,5 @@
 /**
- * Fixed board geometry for the Tetris/dungeon grid.
+ * Fixed board geometry for the block-building/dungeon grid.
  *
  * These are physical layout constants (column/row count, pixel tile size),
  * not gameplay tuning — gameplay numbers live in {@link Balance} and the

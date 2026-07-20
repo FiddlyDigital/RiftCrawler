@@ -213,8 +213,8 @@ export class Game {
     return this.activeClassId === 'draoi' && this.activePatronId === null && this.dungeonLevel >= 2;
   }
 
-  /** Whether the Tetris layer is currently frozen (the Gorgoth duel, a waystation rest floor, or a Causeway Duel — which runs its own placement layer). */
-  private get tetrisSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel; }
+  /** Whether the BlockBuilding layer is currently frozen (the Gorgoth duel, a waystation rest floor, or a Causeway Duel — which runs its own placement layer). */
+  private get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel; }
 
   // ── Causeway Duel (boss-floor play state) ────────────────────────────────
   // A no-gravity, turn-based duel on the shared grid: the player grows a
@@ -281,7 +281,7 @@ export class Game {
   public spearPartsHeld = new Set<'shaft' | 'bolts' | 'head'>();
   /** Whether Goibniu has reforged the complete Spear of Lugh this run. */
   public spearForged = false;
-  /** Set by the run's first real Tetris (4-line clear): An Dagda takes notice and waits in the mound with a gift. */
+  /** Set by the run's first real 4-line clear: An Dagda takes notice and waits in the mound with a gift. */
   public dagdaGiftEarned = false;
   /** Set once his tier-3 Geis has been accepted — he departs for the rest of the run. */
   public dagdaGiftClaimed = false;
@@ -374,7 +374,7 @@ export class Game {
     // heads-up here, mirroring updateBiome()'s biome-change treatment.
     const startBiome = Biome.forFloor(this.dungeonLevel);
     const startIcon = Game.BIOME_ICON[startBiome.id] ?? 'tile_stone_a';
-    this.cb.log(`${startBiome.name} — ${startBiome.desc}`, 'log-tetris', startIcon);
+    this.cb.log(`${startBiome.name} — ${startBiome.desc}`, 'log-blockbuilding', startIcon);
     this.cb.onToast?.(`Entering ${startBiome.name}...`, startIcon);
     this.cb.onCodexDiscover?.('biome', this.biomeId);
     // The Sídhe keep what past characters left with them — minus their tithe.
@@ -428,7 +428,7 @@ export class Game {
   private updateVisibility(): void {
     // During the Gorgoth duel (and inside a waystation) the whole arena stays
     // lit — revealed on entry, so don't re-fog to the vision radius.
-    if (this.tetrisSuspended) return;
+    if (this.blockBuildingSuspended) return;
     const onSmoke = this.hazards.some(h => h.type === 'smoke' && h.x === this.player.x && h.y === this.player.y);
     const fogPenalty = this.activeOmen?.num('visionPenalty', 0) ?? 0;
     const r = onSmoke ? 1 : Math.max(1, this.player.visionRadius - fogPenalty);
@@ -785,7 +785,7 @@ export class Game {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#2a1a10';
           this.brazierTiles.push({ x: tx, y: ty, lit: false });
-          this.cb.log('A cold need-fire settles into the stone. Walk to it to light it.', 'log-tetris', 'tile_brazier');
+          this.cb.log('A cold need-fire settles into the stone. Walk to it to light it.', 'log-blockbuilding', 'tile_brazier');
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -826,7 +826,7 @@ export class Game {
             this.specialTiles.push({ x: fc.x, y: fc.y, type: tileType });
           }
         }
-        this.cb.log(msgs[tileType], 'log-tetris', icons[tileType]);
+        this.cb.log(msgs[tileType], 'log-blockbuilding', icons[tileType]);
       } else if (this.currentType === 'Z') {
         for (const fc of lockedFloorCells) {
           if (!this.hazards.some(h => h.x === fc.x && h.y === fc.y) &&
@@ -834,7 +834,7 @@ export class Game {
             this.hazards.push({ x: fc.x, y: fc.y, type: 'spike', timer: Balance.HAZARD.spike.fieldFixedTimer, warning: false });
           }
         }
-        this.cb.log('Spike Field — fires every 5 ticks!', 'log-tetris', 'trap_spike');
+        this.cb.log('Spike Field — fires every 5 ticks!', 'log-blockbuilding', 'trap_spike');
       } else if (this.currentType === 'T' && this.player.rangedCooldown > 0) {
         const cdReduce = CLASSES.find(c => c.id === this.activeClassId)?.tPieceCdReduction ?? 2;
         this.player.rangedCooldown = Math.max(0, this.player.rangedCooldown - cdReduce);
@@ -913,7 +913,7 @@ export class Game {
   // One-time teaching nudge: when the stack climbs near the ceiling, tell the
   // player that topping out summons Gorgoth — the win condition.
   private maybeHintGorgoth(): void {
-    if (this.gorgothHintShown || this.tetrisSuspended) return;
+    if (this.gorgothHintShown || this.blockBuildingSuspended) return;
     if (this.stackTopRow() <= 5) {
       this.gorgothHintShown = true;
       this.cb.log('The stack climbs high — let it top out to summon BRES THE BEAUTIFUL and win the Rift!', 'log-boss', 'ui_warning');
@@ -1267,7 +1267,7 @@ export class Game {
    * Steps aside into the waystation: a safe sídhe-mound rest stop offered at
    * every staircase (see {@link openStairsChoice}). The mound sits *between*
    * floors — the level counter doesn't advance until its exit stairs are
-   * taken. The Tetris layer is suspended (see {@link tetrisSuspended}) and
+   * taken. The Blockbuilding layer is suspended (see {@link blockBuildingSuspended}) and
    * the mound offers a seanchaí (lore), a hearth-fire (full heal), the Fear
    * Dearg's stall (shop), and the stairs on.
    */
@@ -1330,7 +1330,7 @@ export class Game {
     this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
     this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
-    // while the Tetris layer is suspended, so set the full reveal directly).
+    // while the Blockbuilding layer is suspended, so set the full reveal directly).
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) {
         this.visibility[x]![y] = true;
@@ -1479,7 +1479,7 @@ export class Game {
       );
       if (eligible.length > 0) this.activeGhost = eligible[Math.floor(Math.random() * eligible.length)]!;
     }
-    this.cb.log(omen.logText, 'log-tetris', omen.icon);
+    this.cb.log(omen.logText, 'log-blockbuilding', omen.icon);
     this.cb.onToast?.(omen.toastText, omen.icon);
     // Gravity-affecting omens need the host's tick timer re-armed right away.
     if (this.omenGravityPct !== 0) this.cb.onAction();
@@ -1869,15 +1869,15 @@ export class Game {
         if (lineHeal > 0) {
           this.cb.onParticle(this.player.x, this.player.y, `+${lineHeal} HP`, '#69f0ae');
           this.cb.onParticleBurst?.(this.player.x, this.player.y, 4, '#7fd488');
-          if (this.comboCount === 0) this.cb.log(`Row cleared! +${lineHeal} HP.`, 'log-tetris');
+          if (this.comboCount === 0) this.cb.log(`Row cleared! +${lineHeal} HP.`, 'log-blockbuilding');
         } else if (this.comboCount === 0) {
-          this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold.`, 'log-tetris');
+          this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold.`, 'log-blockbuilding');
         }
       } else if (this.comboCount === 0) {
-        this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold. (Cursed — no heal)`, 'log-tetris');
+        this.cb.log(`Dungeon Row Cleared! +${goldAdded} Gold. (Cursed — no heal)`, 'log-blockbuilding');
       }
 
-      // A real Tetris (all 4 lines at once) is rare enough to be noticed by
+      // A real 4-line clear is rare enough to be noticed by
       // the Good God himself — once per run, An Dagda takes a seat in the
       // sídhe mound with a tier-3 Geis from his cauldron. No modal here; the
       // gift is claimed in person at the next mound visit.
@@ -1913,7 +1913,7 @@ export class Game {
     this.floorsDescended++;
     const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
     this.updateBiome();
-    this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-tetris');
+    this.cb.log(`Collapsed down to depth floor ${this.dungeonLevel}!`, 'log-blockbuilding');
     this.resetDungeonState();
     this.inWaystation = false;  // defense-in-depth: a collapse can't start inside the mound, but never carry the suspension out
     // A boss floor reached by a stack collapse also opens as a Causeway Duel.
@@ -1935,7 +1935,7 @@ export class Game {
     const biome = Biome.forFloor(this.dungeonLevel);
     if (biome.id !== this.biomeId) {
       const icon = Game.BIOME_ICON[biome.id] ?? 'tile_stone_a';
-      this.cb.log(`${biome.name} — ${biome.desc}`, 'log-tetris', icon);
+      this.cb.log(`${biome.name} — ${biome.desc}`, 'log-blockbuilding', icon);
       this.cb.onToast?.(`Entering ${biome.name}...`, icon);
       this.storyBeats.push(`delved into ${biome.name}`);
       this.cb.onCodexDiscover?.('biome', biome.id);
@@ -2046,7 +2046,7 @@ export class Game {
     StatusEffectSystem.applyAuraStun(this);
     HazardSystem.processHazards(this);
     this.processSpecialTiles();
-    if (!this.tetrisSuspended) this.moveGravity();  // no falling blocks during the Gorgoth duel or a waystation
+    if (!this.blockBuildingSuspended) this.moveGravity();  // no falling blocks during the Gorgoth duel or a waystation
     MonsterAiSystem.processMonsterTurns(this);
     this.checkCloseCall();
     this.tickRangedCooldown();
@@ -2073,7 +2073,7 @@ export class Game {
     StatusEffectSystem.applyAuraStun(this);
     HazardSystem.processHazards(this);
     this.processSpecialTiles();
-    if (!this.tetrisSuspended) this.moveGravity();  // no falling stone in the Gorgoth duel, a waystation, or a Causeway Duel
+    if (!this.blockBuildingSuspended) this.moveGravity();  // no falling stone in the Gorgoth duel, a waystation, or a Causeway Duel
     MonsterAiSystem.processMonsterTurns(this);
     this.checkCloseCall();
     this.tickRangedCooldown();
@@ -3219,7 +3219,7 @@ export class Game {
   }
 
   // Spear of Lugh (Lugh's Spear questline, reforged by Goibniu): pierces
-  // straight up the hero's own Tetris column, skewering every monster
+  // straight up the hero's own vertical column, skewering every monster
   // standing on a built tile above them — a direct answer to a lane packed
   // with enemies, rather than another flat-damage nuke.
   private activateSpearBolt(ability: import('./types').RangedAbility): void {
@@ -3273,7 +3273,7 @@ export class Game {
 
   /** Holds the current piece for later (swapping with any already-held piece), once per lock. */
   public handleBlockHold(): void {
-    if (this.player.hp <= 0 || this.paused || this.tetrisSuspended) return;
+    if (this.player.hp <= 0 || this.paused || this.blockBuildingSuspended) return;
     if (!this.canHold) {
       this.cb.log('Already held this piece — lock it first.', 'log-neutral');
       return;
@@ -3419,7 +3419,7 @@ export class Game {
   public handleBlockLeft(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (this.inCausewayDuel) { this.duelSteerPiece(-1); return; }
-    if (this.tetrisSuspended) return;
+    if (this.blockBuildingSuspended) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
@@ -3427,7 +3427,7 @@ export class Game {
   public handleBlockRight(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (this.inCausewayDuel) { this.duelSteerPiece(1); return; }
-    if (this.tetrisSuspended) return;
+    if (this.blockBuildingSuspended) return;
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
 
@@ -3441,7 +3441,7 @@ export class Game {
   public handleBlockRotate(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (this.inCausewayDuel) { this.duelRotatePiece(); return; }
-    if (this.tetrisSuspended) return;
+    if (this.blockBuildingSuspended) return;
     const rotated = GameMath.rotateMatrix(this.blockMatrix);
     if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); }
   }
@@ -3450,7 +3450,7 @@ export class Game {
   public handleBlockSoftDrop(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (this.inCausewayDuel) { this.duelPlacePiece(); return; }  // soft-drop doubles as "place" in a duel
-    if (this.tetrisSuspended) return;
+    if (this.blockBuildingSuspended) return;
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) { this.blockY++; this.advanceTurn(); }
     else { this.lockBlock(); this.advanceTurn(); }
   }
@@ -3459,7 +3459,7 @@ export class Game {
   public handleBlockDrop(): void {
     if (this.player.hp <= 0 || this.paused) return;
     if (this.inCausewayDuel) { this.duelPlacePiece(); return; }
-    if (this.tetrisSuspended) return;
+    if (this.blockBuildingSuspended) return;
     const startY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
     // Afterimage streaks along the travel path — one per occupied column,

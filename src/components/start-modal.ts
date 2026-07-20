@@ -5,7 +5,7 @@ export class StartModal extends BaseModal {
   protected template(): string {
     return `<div class="modal-card" style="max-width:340px;">
       <div class="modal-title" id="start-title" style="color:var(--accent-color);font-size:26px;letter-spacing:3px;">CAUSEWAY TO ÉRIU</div>
-      <p style="color:#666;font-size:10px;letter-spacing:1px;margin:2px 0 14px 0;">TETRIS MEETS DUNGEON — BUILD THE FLOOR, SURVIVE IT</p>
+      <p style="color:#666;font-size:10px;letter-spacing:1px;margin:2px 0 14px 0;">BLOCK-BUILDING MEETS DUNGEON ROGUELIKE — DEFEAT THE FORMORIAN THREAT</p>
 
       <!-- How to play -->
       <div style="text-align:left;background:#0c0c12;border-radius:4px;padding:10px 12px;margin-bottom:10px;font-size:11px;line-height:1.8;">
@@ -20,7 +20,7 @@ export class StartModal extends BaseModal {
       <div class="touch-only" style="background:#0c0c12;border-radius:4px;padding:10px 12px;margin-bottom:14px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;">
           <div>
-            <div style="color:var(--block-accent);font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Block (Tetris)</div>
+            <div style="color:var(--block-accent);font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Block (Shapes)</div>
             <div style="color:#aaa;line-height:2;">
               <span style="color:#555;">Swipe ◀▶</span> Move<br>
               <span style="color:#555;">Swipe ▲</span> Rotate<br>
@@ -42,7 +42,7 @@ export class StartModal extends BaseModal {
       <div class="kbd-only" style="background:#0c0c12;border-radius:4px;padding:10px 12px;margin-bottom:14px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;">
           <div>
-            <div style="color:var(--block-accent);font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Block (Tetris)</div>
+            <div style="color:var(--block-accent);font-size:8px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Block (Shapes)</div>
             <div style="color:#aaa;line-height:2;">
               <span style="color:#555;">I</span> Rotate &nbsp;
               <span style="color:#555;">J / L</span> Move<br>

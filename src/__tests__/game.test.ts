@@ -58,7 +58,7 @@ describe('scoreForLines', () => {
   it('returns 100 for 1 line on floor 1', () => expect(GameMath.scoreForLines(1, 1)).toBe(100));
   it('scales with dungeon level', () => expect(GameMath.scoreForLines(1, 3)).toBe(300));
   it('returns 300 for 2 lines', () => expect(GameMath.scoreForLines(2, 1)).toBe(300));
-  it('returns 1000 for 4 lines (tetris)', () => expect(GameMath.scoreForLines(4, 1)).toBe(1000));
+  it('returns 1000 for 4 lines', () => expect(GameMath.scoreForLines(4, 1)).toBe(1000));
   it('caps at 1200 base for 5+ lines', () => expect(GameMath.scoreForLines(5, 1)).toBe(1200));
 });
 
@@ -1791,7 +1791,7 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(game.inWaystation).toBe(false);
   });
 
-  it('the Tetris layer is suspended in a waystation: no gravity, no block input', () => {
+  it('the Blockbuilding layer is suspended in a waystation: no gravity, no block input', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
@@ -1825,7 +1825,7 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(game.npcTiles.some(n => n.npcId === '__campfire__')).toBe(false);
   });
 
-  it('the mound exit stairs descend directly (no second choice dialog) and restart the Tetris layer', () => {
+  it('the mound exit stairs descend directly (no second choice dialog) and restart the Blockbuilding layer', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
@@ -2358,7 +2358,7 @@ describe("An Dagda's gift (4-line clear)", () => {
     (game as unknown as { checkLineClears(): void }).checkLineClears();
   }
 
-  it('a real Tetris earns the gift once per run — no dialog fires on the clear itself', () => {
+  it('a real 4-line clear earns the gift once per run — no dialog fires on the clear itself', () => {
     const onFloorEvent = vi.fn();
     const onOpenShop = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent, onOpenShop };
@@ -2402,7 +2402,7 @@ describe("An Dagda's gift (4-line clear)", () => {
     const gifted = game.player.boons[game.player.boons.length - 1]!;
     expect(Boon.BY_TIER[3].some(b => b.id === gifted.id)).toBe(true);
     expect(game.dagdaGiftClaimed).toBe(true);
-    // Claimed — the next mound visit has no Dagda, and a second Tetris does not re-earn.
+    // Claimed — the next mound visit has no Dagda, and a second 4-liner does not re-earn.
     (game as unknown as { enterWaystation(): void }).enterWaystation();
     expect(game.npcTiles.some(n => n.npcId === '__dagda__')).toBe(false);
     clearFourLines(game);
