@@ -459,6 +459,17 @@ export interface UIState {
     /** Switch-islands left to flip before the center wall opens (0 = open / none). */
     switchesLeft: number;
   } | null;
+  /** Live Fidchell status for the HUD panel — null when not in a match. */
+  fidchell: {
+    /** Which side the player commands this match. */
+    playerSide: 'king' | 'raider';
+    /** Whether it's the player's move (vs. the AI thinking). */
+    yourTurn: boolean;
+    /** Defenders still on the board. */
+    defenders: number;
+    /** Raiders still on the board. */
+    raiders: number;
+  } | null;
   rangedAbility: { name: string; emoji: string; cooldown: number; cooldownMax: number; ammo: number | null; hpCostPct: number | null; spellIndex: number; spellCount: number } | null;
   characterSheet: CharacterSheetSection[];
   /** Per-floor threshold progress for the HUD dial — targets are null when the corresponding milestone isn't pending this floor. */

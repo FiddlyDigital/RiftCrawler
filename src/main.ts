@@ -231,6 +231,8 @@ class GameApp {
     InputBinder.bindGamepad(() => this.game);
 
     InputBinder.bindCanvasInspect(this.canvas, () => this.game, (gx, gy, clientX, clientY) => {
+      // During a Fidchell match the canvas is the board: taps select/move pieces.
+      if (this.game.inFidchell) { this.game.handleFidchellTap(gx, gy); return; }
       if (this.lastInspectTile && this.lastInspectTile.x === gx && this.lastInspectTile.y === gy && this.ui.isInspectTooltipVisible()) {
         this.ui.hideInspectTooltip();
         this.lastInspectTile = null;

@@ -106,6 +106,11 @@ export class UIManager {
       duelBridgeBar:    document.getElementById('duel-bridge-bar')!,
       duelBridgeLabel:  document.getElementById('duel-bridge-label')!,
       duelSwitchLine:   document.getElementById('duel-switch-line')!,
+      fidchellCard:     document.getElementById('fidchell-card')!,
+      fidchellSide:     document.getElementById('fidchell-side')!,
+      fidchellGoal:     document.getElementById('fidchell-goal')!,
+      fidchellTurn:     document.getElementById('fidchell-turn')!,
+      fidchellCount:    document.getElementById('fidchell-count')!,
       heatBadge:        document.getElementById('heat-badge')!,
       biomeName:        document.getElementById('biome-badge')!,
       rangedAbility:    document.getElementById('ranged-ability-badge')!,
@@ -270,6 +275,22 @@ export class UIManager {
     } else {
       this.els['duelCard']!.style.display = 'none';
     }
+
+    // Fidchell HUD panel
+    if (state.fidchell) {
+      const f = state.fidchell;
+      this.els['fidchellCard']!.style.display = '';
+      this.els['fidchellSide']!.textContent = f.playerSide === 'king' ? 'You: the High King' : 'You: the Fomorian Raiders';
+      this.els['fidchellGoal']!.textContent = f.playerSide === 'king'
+        ? 'Slip the King to any corner dún.'
+        : 'Surround the King on all sides.';
+      this.els['fidchellTurn']!.textContent = f.yourTurn ? 'Your move' : 'Opponent thinking…';
+      this.els['fidchellTurn']!.style.color = f.yourTurn ? '#69c98a' : '#c9a24a';
+      this.els['fidchellCount']!.textContent = `Defenders ${f.defenders} · Raiders ${f.raiders}`;
+    } else {
+      this.els['fidchellCard']!.style.display = 'none';
+    }
+
     if (state.activeModifier) {
       this.els['activeModifier']!.style.display = '';
       this.els['activeModifier']!.innerHTML = `${SpriteService.iconHTML(state.activeModifier.emoji, 12)}${HtmlUtils.escapeHtml(state.activeModifier.name)}`;
