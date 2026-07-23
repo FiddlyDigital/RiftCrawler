@@ -214,7 +214,7 @@ export class Game {
   }
 
   /** Whether the BlockBuilding layer is currently frozen (the Gorgoth duel, a waystation rest floor, or a Causeway Duel — which runs its own placement layer). */
-  private get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel; }
+  private get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel || this.inFidchell; }
 
   // ── Causeway Duel (boss-floor play state) ────────────────────────────────
   // A no-gravity, turn-based duel on the shared grid: the player grows a
@@ -248,6 +248,35 @@ export class Game {
   private static readonly DUEL_WALL_COLOR = '#3a3550';
   private static readonly DUEL_SWITCH_COLOR = '#2a4a44';
   private static readonly DUEL_BOON_COLOR = '#3a2e10';
+
+  // ── Fidchell ("the wooden wisdom") — a brandub/tafl board challenge ────────
+  // Every 7th floor a Fomorian gambler bars the crossing and sets the board.
+  // You're dealt one side at random (King's escape or the Raiders' hunt); win to
+  // take a shortcut past the floor with a prize, lose to fight through it.
+  // See docs/fidchell.md. Runs as its own suspended play-state on a centred 7×7.
+  /** Whether a Fidchell match is currently in progress. */
+  public inFidchell = false;
+  /** Board cells (7×7, local coords): 0 empty, 1 King, 2 Defender, 3 Raider. */
+  private fidBoard: number[][] = [];
+  /** Which side the player controls this match ('king' = King + defenders escaping; 'raider' = the hunt). */
+  private fidPlayerSide: 'king' | 'raider' = 'king';
+  /** Whose turn it is ('king' side moves the King + defenders; raiders move first, tafl-style). */
+  private fidTurn: 'king' | 'raider' = 'raider';
+  /** The tapped piece awaiting a destination, in local board coords. */
+  private fidSelected: { x: number; y: number } | null = null;
+  /** Legal destinations for the selected piece (local coords). */
+  private fidLegal: Array<{ x: number; y: number }> = [];
+  /** Top-left of the 7×7 board in grid coords (centred on the play area). */
+  private fidOrigin = { x: 0, y: 0 };
+  /** Set once the match is decided so no further moves land. */
+  private fidResolved = false;
+  /** Total plies played (for the stalemate/repeat safety cap). */
+  private fidPlies = 0;
+  private static readonly FID_N = 7;                 // board is 7×7 (brandub)
+  private static readonly FID_EMPTY = 0;
+  private static readonly FID_KING = 1;
+  private static readonly FID_DEFENDER = 2;
+  private static readonly FID_RAIDER = 3;
 
   // Bealtaine Fires ritual state (the 'bealtaine' special omen)
   /** Braziers standing on the floor this level — walk into an unlit one to light it. */
@@ -1920,6 +1949,7 @@ export class Game {
     this.inWaystation = false;  // defense-in-depth: a collapse can't start inside the mound, but never carry the suspension out
     // A boss floor reached by a stack collapse also opens as a Causeway Duel.
     if (isBossFloor && this.duelBossFloorsEnabled()) { this.startCausewayDuel(); return; }
+    if (this.fidchellFloor(this.dungeonLevel, isBossFloor)) { this.startFidchell(); return; }
     if (isBossFloor) this.announceBossFloor();
     // Omen first, smith second — if both toast, the more actionable smith
     // hint wins the banner while both keep their log lines.
@@ -2410,6 +2440,7 @@ export class Game {
     if (typeof dx !== 'number' || !Number.isFinite(dx)) throw new TypeError('Game.handleHeroMove: "dx" must be a finite number');
     if (typeof dy !== 'number' || !Number.isFinite(dy)) throw new TypeError('Game.handleHeroMove: "dy" must be a finite number');
     if (this.player.hp <= 0 || this.paused) return;
+    if (this.inFidchell) return;  // during fidchell you command the board by tapping, not by moving a hero
     if (this.player.isStunned) {
       this.cb.log('You are stunned!', 'log-damage');
       this.player.statuses = this.player.statuses.map(s => s.type === 'stun' ? { ...s, duration: s.duration - 1 } : s).filter(s => s.duration > 0);
@@ -2833,6 +2864,11 @@ export class Game {
     return true;
   }
 
+  /** Whether entering `floor` opens a Fidchell challenge: every 7th non-boss floor (boss floors keep their Causeway Duel). */
+  private fidchellFloor(floor: number, isBossFloor: boolean): boolean {
+    return !isBossFloor && floor > 0 && floor % 7 === 0;
+  }
+
   /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (omen, smith, pending-event roll). */
   private descendFloor(): void {
     this.inWaystation = false;
@@ -2846,6 +2882,13 @@ export class Game {
       this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
       this.resetDungeonState();
       this.startCausewayDuel();
+      return;
+    }
+    // Every 7th (non-boss) floor a Fomorian gambler bars the crossing with fidchell.
+    if (this.fidchellFloor(this.dungeonLevel, bossFloor)) {
+      this.cb.log(`Stepped down to floor ${this.dungeonLevel}!`, 'log-success');
+      this.resetDungeonState();
+      this.startFidchell();
       return;
     }
     if (bossFloor) this.announceBossFloor();
@@ -3998,6 +4041,288 @@ export class Game {
     this.cb.onDeath('THE BRIDGE LANDS', 'the Fomorian causeway reached the shore', this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('death'));
   }
 
+  // ── Fidchell ("the wooden wisdom") implementation ─────────────────────────
+
+  private static readonly FID_DIRS: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  /** Local (lx,ly) → grid coords. */
+  private fidToGrid(lx: number, ly: number): { x: number; y: number } { return { x: lx + this.fidOrigin.x, y: ly + this.fidOrigin.y }; }
+  private fidInBounds(lx: number, ly: number): boolean { return lx >= 0 && lx < Game.FID_N && ly >= 0 && ly < Game.FID_N; }
+  /** A board corner — the escape dún (King-only). */
+  private fidIsCorner(lx: number, ly: number): boolean { const n = Game.FID_N - 1; return (lx === 0 || lx === n) && (ly === 0 || ly === n); }
+  /** The central throne (King-only). */
+  private fidIsThrone(lx: number, ly: number): boolean { const c = (Game.FID_N - 1) / 2; return lx === c && ly === c; }
+  /** The side a piece code belongs to. */
+  private fidSideOf(piece: number): 'king' | 'raider' | null {
+    if (piece === Game.FID_KING || piece === Game.FID_DEFENDER) return 'king';
+    if (piece === Game.FID_RAIDER) return 'raider';
+    return null;
+  }
+
+  /** Read-only board view for the renderer. */
+  public get fidchellBoard(): ReadonlyArray<ReadonlyArray<number>> { return this.fidBoard; }
+  public get fidchellOrigin(): { x: number; y: number } { return this.fidOrigin; }
+  public get fidchellSelected(): { x: number; y: number } | null { return this.fidSelected; }
+  public get fidchellLegal(): ReadonlyArray<{ x: number; y: number }> { return this.fidLegal; }
+  public get fidchellPlayerSide(): 'king' | 'raider' { return this.fidPlayerSide; }
+
+  /**
+   * Starts a Fidchell match on entering a 7th floor. The player is dealt a side
+   * at random: the King's escape or the Raiders' hunt. Brandub opening on a
+   * centred 7×7 — King on the throne, four defenders in the cross, eight raiders
+   * on the arms. Raiders move first (tafl tradition).
+   */
+  public startFidchell(): void {
+    this.inFidchell = true;
+    this.fidResolved = false;
+    this.fidPlies = 0;
+    this.fidSelected = null;
+    this.fidLegal = [];
+    this.fidPlayerSide = Math.random() < 0.5 ? 'king' : 'raider';
+    this.fidTurn = 'raider';
+    this.map = this.emptyMap();
+    this.colors = this.emptyColors();
+    this.monsters = [];
+    this.hazards = [];
+    this.specialTiles = [];
+    this.npcTiles = [];
+    this.altarTiles = [];
+    this.tattooTiles = [];
+    this.blockMatrix = [];
+    const n = Game.FID_N;
+    this.fidOrigin = { x: Math.floor((GameConfig.COLS - n) / 2), y: Math.floor((GameConfig.ROWS - n) / 2) };
+    this.fidBoard = Array.from({ length: n }, () => Array<number>(n).fill(Game.FID_EMPTY));
+    const c = (n - 1) / 2;
+    this.fidBoard[c]![c] = Game.FID_KING;
+    for (const [dx, dy] of Game.FID_DIRS) this.fidBoard[c + dx]![c + dy] = Game.FID_DEFENDER;
+    for (const [dx, dy] of Game.FID_DIRS) {
+      this.fidBoard[c + dx * 2]![c + dy * 2] = Game.FID_RAIDER;
+      this.fidBoard[c + dx * 3]![c + dy * 3] = Game.FID_RAIDER;
+    }
+    // No fog — the whole board is in view. The hero isn't a piece; you command
+    // from outside, so it's parked off-board and hidden by the renderer.
+    for (let x = 0; x < GameConfig.COLS; x++) for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
+    const asKing = this.fidPlayerSide === 'king';
+    this.cb.log(`Fidchell! A Fomorian gambler bars the crossing and sets the wooden wisdom. ${asKing ? 'You hold the High King — slip him to a corner dún to win free.' : 'You command the Fomorian raiders — surround the High King before he escapes.'}`, 'log-boss', 'ui_warning');
+    this.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'ui_warning');
+    this.cb.onAudio?.('bossWarn');
+    if (this.fidTurn !== this.fidPlayerSide) this.fidAiMove();
+    this.pushUI();
+  }
+
+  /** Legal rook-slide destinations for the piece at local (lx,ly) on the given board. */
+  private fidLegalMovesOn(board: number[][], lx: number, ly: number): Array<{ x: number; y: number }> {
+    const piece = board[lx]?.[ly] ?? Game.FID_EMPTY;
+    if (piece === Game.FID_EMPTY) return [];
+    const isKing = piece === Game.FID_KING;
+    // Every piece slides like a rook. The King is "weak" (capturable by ordinary
+    // custodial flanking), which balances its speed against the raiders' numbers.
+    const maxRange = Game.FID_N;
+    const out: Array<{ x: number; y: number }> = [];
+    for (const [dx, dy] of Game.FID_DIRS) {
+      let nx = lx + dx, ny = ly + dy, steps = 0;
+      while (steps < maxRange && this.fidInBounds(nx, ny) && board[nx]![ny] === Game.FID_EMPTY) {
+        const corner = this.fidIsCorner(nx, ny), throne = this.fidIsThrone(nx, ny);
+        if (corner && !isKing) break;                            // corners bar all but the King
+        if (throne && !isKing) { nx += dx; ny += dy; steps++; continue; } // pass over the empty throne, never stop
+        out.push({ x: nx, y: ny });
+        nx += dx; ny += dy; steps++;
+      }
+    }
+    return out;
+  }
+
+  /** Every legal move for a side on the given board. */
+  private fidAllMoves(board: number[][], side: 'king' | 'raider'): Array<{ fx: number; fy: number; tx: number; ty: number }> {
+    const moves: Array<{ fx: number; fy: number; tx: number; ty: number }> = [];
+    for (let x = 0; x < Game.FID_N; x++) for (let y = 0; y < Game.FID_N; y++) {
+      if (this.fidSideOf(board[x]![y]!) !== side) continue;
+      for (const d of this.fidLegalMovesOn(board, x, y)) moves.push({ fx: x, fy: y, tx: d.x, ty: d.y });
+    }
+    return moves;
+  }
+
+  /** Custodial captures triggered by the piece that just moved to (mx,my). Mutates `board`, returns removed cells. */
+  private fidCapturesOn(board: number[][], mx: number, my: number): Array<{ x: number; y: number }> {
+    const side = this.fidSideOf(board[mx]![my]!);
+    const removed: Array<{ x: number; y: number }> = [];
+    for (const [dx, dy] of Game.FID_DIRS) {
+      const ax = mx + dx, ay = my + dy, bx = mx + 2 * dx, by = my + 2 * dy;
+      if (!this.fidInBounds(ax, ay)) continue;
+      const adj = board[ax]![ay]!;
+      if (adj === Game.FID_EMPTY || this.fidSideOf(adj) === side) continue;  // a "weak" King is flanked like any soldier
+      let anvil = false;
+      if (this.fidInBounds(bx, by)) {
+        const beyond = board[bx]![by]!;
+        if (this.fidSideOf(beyond) === side) anvil = true;
+        else if (beyond === Game.FID_EMPTY && (this.fidIsCorner(bx, by) || this.fidIsThrone(bx, by))) anvil = true;  // a hostile square is an anvil
+      }
+      if (anvil) { board[ax]![ay] = Game.FID_EMPTY; removed.push({ x: ax, y: ay }); }
+    }
+    return removed;
+  }
+
+  /** The King's location on a board, or null. */
+  private fidKingAt(board: number[][]): { x: number; y: number } | null {
+    for (let x = 0; x < Game.FID_N; x++) for (let y = 0; y < Game.FID_N; y++) if (board[x]![y] === Game.FID_KING) return { x, y };
+    return null;
+  }
+
+  /** Whether the King has been taken — with the weak-King rule, capture removes it from the board during the move, so "captured" simply means the King is gone. */
+  private fidKingCaptured(board: number[][]): boolean {
+    return this.fidKingAt(board) === null;
+  }
+
+  /**
+   * Handles a tap at grid (gx,gy): selects one of your pieces, or moves the
+   * selected piece to a highlighted square. Only responds on your turn.
+   */
+  public handleFidchellTap(gx: number, gy: number): void {
+    if (!this.inFidchell || this.fidResolved || this.paused || this.fidTurn !== this.fidPlayerSide) return;
+    const lx = gx - this.fidOrigin.x, ly = gy - this.fidOrigin.y;
+    if (!this.fidInBounds(lx, ly)) { this.fidSelected = null; this.fidLegal = []; this.pushUI(); return; }
+    if (this.fidSelected && this.fidLegal.some(d => d.x === lx && d.y === ly)) {
+      this.fidApplyMove(this.fidSelected.x, this.fidSelected.y, lx, ly);
+      return;
+    }
+    if (this.fidSideOf(this.fidBoard[lx]![ly]!) === this.fidPlayerSide) {
+      this.fidSelected = { x: lx, y: ly };
+      this.fidLegal = this.fidLegalMovesOn(this.fidBoard, lx, ly);
+      this.cb.onAudio?.('blockMove');
+    } else {
+      this.fidSelected = null; this.fidLegal = [];
+    }
+    this.pushUI();
+  }
+
+  /** Applies a move on the live board, resolves captures, checks the result, then hands the turn on (to the AI or back to you). */
+  private fidApplyMove(fx: number, fy: number, tx: number, ty: number): void {
+    if (this.fidResolved) return;
+    const piece = this.fidBoard[fx]![fy]!;
+    const side = this.fidSideOf(piece)!;
+    this.fidBoard[fx]![fy] = Game.FID_EMPTY;
+    this.fidBoard[tx]![ty] = piece;
+    this.fidSelected = null; this.fidLegal = [];
+    this.fidPlies++;
+    this.cb.onAudio?.('blockLand');
+    const removed = this.fidCapturesOn(this.fidBoard, tx, ty);
+    for (const r of removed) { const g = this.fidToGrid(r.x, r.y); this.cb.onParticleBurst?.(g.x, g.y, 8, side === 'king' ? '#69f0ae' : '#c1443c', 'fx_impact'); }
+    if (removed.length > 0) this.cb.onAudio?.('hit');
+    const dst = this.fidToGrid(tx, ty);
+    this.cb.onRingPulse?.(dst.x, dst.y, side === 'king' ? '105,240,174' : '193,68,59');
+    // Resolve the match.
+    if (piece === Game.FID_KING && this.fidIsCorner(tx, ty)) { this.fidFinish('king'); return; }
+    if (side === 'raider' && this.fidKingCaptured(this.fidBoard)) { this.fidFinish('raider'); return; }
+    this.fidTurn = side === 'king' ? 'raider' : 'king';
+    if (this.fidPlies > 120) { this.fidFinish(this.fidPlayerSide === 'king' ? 'raider' : 'king'); return; }  // anti-shuffle cap → player loses the stall
+    this.pushUI();
+    if (this.fidTurn !== this.fidPlayerSide) this.fidAiMove();
+    else if (this.fidAllMoves(this.fidBoard, this.fidPlayerSide).length === 0) this.fidFinish(this.fidPlayerSide === 'king' ? 'raider' : 'king');  // stalemated → you lose
+  }
+
+  private static readonly FID_WIN = 1e6;
+  private static readonly FID_SEARCH_DEPTH = 3;
+
+  /** Applies a move to a cloned board (with captures) and returns the new board — for search. */
+  private fidBoardAfter(board: number[][], m: { fx: number; fy: number; tx: number; ty: number }): number[][] {
+    const nb = board.map(col => col.slice());
+    nb[m.tx]![m.ty] = nb[m.fx]![m.fy]!;
+    nb[m.fx]![m.fy] = Game.FID_EMPTY;
+    this.fidCapturesOn(nb, m.tx, m.ty);
+    return nb;
+  }
+
+  /** Negamax with alpha-beta. Returns the value of `board` for `side` to move, `depth` plies deep. */
+  private fidSearch(board: number[][], side: 'king' | 'raider', depth: number, alpha: number, beta: number): number {
+    const k = this.fidKingAt(board);
+    if (!k || this.fidKingCaptured(board)) return (side === 'raider' ? Game.FID_WIN : -Game.FID_WIN) - depth;  // sooner is better
+    if (this.fidIsCorner(k.x, k.y)) return (side === 'king' ? Game.FID_WIN : -Game.FID_WIN) - depth;
+    if (depth === 0) return this.fidEvaluate(board, side);
+    const moves = this.fidAllMoves(board, side);
+    if (moves.length === 0) return -Game.FID_WIN + depth;  // no move = you lose
+    let best = -Infinity;
+    for (const m of moves) {
+      const score = -this.fidSearch(this.fidBoardAfter(board, m), side === 'king' ? 'raider' : 'king', depth - 1, -beta, -alpha);
+      if (score > best) best = score;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;  // cutoff
+    }
+    return best;
+  }
+
+  /** The AI takes one move for whichever side it controls, choosing by a shallow alpha-beta search so it plays both roles competently. */
+  private fidAiMove(): void {
+    if (this.fidResolved) return;
+    const side = this.fidTurn;
+    const moves = this.fidAllMoves(this.fidBoard, side);
+    if (moves.length === 0) { this.fidFinish(side === 'king' ? 'raider' : 'king'); return; }
+    let best = moves[0]!, bestScore = -Infinity;
+    for (const m of moves) {
+      const score = -this.fidSearch(this.fidBoardAfter(this.fidBoard, m), side === 'king' ? 'raider' : 'king', Game.FID_SEARCH_DEPTH - 1, -Infinity, Infinity) + Math.random() * 0.25;
+      if (score > bestScore) { bestScore = score; best = m; }
+    }
+    this.fidApplyMove(best.fx, best.fy, best.tx, best.ty);
+  }
+
+  /** Positional score of `board` from `side`'s perspective (higher = better). Symmetric: raider score is the negation of the King-side score. */
+  private fidEvaluate(board: number[][], side: 'king' | 'raider'): number {
+    const k = this.fidKingAt(board);
+    if (!k) return side === 'raider' ? 100000 : -100000;
+    if (this.fidIsCorner(k.x, k.y)) return side === 'king' ? 100000 : -100000;
+    if (this.fidKingCaptured(board)) return side === 'raider' ? 100000 : -100000;
+    let defenders = 0, raiders = 0;
+    for (let x = 0; x < Game.FID_N; x++) for (let y = 0; y < Game.FID_N; y++) {
+      if (board[x]![y] === Game.FID_DEFENDER) defenders++;
+      else if (board[x]![y] === Game.FID_RAIDER) raiders++;
+    }
+    const n = Game.FID_N - 1;
+    const distToCorner = Math.min(k.x + k.y, (n - k.x) + k.y, k.x + (n - k.y), (n - k.x) + (n - k.y));
+    const kingMobility = this.fidLegalMovesOn(board, k.x, k.y).length;
+    let raiderAdj = 0;
+    for (const [dx, dy] of Game.FID_DIRS) { const nx = k.x + dx, ny = k.y + dy; if (this.fidInBounds(nx, ny) && board[nx]![ny] === Game.FID_RAIDER) raiderAdj++; }
+    // Good-for-King: closer to a corner, more escape mobility, more defenders, fewer raiders pressing the King.
+    const kingScore = defenders * 9 - raiders * 4 + (2 * n - distToCorner) * 5 + kingMobility * 3 - raiderAdj * 8;
+    return side === 'king' ? kingScore : -kingScore;
+  }
+
+  /** Ends the match: whichever side met its goal. The player winning takes the shortcut + prize; losing means fighting the floor. */
+  private fidFinish(winnerSide: 'king' | 'raider'): void {
+    if (this.fidResolved) return;
+    this.fidResolved = true;
+    this.fidSelected = null; this.fidLegal = [];
+    this.pushUI();
+    if (winnerSide === this.fidPlayerSide) this.fidWin(); else this.fidLose();
+  }
+
+  /** Player won the board: a prize and a shortcut straight past this floor. */
+  private fidWin(): void {
+    const gold = 150 + this.dungeonLevel * 30;
+    this.gold += gold;
+    const pool = Boon.BY_TIER[this.dungeonLevel >= 14 ? 3 : 2];
+    const boon = pool[Math.floor(Math.random() * pool.length)]!;
+    this.player.addBoon(boon);
+    this.cb.log(`You take the wooden wisdom! The gambler yields the crossing — ${gold} gold and a boon: ${boon.name}. The way on opens.`, 'log-perk', boon.char);
+    this.cb.onToast?.('You win at fidchell — passage granted!', 'special_sacred');
+    const mid = this.fidToGrid(3, 3);
+    this.cb.onParticleBurst?.(mid.x, mid.y, 18, '#d9a441', 'item_trophy');
+    this.cb.onImpactGlow?.(mid.x, mid.y, '217,164,65', 24);
+    this.cb.onAudio?.('bountyFulfilled');
+    this.storyBeats.push('bested a Fomorian at fidchell');
+    this.inFidchell = false;
+    this.descendFloor();  // skip this floor's grind — the reward for winning
+  }
+
+  /** Player lost the board: no shortcut. The floor is rebuilt and the gambler drops onto it as an elite to fight through. */
+  private fidLose(): void {
+    this.cb.log('The gambler sweeps the pieces aside with a laugh — no free passage. Take the crossing the hard way.', 'log-boss', 'ui_warning');
+    this.cb.onToast?.('You lost at fidchell — fight through!', 'ui_warning');
+    this.cb.onAudio?.('bossWarn');
+    this.inFidchell = false;
+    this.resetDungeonState();  // build the real floor underneath
+    this.spawnMonster('berserker_orc', 4, 2, true, 'Fomorian Gambler');
+    this.pushUI();
+  }
+
   // ── Lookups ──────────────────────────────────────────────────────────────
 
   /** The monster standing at `(x, y)`, if any. */
@@ -4322,6 +4647,14 @@ export class Game {
             bridgeGap: Math.max(0, (GameConfig.ROWS - 1) - this.duelBossDeepestRow()),
             bridgeSpan: GameConfig.ROWS - 1,
             switchesLeft: this.duelSwitches.filter(s => !s.lit).length,
+          }
+        : null,
+      fidchell: this.inFidchell
+        ? {
+            playerSide: this.fidPlayerSide,
+            yourTurn: this.fidTurn === this.fidPlayerSide && !this.fidResolved,
+            defenders: this.fidBoard.flat().filter(p => p === Game.FID_DEFENDER).length,
+            raiders: this.fidBoard.flat().filter(p => p === Game.FID_RAIDER).length,
           }
         : null,
       rangedAbility: this.player.rangedAbility

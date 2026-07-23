@@ -412,6 +412,44 @@ export class Renderer {
       ctx.lineWidth = 1;
     }
 
+    // ── Fidchell board (the wooden wisdom) ────────────────────────────────
+    if (game.inFidchell) {
+      // Darken the whole arena so the centred board is the focus.
+      ctx.fillStyle = 'rgba(10,8,18,0.84)';
+      ctx.fillRect(0, 0, GameConfig.COLS * TS, GameConfig.ROWS * TS);
+      const o = game.fidchellOrigin, N = 7;
+      const isCorner = (lx: number, ly: number): boolean => (lx === 0 || lx === N - 1) && (ly === 0 || ly === N - 1);
+      for (let lx = 0; lx < N; lx++) for (let ly = 0; ly < N; ly++) {
+        const gx = o.x + lx, gy = o.y + ly;
+        ctx.fillStyle = (lx + ly) % 2 === 0 ? '#2a2740' : '#211f33';
+        ctx.fillRect(gx * TS, gy * TS, TS, TS);
+        if (isCorner(lx, ly)) { ctx.fillStyle = '#39604a'; ctx.fillRect(gx * TS + 2, gy * TS + 2, TS - 4, TS - 4); }        // escape dún
+        else if (lx === 3 && ly === 3) { ctx.fillStyle = '#4a3a5c'; ctx.fillRect(gx * TS + 2, gy * TS + 2, TS - 4, TS - 4); } // throne
+        ctx.strokeStyle = '#3d3a55'; ctx.lineWidth = 1;
+        ctx.strokeRect(gx * TS + 0.5, gy * TS + 0.5, TS - 1, TS - 1);
+      }
+      // Selection + legal-move dots.
+      const sel = game.fidchellSelected;
+      if (sel) {
+        ctx.strokeStyle = '#f0c14b'; ctx.lineWidth = 2;
+        ctx.strokeRect((o.x + sel.x) * TS + 1, (o.y + sel.y) * TS + 1, TS - 2, TS - 2);
+        ctx.fillStyle = 'rgba(240,193,75,0.4)';
+        for (const d of game.fidchellLegal) { ctx.beginPath(); ctx.arc((o.x + d.x) * TS + TS / 2, (o.y + d.y) * TS + TS / 2, TS * 0.16, 0, Math.PI * 2); ctx.fill(); }
+      }
+      // Pieces: a side-coloured disc under a token sprite.
+      const board = game.fidchellBoard;
+      for (let lx = 0; lx < N; lx++) for (let ly = 0; ly < N; ly++) {
+        const p = board[lx]![ly]!;
+        if (!p) continue;
+        const gx = o.x + lx, gy = o.y + ly;
+        ctx.fillStyle = p === 3 ? 'rgba(193,68,59,0.9)' : p === 1 ? 'rgba(240,193,75,0.95)' : 'rgba(74,132,178,0.9)';
+        ctx.beginPath(); ctx.arc(gx * TS + TS / 2, gy * TS + TS / 2, TS * 0.42, 0, Math.PI * 2); ctx.fill();
+        const key = p === 1 ? 'sprite_player' : p === 2 ? 'sprite_equip_iron_sword' : 'sprite_berserker_orc';
+        this.drawSprite(key, gx * TS + TS * 0.15, gy * TS + TS * 0.15, TS * 0.7, TS * 0.7);
+      }
+      ctx.lineWidth = 1;
+    }
+
     // ── Cleared-row white flash ───────────────────────────────────────────
     if (this.rowFlash) {
       const a = 0.5 * (this.rowFlash.frames / this.rowFlash.maxFrames);
@@ -731,7 +769,7 @@ export class Renderer {
     }
 
     // ── Player ────────────────────────────────────────────────────────────
-    if (game.player.hp > 0) {
+    if (game.player.hp > 0 && !game.inFidchell) {  // during fidchell you're the commander, not a piece on the board
       ctx.font = `${TS * 0.7}px Arial`;
 
       // Féth Fíada: translucent, wrapped in sea-mist instead of the hero green
