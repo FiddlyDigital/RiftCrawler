@@ -38,6 +38,8 @@ export class Fidchell {
   resolved = false;
   /** Total plies played (for the stalemate/repeat safety cap). */
   private plies = 0;
+  /** Set at match start; the rules modal opens on the next safe tick (see {@link maybeShowRules}). */
+  private rulesPending = false;
 
   static readonly N = 7;                 // board is 7×7 (brandub)
   static readonly EMPTY = 0;
@@ -105,8 +107,30 @@ export class Fidchell {
     g.cb.log(`Fidchell! A Fomorian gambler bars the crossing and sets the wooden wisdom. ${asKing ? 'You hold the High King — slip him to a corner dún to win free.' : 'You command the Fomorian raiders — surround the High King before he escapes.'}`, 'log-boss', 'ui_warning');
     g.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'ui_warning');
     g.cb.onAudio?.('bossWarn');
+    this.rulesPending = true;  // rules modal opens on the next safe tick
     if (this.turn !== this.playerSide) this.aiMove();
     g.pushUI();
+  }
+
+  /**
+   * Opens the "how to play" rules modal once, on the first tick where nothing
+   * else is modal (so it never stacks on the descent dialog that entered this
+   * floor). Driven from {@link Game.autoTick}.
+   */
+  maybeShowRules(): void {
+    const g = this.game;
+    if (!g.cb.onFloorEvent) { this.rulesPending = false; return; }  // headless/tests: nothing to show
+    if (!this.active || !this.rulesPending || this.resolved || g.paused) return;
+    this.rulesPending = false;
+    const asKing = this.playerSide === 'king';
+    g.paused = true;
+    g.cb.onFloorEvent({
+      id: '__fidchell_rules__',
+      emoji: 'special_sacred',
+      title: 'Fidchell — the Wooden Wisdom',
+      flavor: `A Fomorian gambler bars the crossing and sets the wooden wisdom. You play the ${asKing ? 'HIGH KING — slip him to any corner dún to win free' : 'FOMORIAN RAIDERS — surround the High King before he escapes'}. Tap a piece, then a glowing square; every piece slides in a straight line like a rook. Trap an enemy between two of your own to take it. Win and the gambler yields the crossing with gold and a boon; lose and you take it the hard way.`,
+      options: [{ label: asKing ? 'Play the King' : 'Play the raiders', desc: 'Begin the match.', apply: () => '' }],
+    }, () => { g.paused = false; g.cb.onAction?.(); });
   }
 
   /** HUD payload for the sidebar panel (null when not in a match). */

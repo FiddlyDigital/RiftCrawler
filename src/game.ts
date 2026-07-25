@@ -2041,6 +2041,7 @@ export class Game {
   public autoTick(): void {
     if (this.player.hp <= 0 || this.paused) return;
     this.settleDuel();  // end a won duel / open its descent choice the moment the boss is gone
+    this.fidchell.maybeShowRules();  // open the fidchell rules modal on the first safe tick of a match
     StatusEffectSystem.applyStatusEffects(this);
     StatusEffectSystem.applyRegen(this);
     StatusEffectSystem.applyAuraStun(this);
