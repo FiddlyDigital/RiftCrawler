@@ -11,6 +11,7 @@ import { UiStateBuilder } from './views/uiState';
 import { PactCeremony } from './pact';
 import { NpcEncounters } from './npcEncounters';
 import { SmithQuest } from './smithQuest';
+import { Spawner } from './spawning';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -212,6 +213,7 @@ export class Game {
   private readonly pact: PactCeremony = new PactCeremony(this);
   private readonly npcEncounters: NpcEncounters = new NpcEncounters(this);
   private readonly smithQuest: SmithQuest = new SmithQuest(this);
+  private readonly spawner: Spawner = new Spawner(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -922,46 +924,18 @@ export class Game {
 
   // ── Monster spawning helper ───────────────────────────────────────────────
 
-  /** Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the resulting `Monster` at `(tx, ty)`. */
-  /** `elite`: true forces an elite, false forbids one, undefined rolls the normal chance. */
+  /**
+   * Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the
+   * resulting `Monster` at `(tx, ty)`. Thin delegate onto {@link Spawner}.
+   * `elite`: true forces an elite, false forbids one, undefined rolls the normal chance.
+   */
   public spawnMonster(key: string, tx: number, ty: number, elite?: boolean, nameOverride?: string): void {
-    const def = MONSTERS[key];
-    if (!def) return;
-    const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance + this.heatAdd('eliteChanceBonus'));
-    const diff = this.difficultyTuning();
-    const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult * diff.monsterHpMult);
-    const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
-    const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
-    // Omens like the Morrígan's Ravens or Crom's Tithe harden every spawn;
-    // New Game+ geasa stack on top of both omen and difficulty.
-    const omenAtkMult = this.activeOmen?.num('monsterAtkMult', 1) ?? 1;
-    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult * diff.monsterAtkMult * this.heatMult('monsterAtkMult'));
-    const name = nameOverride ?? (isElite ? `Elite ${def.name}` : def.name);
-    const m = new Monster(
-      tx, ty, def.char, name, hp, hp, atk, def.xpReward,
-      false,
-      def.behaviorType ?? 'melee',
-      def.attackRange  ?? 1,
-      def.moveSpeed    ?? 1,
-      def.statusInflict,
-    );
-    m.isElite = isElite;
-    m.combatLevel = Math.min(6, def.combatLevel + (isElite ? Balance.CONFIG.eliteMonsters.combatLevelBonus : 0));
-    if (this.frozenRift) {
-      m.statuses.push({ type: 'stun', duration: 1, power: 0 });
-    }
-    // Abcán's suantraí (sleep-strain) lulls everything that arrives on the
-    // floor it was played for.
-    if (this.dungeonLevel === this.harperLullFloor) {
-      m.statuses.push({ type: 'stun', duration: 2, power: 0 });
-    }
-    this.monsters.push(m);
-    if (isElite) {
-      this.cb.onParticle(tx, ty, 'ELITE!', '#ffd700', undefined, 'special_sacred');
-      this.cb.log(`Elite ${def.name} stalks out of the dark!`, 'log-boss', 'special_sacred');
-    } else {
-      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373', undefined, def.char);
-    }
+    this.spawner.monster(key, tx, ty, elite, nameOverride);
+  }
+
+  /** A monster key, weighted toward tougher species as the dungeon deepens. Delegates to {@link Spawner}. */
+  public getRandomMonsterKey(): string {
+    return this.spawner.randomMonsterKey();
   }
 
   /** Spawns up to two Crystal Shard adds beside a fallen Cailleach's Stoneward. Called by that boss's `onDeath` hook. */
@@ -994,55 +968,9 @@ export class Game {
 
   // ── Dungeon rooms ────────────────────────────────────────────────────────
 
+  /** Rolls the per-floor chance to carve a lateral vault/den room. Delegates to {@link Spawner}. */
   private maybeSpawnDungeonRoom(): void {
-    if (Math.random() > Balance.CONFIG.floors.dungeonRoomChance) return;
-    this.spawnRoom(Math.random() < 0.5 ? 'vault' : 'den');
-  }
-
-  /** A monster key, weighted toward tougher species as the dungeon deepens. */
-  private getRandomMonsterKey(): string {
-    const all = ['rat', 'skeleton', 'goblin_archer', 'cave_slime', 'berserker_orc', 'plague_bat'];
-    const maxIdx = Math.min(all.length - 1, 1 + Math.floor(this.dungeonLevel / 3));
-    return all[Math.floor(Math.random() * (maxIdx + 1))]!;
-  }
-
-  private spawnRoom(type: 'vault' | 'den'): void {
-    // Rooms are lateral 2×3 extensions of the starting platform (x=2..7, y=23..24).
-    // Left side: x=0..1. Right side: x=8..9. y=22..24 (one row above platform top).
-    // This keeps the centre columns clear so falling blocks are never intercepted.
-    const colors = { vault: '#3d2b00', den: '#2d0000' } as const;
-    const side = Math.random() < 0.5 ? 'left' : 'right';
-    const roomX = side === 'left' ? 0 : GameConfig.COLS - 2;  // 0 or 8
-    const roomY = GameConfig.ROWS - 3;                         // 22 (rows 22..24)
-    const color = colors[type];
-
-    for (let dx = 0; dx < 2; dx++) {
-      for (let dy = 0; dy < 3; dy++) {
-        const x = roomX + dx, y = roomY + dy;
-        this.map[x]![y]    = Tile.FLOOR;
-        this.colors[x]![y] = color;
-      }
-    }
-
-    const innerX = roomX + (side === 'left' ? 1 : 0);  // column closer to starting platform
-    const midY   = roomY + 1;                           // middle row of the room
-
-    if (type === 'vault') {
-      // Place a bonus altar in the vault, guarded by a monster.
-      const altarX = roomX + (side === 'left' ? 0 : 1);
-      const altarTier: 1 | 2 | 3 = this.dungeonLevel >= Balance.CONFIG.altars.vaultTierMinFloorT3 ? 3 : this.dungeonLevel >= Balance.CONFIG.altars.vaultTierMinFloorT2 ? 2 : 1;
-      const altarColor = Colors.forTier(altarTier).bg;
-      this.colors[altarX]![midY] = altarColor;
-      this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
-      this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
-      this.cb.log(`A Treasure Vault lies to the ${side} — guarded.`, 'log-perk', 'item_gold_pouch');
-    } else {
-      const positions: Array<[number, number]> = [[0, 0], [1, 0], [0, 1]];
-      for (const [pdx, pdy] of positions) {
-        this.spawnMonster(this.getRandomMonsterKey(), roomX + pdx, roomY + pdy);
-      }
-      this.cb.log(`A Monster Den lurks to the ${side}...`, 'log-damage', 'status_poison');
-    }
+    this.spawner.maybeSpawnRoom();
   }
 
   // Boss selection is deterministic per floor (cycles through the pool in a
@@ -1913,7 +1841,7 @@ export class Game {
   // whole run, in exchange for bonus XP. Heat N applies every tier ≤ N.
 
   /** Cumulative multiplicative heat param for `key` across the active tiers (identity 1). */
-  private heatMult(key: string): number {
+  public heatMult(key: string): number {
     let v = 1;
     for (const t of Balance.CONFIG.ngplus.tiers) {
       const p = t.params[key];
@@ -1923,7 +1851,7 @@ export class Game {
   }
 
   /** Cumulative additive heat param for `key` across the active tiers (identity 0). */
-  private heatAdd(key: string): number {
+  public heatAdd(key: string): number {
     let v = 0;
     for (const t of Balance.CONFIG.ngplus.tiers) {
       const p = t.params[key];
@@ -3353,7 +3281,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters', 'smithQuest',
+    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters', 'smithQuest', 'spawner',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
