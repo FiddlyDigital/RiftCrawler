@@ -10,6 +10,7 @@ import { CharacterSheetView } from './views/charSheet';
 import { UiStateBuilder } from './views/uiState';
 import { PactCeremony } from './pact';
 import { NpcEncounters } from './npcEncounters';
+import { SmithQuest } from './smithQuest';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -210,6 +211,7 @@ export class Game {
   private readonly uiStateBuilder: UiStateBuilder = new UiStateBuilder(this);
   private readonly pact: PactCeremony = new PactCeremony(this);
   private readonly npcEncounters: NpcEncounters = new NpcEncounters(this);
+  private readonly smithQuest: SmithQuest = new SmithQuest(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -245,7 +247,7 @@ export class Game {
   /** Whole-board fill fraction a pending boss waits for before riding in (see spawnBlock); also drives the HUD dial's boss marker. */
   private static readonly BOSS_FILL_FRACTION = 0.5;
   /** Set on a smith-eligible floor entry; the smith rider doesn't inject until {@link blocksSpawnedThisFloor} passes the configured threshold. */
-  private pendingSmithFloor = false;
+  public pendingSmithFloor = false;
   private blocksSpawnedThisFloor = 0;
   /** Whether the "anvils are getting stronger" mid-floor warning has already fired this floor. */
   private smithWarningShown = false;
@@ -1284,20 +1286,11 @@ export class Game {
     if (this.omenGravityPct !== 0) this.cb.onAction();
   }
 
-  /** Sets {@link pendingSmithFloor} and gives the player an ambient heads-up, on a smith-eligible floor entry. */
-  private maybeAnnounceSmithFloor(isBossFloor: boolean): void {
-    if (isBossFloor || this.pendingSmithFloor || this.smithsMetCount >= SMITHS.length) return;
-    if (this.dungeonLevel % Balance.CONFIG.smiths.floorInterval !== 0) return;
-    this.pendingSmithFloor = true;
-    this.cb.log('You hear the clang of an anvil in the distance...', 'log-perk', 'fx_impact');
-    this.cb.onToast?.('You hear the clang of an anvil in the distance...', 'fx_impact');
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#d9a441');
-  }
+  /** Ambient heads-up on a smith-eligible floor entry (delegates to {@link SmithQuest}). */
+  private maybeAnnounceSmithFloor(isBossFloor: boolean): void { this.smithQuest.announceFloor(isBossFloor); }
 
-  /** The next smith due to appear this run (Luchta → Credne → Goibniu), or `null` once all three have been met. */
-  private nextSmith(): Smith | null {
-    return (SMITHS as Smith[])[this.smithsMetCount] ?? null;
-  }
+  /** The next smith due to appear this run, or null once all three are met (delegates to {@link SmithQuest}). */
+  private nextSmith(): Smith | null { return this.smithQuest.next(); }
 
   /**
    * The tutorial's single practice foe: one ordinary rat on a floor tile
@@ -1325,45 +1318,8 @@ export class Game {
     return pool[Math.floor(Math.random() * pool.length)]!;
   }
 
-  /** Grants the smith's part, and — on the third meeting (Goibniu) — reforges the complete Spear of Lugh. */
-  private triggerSmithEncounter(smith: Smith, onClosed?: () => void): void {
-    const isReforge = smith.partKey === 'head' && this.spearPartsHeld.has('shaft') && this.spearPartsHeld.has('bolts');
-    const event: FloorEventDef = {
-      id: smith.id, emoji: smith.char, title: smith.name,
-      flavor: isReforge
-        ? `${smith.flavor} He takes the shaft and the bolts from your hands without asking, and sets to work.`
-        : smith.flavor,
-      options: [
-        {
-          label: isReforge ? 'Let him reforge the spear' : `Take ${smith.partName}`,
-          desc: isReforge ? 'Shaft, bolts, and head, made whole again.' : 'A piece of Lugh\'s Spear, freely given.',
-          apply: (game: Game): string => {
-            game.spearPartsHeld.add(smith.partKey);
-            game.smithsMetCount++;
-            game.storyBeats.push(`received ${smith.partName} from ${smith.name}`);
-            if (isReforge) {
-              game.spearForged = true;
-              game.player.rangedAbility = {
-                name: 'Spear of Lugh', emoji: 'item_spear_of_lugh', abilityType: 'spear_bolt',
-                range: 0, damageMult: Balance.CONFIG.spearOfLugh.dmgMult, cooldownMax: Balance.CONFIG.spearOfLugh.cooldownMax,
-              };
-              game.storyBeats.push('saw Lugh\'s Spear reforged whole');
-              return `Goibniu's forge roars once more — shaft, bolts, and head become one. The Spear of Lugh is whole again, and it answers to you now.`;
-            }
-            return `${smith.name} gives you ${smith.partName}.`;
-          },
-        },
-      ],
-    };
-    this.paused = true;
-    this.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', smith.char);
-      this.paused = false;
-      this.cb.onAction();
-      onClosed?.();
-    });
-  }
+  /** Grants the smith's part / reforges the Spear on the third meeting (delegates to {@link SmithQuest}). */
+  private triggerSmithEncounter(smith: Smith, onClosed?: () => void): void { this.smithQuest.triggerEncounter(smith, onClosed); }
 
   // ── An Draoi's pact ceremony ───────────────────────────────────────────────
   // Triggered by bumping the deity emissary in the waystation (see
@@ -3397,7 +3353,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters',
+    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters', 'smithQuest',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
