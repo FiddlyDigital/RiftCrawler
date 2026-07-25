@@ -1,13 +1,14 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun, type UIState } from './types';
+import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, RESCUES, Omen, EffectResolver, type ClassDef, type PatronDef, type RescueDef } from './content';
+import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
 import { GameMath } from './gameMath';
 import { AbilitySystem } from './systems/abilities';
 import { InspectView } from './views/inspect';
 import { CharacterSheetView } from './views/charSheet';
 import { UiStateBuilder } from './views/uiState';
+import { PactCeremony } from './pact';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -20,38 +21,6 @@ const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
 };
 
-// Human-readable summary of a patron's signature spell for the pact ceremony.
-function describePatronSpell(p: PatronDef): string {
-  const spell = p.spells[0]!;
-  const params = spell.params ?? {};
-  const num = (k: string, d: number): number => typeof params[k] === 'number' ? params[k] as number : d;
-  const costPct = Math.round(num('hpCostPct', 0) * 100);
-  switch (spell.abilityType) {
-    case 'shriek':
-      return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to EVERY visible foe (${Math.round(num('stunChance', 0) * 100)}% terror-stun).`;
-    case 'veil':
-      return `pay ${costPct}% Max HP, vanish from mortal sight for ${num('veilTurns', 6)} turns.`;
-    case 'drain':
-      return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to the nearest foe, heal ${Math.round(num('healPct', 0) * 100)}% of it — a kill refunds the price.`;
-    default:
-      return `pay ${costPct}% Max HP.`;
-  }
-}
-
-// Human-readable summary of a spell's one-time toll, applied the moment the
-// patron grants it (at the pact, or at each later level-gated unlock).
-const TOLL_LABELS: Record<string, string> = { atk: 'ATK', maxHp: 'Max HP', tickSlowPercent: 'gravity speed' };
-function describeToll(effects: EffectSpec[] | undefined): string {
-  return (effects ?? []).map(e => {
-    const label = TOLL_LABELS[e.stat] ?? e.stat;
-    if (e.op === 'mul') {
-      const pct = Math.round((1 - (e.value as number)) * 100);
-      return `−${pct}% ${label}`;
-    }
-    const v = e.value as number;
-    return `${v > 0 ? '+' : ''}${v} ${label}`;
-  }).join(', ');
-}
 
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
@@ -238,6 +207,7 @@ export class Game {
   private readonly inspectView: InspectView = new InspectView(this);
   public readonly characterSheetView: CharacterSheetView = new CharacterSheetView(this);
   private readonly uiStateBuilder: UiStateBuilder = new UiStateBuilder(this);
+  private readonly pact: PactCeremony = new PactCeremony(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -1576,82 +1546,13 @@ export class Game {
   // answered — the pact IS the class, so there is no decline. Returns true
   // if the ceremony modal was opened.
 
-  private maybeOfferPact(): boolean {
-    if (this.activeClassId !== 'draoi' || this.activePatronId !== null) return false;
-    if (this.dungeonLevel < 2 || !this.cb.onFloorEvent) return false;
+  private maybeOfferPact(): boolean { return this.pact.offer(); }
 
-    // Only 2 of the 3 deities call on any given run — which two is the rift's whim.
-    const offered = [...PATRONS].sort(() => Math.random() - 0.5).slice(0, 2);
-    const event: FloorEventDef = {
-      id: '__pact__', emoji: 'fx_arcane', title: 'The Deities Call',
-      flavor: 'Two voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',
-      options: offered.map(p => ({
-        label: p.deity,
-        desc: `${p.tagline} — ${p.spells[0]!.name}: ${describePatronSpell(p)} ${p.tollDesc} More spells unlock as you level.`,
-        apply: (game: Game): string => {
-          game.applyPatron(p.id);
-          return `The pact is sworn. ${p.deity} marks you as their own.`;
-        },
-      })),
-    };
+  /** Swears An Draoi's pact with the named deity (delegates to {@link PactCeremony}). */
+  public applyPatron(id: string): void { this.pact.apply(id); }
 
-    this.paused = true;
-    this.cb.onFloorEvent(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', 'fx_arcane');
-      this.paused = false;
-      this.cb.onAction();
-    });
-    return true;
-  }
-
-  /**
-   * Swears An Draoi's pact with the named deity: applies the patron's
-   * passive, grants the level-appropriate spells (paying each one's toll),
-   * and swaps in the signature spell as the active ranged ability.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
-  public applyPatron(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyPatron: "id" must be a non-empty string');
-    const patron = PATRONS.find(p => p.id === id);
-    if (!patron) return;
-    this.activePatronId = id;
-    EffectResolver.applyToPlayer(this.player, patron.effects);
-    this.player.spellbook = patron.spells
-      .filter(s => (s.unlockLevel ?? 1) <= this.player.playerLevel)
-      .map(s => ({ ...s }));
-    for (const spell of this.player.spellbook) EffectResolver.applyToPlayer(this.player, spell.toll);
-    this.player.hp = Math.min(this.player.hp, this.player.maxHp);
-    this.player.activeSpellIndex = 0;
-    this.player.rangedAbility = this.player.spellbook[0] ?? null;
-    this.player.rangedCooldown = 0;
-    this.storyBeats.push(`swore a pact with ${patron.deity}`);
-    this.cb.onCodexDiscover?.('patron', id);
-    this.cb.log(`${patron.name} — ${patron.spells[0]!.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
-    this.cb.log(patron.tollDesc, 'log-neutral', patron.char);
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#8d6fd4', patron.char);
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '141,111,212');
-    this.cb.onAudio?.('pactSworn');
-    this.pushUI();
-  }
-
-  // Adds any patron spells whose unlockLevel the player has now reached.
-  // Called from openLevelUpBoons — the single choke point every level-up
-  // passes through (kills, tomes, scholars, line-clear XP).
-  private syncSpellUnlocks(): void {
-    const patron = PATRONS.find(p => p.id === this.activePatronId);
-    if (!patron) return;
-    for (const spell of patron.spells) {
-      if ((spell.unlockLevel ?? 1) > this.player.playerLevel) continue;
-      if (this.player.spellbook.some(s => s.name === spell.name)) continue;
-      this.player.spellbook.push({ ...spell });
-      EffectResolver.applyToPlayer(this.player, spell.toll);
-      this.player.hp = Math.min(this.player.hp, this.player.maxHp);
-      const toll = describeToll(spell.toll);
-      this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (${toll} — E cycles spells)`, 'log-perk', spell.emoji);
-      this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4', spell.emoji);
-    }
-  }
+  /** Adds any patron spells the player has now reached the level for (delegates to {@link PactCeremony}); called from the level-up choke point. */
+  private syncSpellUnlocks(): void { this.pact.syncUnlocks(); }
 
   /**
    * Cycles the active spell (An Draoi with 2+ unlocked spells). Shared
@@ -3671,7 +3572,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder',
+    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
