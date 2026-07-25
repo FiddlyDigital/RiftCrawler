@@ -1,11 +1,12 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun } from './types';
+import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, RESCUES, Omen, EffectResolver, type ClassDef, type PatronDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
 import { GameMath } from './gameMath';
 import { AbilitySystem } from './systems/abilities';
 import { InspectView } from './views/inspect';
+import { CharacterSheetView } from './views/charSheet';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -234,6 +235,7 @@ export class Game {
   // instance and delegates entry, input, the HUD payload, and save/resume.
   public readonly fidchell: Fidchell = new Fidchell(this);
   private readonly inspectView: InspectView = new InspectView(this);
+  private readonly characterSheetView: CharacterSheetView = new CharacterSheetView(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -3645,76 +3647,6 @@ export class Game {
   /** Builds the inspect-tooltip content for whatever occupies `(x, y)` (delegates to {@link InspectView}). */
   public getInspectInfo(x: number, y: number): InspectInfo | null { return this.inspectView.build(x, y); }
 
-  // ── Character sheet ─────────────────────────────────────────────────────
-  // Aggregates every effective stat currently on the player — base numbers
-  // plus whatever boons/brands/shop purchases have folded into them — into a
-  // display-ready snapshot. Boons/brands/shop purchases all mutate the same
-  // Player fields directly, so reading Player state IS reading the totals.
-
-  /** Aggregates every effective player stat into a display-ready character-sheet snapshot. */
-  private buildCharacterSheet(): CharacterSheetSection[] {
-    const p = this.player;
-    const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
-    return [
-      {
-        title: 'Offense', icon: 'sprite_equip_iron_sword',
-        stats: [
-          { label: 'Attack', value: String(Math.round(p.atk)) },
-          { label: 'Combat Dice', value: `D${CombatSystem.dieSides(p.combatLevel)}` },
-          { label: 'Line-Clear Damage', value: p.lineClearDamage > 0 ? `+${pct(p.lineClearDamage)} ATK` : '—' },
-          { label: 'Line-Clear AoE', value: p.lineClearAoeDmgMult > 0 ? `${p.lineClearAoeDmgMult}× floor dmg, all enemies` : '—' },
-          { label: 'Kill ATK Bonus', value: p.killAtkBonus > 0 ? `+${pct(p.killAtkBonus)} ATK/kill (this floor)` : '—' },
-          { label: 'Thorn Reflect', value: p.thornDamage > 0 ? pct(p.thornDamage) : '—' },
-          { label: 'Poison on Hit', value: p.poisonAttackChance > 0 ? pct(p.poisonAttackChance) : '—' },
-          { label: 'Stun on Hit', value: p.stunAttackChance > 0 ? pct(p.stunAttackChance) : '—' },
-          { label: 'Guaranteed Crit', value: p.critEvery > 0 ? `every ${p.critEvery}${p.critEvery === 1 ? 'st' : 'th'} hit` : '—' },
-        ],
-      },
-      {
-        title: 'Defense', icon: 'sprite_equip_buckler',
-        stats: [
-          { label: 'Max HP', value: String(Math.round(p.maxHp)) },
-          { label: 'Damage Reduction', value: p.damageReduction > 0 ? `${pct(p.damageReduction)} (−${p.totalDef} dmg/hit)` : '—' },
-          { label: 'Dodge Chance', value: p.dodgeChance > 0 ? pct(p.dodgeChance) : '—' },
-          { label: 'Dodge Heal', value: p.dodgeHeal > 0 ? `${pct(p.dodgeHeal)} Max HP` : '—' },
-          { label: 'Poison Immune', value: p.poisonImmune ? 'Yes' : '—' },
-          { label: 'Deathward Charges', value: p.deathwardCharges > 0 ? String(p.deathwardCharges) : '—' },
-          { label: 'Ghost Dodge Charges', value: p.ghostDodgeCharges > 0 ? String(p.ghostDodgeCharges) : '—' },
-          { label: 'Life Brand Revive', value: p.lifeBrandRevive ? 'Armed' : '—' },
-        ],
-      },
-      {
-        title: 'Sustain', icon: 'item_droplet',
-        stats: [
-          { label: 'Regen / Tick', value: p.regenPerTick > 0 ? `${pct(p.regenPerTick)} Max HP` : '—' },
-          { label: 'Heal on Kill', value: p.killHeal > 0 ? `${pct(p.killHeal)} Max HP` : '—' },
-        ],
-      },
-      {
-        title: 'Utility', icon: 'fx_arcane',
-        stats: [
-          { label: 'Vision Radius', value: String(p.visionRadius) },
-          { label: 'Gravity Slow', value: p.tickSlowPercent !== 0 ? `${p.tickSlowPercent > 0 ? '+' : ''}${p.tickSlowPercent}%` : '—' },
-          { label: 'Status Fades Faster', value: p.statusDurationBonus > 0 ? `−${p.statusDurationBonus} turn(s)` : '—' },
-          { label: 'Aura Stun Radius', value: p.auraStunRadius > 0 ? `${p.auraStunRadius} tile(s)` : '—' },
-          { label: 'Bonus Hero Moves', value: p.bonusHeroMoves > 0 ? `+${p.bonusHeroMoves}/turn` : '—' },
-          { label: 'Line-Clear XP', value: p.lineClearXpMult !== 1 ? `×${p.lineClearXpMult}` : '—' },
-          { label: 'Sworn Patron', value: PATRONS.find(pt => pt.id === this.activePatronId)?.deity ?? '—' },
-          {
-            label: 'Spells Known',
-            value: p.spellbook.length > 0 ? p.spellbook.map(s => s.name).join(', ') : '—',
-          },
-          {
-            label: 'Active Spell Cost',
-            value: typeof p.rangedAbility?.params?.['hpCostPct'] === 'number'
-              ? `${Math.round((p.rangedAbility.params['hpCostPct'] as number) * 100)}% Max HP (${StatMath.pctOf(p.maxHp, p.rangedAbility.params['hpCostPct'] as number)} HP)`
-              : '—',
-          },
-        ],
-      },
-    ];
-  }
-
   // ── Mid-run save/resume ──────────────────────────────────────────────────
 
   /**
@@ -3737,7 +3669,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView',
+    'fidchell', 'inspectView', 'characterSheetView',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
@@ -3902,7 +3834,7 @@ export class Game {
             spellCount:  this.player.spellbook.length,
           }
         : null,
-      characterSheet: this.buildCharacterSheet(),
+      characterSheet: this.characterSheetView.build(),
       floorProgress: {
         pieces: this.blocksSpawnedThisFloor,
         smithTarget: this.pendingSmithFloor ? Balance.CONFIG.smiths.pieceThreshold : null,
