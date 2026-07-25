@@ -38,7 +38,7 @@ export class SaveGame {
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
     'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact',
-    'npcEncounters', 'smithQuest', 'spawner', 'runSetup', 'saveGame', 'vendorOffers',
+    'npcEncounters', 'smithQuest', 'spawner', 'runSetup', 'saveGame', 'vendorOffers', 'bossEncounters',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link restore}). */

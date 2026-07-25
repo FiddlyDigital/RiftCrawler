@@ -15,6 +15,7 @@ import { Spawner } from './spawning';
 import { RunSetup } from './runSetup';
 import { SaveGame } from './saveGame';
 import { VendorOffers } from './vendorOffers';
+import { BossEncounters } from './bossEncounters';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -170,7 +171,7 @@ export class Game {
   }
 
   /** Whether the BlockBuilding layer is currently frozen (the Gorgoth duel, a waystation rest floor, or a Causeway Duel — which runs its own placement layer). */
-  private get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel || this.inFidchell; }
+  public get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel || this.inFidchell; }
 
   // ── Causeway Duel (boss-floor play state) ────────────────────────────────
   // A no-gravity, turn-based duel on the shared grid: the player grows a
@@ -220,6 +221,7 @@ export class Game {
   private readonly runSetup: RunSetup = new RunSetup(this);
   private readonly saveGame: SaveGame = new SaveGame(this);
   private readonly vendorOffers: VendorOffers = new VendorOffers(this);
+  private readonly bossEncounters: BossEncounters = new BossEncounters(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -251,7 +253,7 @@ export class Game {
   // Internal counters
   private floorsDescended = 0;
   private blocksPlacedSinceStairs = 0;
-  private pendingBossFloor = false;
+  public pendingBossFloor = false;  // public: set by BossEncounters.announceFloor
   /** Whole-board fill fraction a pending boss waits for before riding in (see spawnBlock); also drives the HUD dial's boss marker. */
   private static readonly BOSS_FILL_FRACTION = 0.5;
   /** Set on a smith-eligible floor entry; the smith rider doesn't inject until {@link blocksSpawnedThisFloor} passes the configured threshold. */
@@ -323,9 +325,9 @@ export class Game {
    */
   public gorgothSummoned = false;
   public won = false;
-  /** One-time nudge toward the win condition. */
-  private gorgothHintShown = false;
-  private gorgothHalfTriggered = false;
+  /** One-time nudge toward the win condition. Public: owned by BossEncounters. */
+  public gorgothHintShown = false;
+  public gorgothHalfTriggered = false;
 
   public readonly cb: GameCallbacks;
 
@@ -866,7 +868,7 @@ export class Game {
   }
 
   /** Row index of the highest built floor tile across every column (`GameConfig.ROWS` if the field is empty — row 0 is the field's top). */
-  private stackTopRow(): number {
+  public stackTopRow(): number {
     let stackTop: number = GameConfig.ROWS;
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) {
@@ -897,14 +899,9 @@ export class Game {
     return filled / (GameConfig.COLS * GameConfig.ROWS);
   }
 
-  // One-time teaching nudge: when the stack climbs near the ceiling, tell the
-  // player that topping out summons Gorgoth — the win condition.
+  /** Near-ceiling "top out to win" nudge. Delegates to {@link BossEncounters}. */
   private maybeHintGorgoth(): void {
-    if (this.gorgothHintShown || this.blockBuildingSuspended) return;
-    if (this.stackTopRow() <= 5) {
-      this.gorgothHintShown = true;
-      this.cb.log('The stack climbs high — let it top out to summon BRES THE BEAUTIFUL and win the Rift!', 'log-boss', 'ui_warning');
-    }
+    this.bossEncounters.maybeHintGorgoth();
   }
 
   // ── Special tile processing ──────────────────────────────────────────────
@@ -945,32 +942,14 @@ export class Game {
     return this.spawner.randomMonsterKey();
   }
 
-  /** Spawns up to two Crystal Shard adds beside a fallen Cailleach's Stoneward. Called by that boss's `onDeath` hook. */
+  /** Spawns up to two Crystal Shard adds beside a fallen Cailleach's Stoneward. Called by that boss's `onDeath` hook. Delegates to {@link BossEncounters}. */
   public spawnCrystalShards(bx: number, by: number): void {
-    const shardHp  = Balance.CONFIG.crystalShards.baseHp + this.dungeonLevel * Balance.CONFIG.crystalShards.hpPerDungeonLevel;
-    const shardAtk = Balance.CONFIG.crystalShards.baseAtk + Math.floor(this.dungeonLevel * Balance.CONFIG.crystalShards.atkPerDungeonLevel);
-    const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    let spawned = 0;
-    for (const [dx, dy] of dirs) {
-      if (spawned >= 2) break;
-      const sx = bx + dx, sy = by + dy;
-      if (this.isValidMove(sx, sy) && !this.getMonsterAt(sx, sy)) {
-        const shard = new Monster(sx, sy, 'sprite_crystal_shard', 'Crystal Shard', shardHp, shardHp, shardAtk, 30);
-        shard.combatLevel = 3;
-        this.monsters.push(shard);
-        this.cb.onParticle(sx, sy, '', '#80d8ff', undefined, 'sprite_crystal_shard');
-        spawned++;
-      }
-    }
-    this.cb.log("Cailleach's Stoneward shatters — shards emerge!", 'log-boss', 'sprite_boss_crystal_golem');
+    this.bossEncounters.spawnCrystalShards(bx, by);
   }
 
-  /** Yanks the falling piece 5 rows down. Called by Balor's Herald's `onHalfHp` hook. */
+  /** Yanks the falling piece 5 rows down. Called by Balor's Herald's `onHalfHp` hook. Delegates to {@link BossEncounters}. */
   public triggerGravityBurst(): void {
-    this.blockY = Math.max(0, this.blockY - 5);
-    this.cb.log("Balor's Herald tears the weave — gravity surges!", 'log-boss', 'fx_impact');
-    this.cb.onParticle(this.player.x, this.player.y, 'SURGE!', '#aa00ff', undefined, 'fx_impact');
-    this.cb.onAudio?.('bossWarn');
+    this.bossEncounters.triggerGravityBurst();
   }
 
   // ── Dungeon rooms ────────────────────────────────────────────────────────
@@ -1414,10 +1393,9 @@ export class Game {
 
   // ── Floor transitions ────────────────────────────────────────────────────
 
-  /** Ambient heads-up on entering a boss-eligible floor — mirrors {@link maybeAnnounceSmithFloor}. The boss itself doesn't spawn until the floor is built up (see `instantiateRider`'s `Cell.BOSS` case). */
+  /** Ambient heads-up on entering a boss-eligible floor. Delegates to {@link BossEncounters}. */
   private announceBossFloor(): void {
-    this.pendingBossFloor = true;
-    this.cb.onToast?.('You sense dark forces lie in ambush!', 'ui_warning');
+    this.bossEncounters.announceFloor();
   }
 
   /** Advances the dungeon level counter and rebuilds the floor (used when the stack's top row itself scrolls off the bottom). */
@@ -2321,107 +2299,19 @@ export class Game {
 
   // ── Endgame: Gorgoth the Returned ─────────────────────────────────────────
 
-  /** Overflowing the stack summons the final boss into a cleared arena. */
+  /** Overflowing the stack summons the final boss into a cleared arena. Delegates to {@link BossEncounters}. */
   public summonGorgoth(): void {
-    if (this.gorgothSummoned) return;
-    this.gorgothSummoned = true;
-    this.storyBeats.push('called Bres the Beautiful forth to battle');
-
-    // The board the player built stays exactly as it is — no arena reset; only
-    // the tetromino supply stops.
-    this.blockMatrix = [];
-    this.heldType = null;
-
-    // The causeway is complete — there's no more "descend and try again
-    // later." Every remaining stairs tile becomes plain floor, beaming away
-    // like any other departing tile-feature (NPCs, altars, the tattoo artist).
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        if (this.map[x]![y] === Tile.STAIRS) {
-          this.map[x]![y] = Tile.FLOOR;
-          this.colors[x]![y] = this.blockColor;
-          this.cb.onBeam?.(x, '109,63,122');
-        }
-      }
-    }
-
-    // Gorgoth looms in at the very top-centre and grinds his way down to the
-    // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
-    // so descending floors only ever helps you.
-    const gx = Math.floor(GameConfig.COLS / 2);
-    const gDiff = this.difficultyTuning();
-    const gHp = Math.floor(Balance.CONFIG.gorgoth.maxHp * gDiff.monsterHpMult);
-    const gAtk = Math.floor(Balance.CONFIG.gorgoth.atk * gDiff.monsterAtkMult * this.heatMult('monsterAtkMult'));
-    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', gHp, gHp, gAtk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
-    boss.combatLevel = Balance.CONFIG.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
-    boss.isGorgoth = true;
-    this.monsters.push(boss);
-
-    // Fomorian escort — an invasion party at his side, scaled the same as any
-    // other floor monster (not buffed to match Bres) so it reads as a raiding
-    // party, not a second boss.
-    let escorts = 0;
-    for (const [dx, dy] of [[-2, 0], [-1, 0], [1, 0], [2, 0]] as Array<[number, number]>) {
-      if (escorts >= 3) break;
-      const ex = gx + dx, ey = 0 + dy;
-      if (ex >= 0 && ex < GameConfig.COLS && ey >= 0 && ey < GameConfig.ROWS && this.isValidMove(ex, ey) && !this.getMonsterAt(ex, ey)) {
-        this.spawnMonster(this.getRandomMonsterKey(), ex, ey);
-        escorts++;
-      }
-    }
-    if (escorts > 0) this.cb.log('Fomorian raiders pour across the finished causeway behind him!', 'log-boss', 'sprite_boss_gorgoth');
-
-    // Half-HP: roar and raise two of the Returned beside him — but only the
-    // first time he crosses the threshold this run (persists across summons).
-    this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
-    this.activeBossOnDeath = null;  // victory is fired from killMonster (covers every death path)
-    this.bossHalfHpTriggered = this.gorgothHalfTriggered;
-
-    // Reveal the whole arena — no fog for the finale.
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        this.visibility[x]![y] = true;
-        this.explored[x]![y] = true;
-      }
-    }
-
-    this.cb.log('The causeway is complete! Bres the Beautiful now leads the charge to invade the Emerald Isle...', 'log-boss', 'ui_warning');
-    this.cb.onParticle(gx, 0, 'BRES', '#ff1744', 18, 'sprite_boss_gorgoth');
-    this.cb.onCodexDiscover?.('boss', 'gorgoth');
-
-    this.paused = true;
-    this.cb.onBossWarning?.(
-      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: Balance.CONFIG.gorgoth.xpReward, flavorText: 'The bridge home is finished — and he means to be first across it.' },
-      () => { this.paused = false; },
-    );
-    this.pushUI();
+    this.bossEncounters.summonGorgoth();
   }
 
-  /**
-   * Bres's half-HP mechanic (roar + two Fomorian adds beside him), built as
-   * a factory so both {@link summonGorgoth} and a mid-duel save restore can
-   * attach it around the live boss instance.
-   */
+  /** Bres's half-HP mechanic factory (roar + two Fomorian adds). Delegates to {@link BossEncounters}. */
   public makeGorgothOnHalfHp(boss: Monster): (game: Game) => void {
-    return (g) => {
-      g.gorgothHalfTriggered = true;
-      g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
-      for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
-        const ax = boss.x + dx, ay = boss.y + dy;
-        if (ax >= 0 && ax < GameConfig.COLS && ay >= 0 && ay < GameConfig.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
-          g.spawnMonster(g.getRandomMonsterKey(), ax, ay);
-        }
-      }
-    };
+    return this.bossEncounters.makeGorgothOnHalfHp(boss);
   }
 
-  /** Gorgoth defeated — the run is won. Idempotent. */
+  /** Gorgoth defeated — the run is won. Idempotent. Delegates to {@link BossEncounters}. */
   public triggerVictory(): void {
-    if (this.won) return;
-    this.won = true;
-    this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
-    this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
-    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('victory'));
+    this.bossEncounters.triggerVictory();
   }
 
   /** Shifts the falling piece one column left, if unobstructed. */
