@@ -1,7 +1,7 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
 import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
+import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
 import { GameMath } from './gameMath';
 import { AbilitySystem } from './systems/abilities';
@@ -12,6 +12,7 @@ import { PactCeremony } from './pact';
 import { NpcEncounters } from './npcEncounters';
 import { SmithQuest } from './smithQuest';
 import { Spawner } from './spawning';
+import { RunSetup } from './runSetup';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -214,6 +215,7 @@ export class Game {
   private readonly npcEncounters: NpcEncounters = new NpcEncounters(this);
   private readonly smithQuest: SmithQuest = new SmithQuest(this);
   private readonly spawner: Spawner = new Spawner(this);
+  private readonly runSetup: RunSetup = new RunSetup(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -1765,31 +1767,14 @@ export class Game {
 
   // ── Class selection ──────────────────────────────────────────────────────
 
-  /**
-   * The classes offered on the start-screen picker.
-   * @throws {TypeError} If `count` is not a positive finite number.
-   */
+  /** The classes offered on the start-screen picker. Delegates to {@link RunSetup}. */
   public getRandomClasses(count = 2): ClassDef[] {
-    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
-      throw new TypeError('Game.getRandomClasses: "count" must be a positive finite number');
-    }
-    return CLASSES.slice(0, count);
+    return this.runSetup.getRandomClasses(count);
   }
 
-  /**
-   * Applies the chosen starting class's stat effects/ability and sets the
-   * hero's board sprite to match.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
+  /** Applies the chosen starting class's stat effects/ability. Delegates to {@link RunSetup}. */
   public applyClass(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyClass: "id" must be a non-empty string');
-    const cls = CLASSES.find(c => c.id === id);
-    if (!cls) return;
-    cls.apply(this.player);
-    this.player.char = cls.emoji;  // the hero looks like the card you picked
-    this.activeClassId = id;
-    this.cb.log(`Playing as ${cls.name}: ${cls.tagline}`, 'log-perk', cls.emoji);
-    this.pushUI();
+    this.runSetup.applyClass(id);
   }
 
   // ── Difficulty selection ─────────────────────────────────────────────────
@@ -1811,28 +1796,9 @@ export class Game {
     return this.difficultyTuning().gravityPct;
   }
 
-  /**
-   * Applies the chosen run difficulty. Called once at run start, after the
-   * class is applied so the Max-HP multiplier covers class bonuses too; the
-   * monster/gold/gravity multipliers are read live from the preset at their
-   * respective choke points for the rest of the run.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
+  /** Applies the chosen run difficulty at run start. Delegates to {@link RunSetup}. */
   public applyDifficulty(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyDifficulty: "id" must be a non-empty string');
-    const preset = Balance.CONFIG.difficulty.presets.find(p => p.id === id);
-    if (!preset) return;
-    this.activeDifficultyId = id;
-    if (preset.playerHpMult !== 1) {
-      this.player.maxHp = Math.round(this.player.maxHp * preset.playerHpMult);
-      this.player.hp = Math.min(Math.round(this.player.hp * preset.playerHpMult), this.player.maxHp);
-    }
-    this.xpMultiplier *= preset.xpMult;
-    if (id !== 'standard') {
-      this.storyBeats.push(`chose ${preset.name.split(' — ')[0]!}`);
-      this.cb.log(`${preset.name}. ${preset.desc}`, 'log-perk', preset.icon);
-    }
-    this.pushUI();
+    this.runSetup.applyDifficulty(id);
   }
 
   // ── New Game+ heat ───────────────────────────────────────────────────────
@@ -1865,52 +1831,21 @@ export class Game {
     return this.heatAdd('gravityPct');
   }
 
-  /**
-   * Applies the chosen New Game+ heat. Called once at run start (only
-   * offered after a victory has unlocked the ladder); each active geis
-   * pays +`ngplus.xpBonusPerHeat` XP.
-   * @throws {TypeError} If `level` is not a finite number.
-   */
+  /** Applies the chosen New Game+ heat at run start. Delegates to {@link RunSetup}. */
   public applyHeat(level: number): void {
-    if (typeof level !== 'number' || !Number.isFinite(level)) throw new TypeError('Game.applyHeat: "level" must be a finite number');
-    const tiers = Balance.CONFIG.ngplus.tiers;
-    this.heatLevel = Math.max(0, Math.min(Math.floor(level), tiers.length));
-    if (this.heatLevel === 0) return;
-    this.xpMultiplier *= 1 + Balance.CONFIG.ngplus.xpBonusPerHeat * this.heatLevel;
-    for (const t of tiers) {
-      if (t.level <= this.heatLevel) this.cb.log(`${t.name} — ${t.desc}`, 'log-boss', t.icon);
-    }
-    this.cb.log(`Heat ${this.heatLevel}: +${Math.round(Balance.CONFIG.ngplus.xpBonusPerHeat * this.heatLevel * 100)}% XP for the burden.`, 'log-perk', 'special_sacred');
-    this.storyBeats.push(`took up ${this.heatLevel} ${this.heatLevel === 1 ? 'geis' : 'geasa'} of the victorious`);
-    this.pushUI();
+    this.runSetup.applyHeat(level);
   }
 
   // ── Modifier selection ───────────────────────────────────────────────────
 
-  /**
-   * A random selection of run modifiers (Rift Curses) for the start-screen picker.
-   * @throws {TypeError} If `count` is not a positive finite number.
-   */
+  /** A random selection of run modifiers (Rift Curses) for the start-screen picker. Delegates to {@link RunSetup}. */
   public getRandomModifiers(count = 3): ModifierDef[] {
-    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
-      throw new TypeError('Game.getRandomModifiers: "count" must be a positive finite number');
-    }
-    const shuffled = [...MODIFIERS].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
+    return this.runSetup.getRandomModifiers(count);
   }
 
-  /**
-   * Applies the chosen run modifier's effect for the whole run.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
+  /** Applies the chosen run modifier's effect for the whole run. Delegates to {@link RunSetup}. */
   public applyModifier(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyModifier: "id" must be a non-empty string');
-    const mod = MODIFIERS.find(m => m.id === id);
-    if (!mod) return;
-    mod.apply(this);
-    this.activeModifierId = id;
-    this.cb.log(`Rift Curse active: ${mod.name} — ${mod.desc}`, 'log-perk', mod.emoji);
-    this.pushUI();
+    this.runSetup.applyModifier(id);
   }
 
   // ── Tattoo Artist ─────────────────────────────────────────────────────────
@@ -3281,7 +3216,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters', 'smithQuest', 'spawner',
+    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters', 'smithQuest', 'spawner', 'runSetup',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
