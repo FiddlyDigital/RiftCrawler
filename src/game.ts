@@ -5,11 +5,11 @@ import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, N
 import { Fidchell } from './fidchell';
 import { GameMath } from './gameMath';
 import { AbilitySystem } from './systems/abilities';
+import { InspectView } from './views/inspect';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
 import { MonsterAiSystem } from './systems/monsterAI';
-import { SpriteService } from './sprites';
 import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
 import { StorageService } from './storage';
@@ -233,6 +233,7 @@ export class Game {
   // Self-contained in its own module (see src/fidchell.ts); Game just holds the
   // instance and delegates entry, input, the HUD payload, and save/resume.
   public readonly fidchell: Fidchell = new Fidchell(this);
+  private readonly inspectView: InspectView = new InspectView(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -704,7 +705,7 @@ export class Game {
     return this.altarTiles.some(a => a.x === x && a.y === y);
   }
 
-  private getHazardAt(x: number, y: number): HazardTile | undefined {
+  public getHazardAt(x: number, y: number): HazardTile | undefined {
     return this.hazards.find(h => h.x === x && h.y === y);
   }
 
@@ -3641,85 +3642,8 @@ export class Game {
 
   // ── Tap-to-inspect ───────────────────────────────────────────────────────
 
-  /**
-   * Builds the inspect-tooltip content for whatever occupies `(x, y)` —
-   * the hero, a monster, a hazard, or a floor feature.
-   * @throws {TypeError} If `x` or `y` is not a finite number.
-   */
-  public getInspectInfo(x: number, y: number): InspectInfo | null {
-    if (typeof x !== 'number' || !Number.isFinite(x)) throw new TypeError('Game.getInspectInfo: "x" must be a finite number');
-    if (typeof y !== 'number' || !Number.isFinite(y)) throw new TypeError('Game.getInspectInfo: "y" must be a finite number');
-    if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return null;
-
-    if (this.player.x === x && this.player.y === y) {
-      const lines = [
-        `HP ${Math.round(this.player.hp)}/${Math.round(this.player.maxHp)}`,
-        `ATK ${Math.round(this.player.totalAtk)}  DEF ${this.player.totalDef}`,
-        `Lv.${this.player.playerLevel}`,
-      ];
-      if (this.player.boons.length > 0) lines.push(`Geasa: ${this.player.boons.map(b => `${SpriteService.iconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
-      return { icon: this.player.char, title: 'You', lines };
-    }
-
-    const monster = this.getMonsterAt(x, y);
-    if (monster) {
-      const hitPct = Math.round(CombatSystem.estimateHitChance(this.player.combatLevel, monster.combatLevel) * 100);
-      const lines = [
-        `HP ${Math.max(0, monster.hp)}/${monster.maxHp}`,
-        `ATK ${monster.atk}`,
-        `Your hit chance: ${hitPct}%`,
-        `Type: ${monster.behaviorType}`,
-      ];
-      if (monster.statuses.length > 0) lines.push(`Status: ${monster.statuses.map(s => s.type).join(', ')}`);
-      return { icon: monster.char, title: monster.name, lines };
-    }
-
-    const hazard = this.getHazardAt(x, y);
-    if (hazard) {
-      if (hazard.type === 'spike') {
-        const line = hazard.warning ? `Firing in ${hazard.timer}!` : `Arms in ${hazard.timer} turns`;
-        return { icon: 'trap_spike', title: 'Spike Trap', lines: [line] };
-      }
-      if (hazard.type === 'smoke') {
-        return { icon: 'trap_smoke', title: 'Smoke Cloud', lines: ['Limits vision while standing inside'] };
-      }
-      if (hazard.type === 'teleport') {
-        return { icon: 'trap_teleport', title: 'Teleport Rune', lines: ['Warps whoever steps on it to a random floor tile'] };
-      }
-    }
-
-    if (this.map[x]![y] === Tile.STAIRS) {
-      return { icon: 'tile_stairs', title: 'Stairs', lines: ['Descend to the next floor'] };
-    }
-
-    if (this.isTattooTile(x, y)) {
-      return this.player.brandsCapped
-        ? { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['No room left — you already bear 5 Ogham Marks'] }
-        : { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Ogham Mark'] };
-    }
-
-    const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
-    if (altarInfo) {
-      const tierName = altarInfo.tier === 3 ? 'Grand Altar (Tier III)' : altarInfo.tier === 2 ? 'Ruined Altar (Tier II)' : 'Minor Altar (Tier I)';
-      return { icon: 'tile_altar', title: tierName, lines: ['Step on to choose a stackable geis'] };
-    }
-
-    const npcInfo = this.npcTiles.find(n => n.x === x && n.y === y);
-    if (npcInfo) {
-      return npcInfo.npcId === '__ghost__'
-        ? { icon: 'sprite_boss_wraith', title: 'A Restless Ghost', lines: ['A fallen wanderer... something about them is familiar'] }
-        : { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
-    }
-
-    const special = this.specialTiles.find(t => t.x === x && t.y === y);
-    if (special) {
-      if (special.type === 'swamp')  return { icon: 'special_swamp',  title: 'Swamp',         lines: ['Deals 1 dmg/turn to monsters'] };
-      if (special.type === 'sacred') return { icon: 'special_sacred', title: 'Sacred Ground', lines: ['Wait here for +2 bonus HP per rest'] };
-      if (special.type === 'ice')    return { icon: 'special_ice',    title: 'Ice',           lines: ['Slide uncontrollably in direction of travel'] };
-    }
-
-    return null;
-  }
+  /** Builds the inspect-tooltip content for whatever occupies `(x, y)` (delegates to {@link InspectView}). */
+  public getInspectInfo(x: number, y: number): InspectInfo | null { return this.inspectView.build(x, y); }
 
   // ── Character sheet ─────────────────────────────────────────────────────
   // Aggregates every effective stat currently on the player — base numbers
@@ -3811,7 +3735,9 @@ export class Game {
     'activeGhost', 'availableGhosts',
     'lastLineClearMs', 'tutorialSafety',
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
-    'fidchell',  // its own module with a back-ref to Game — serialized explicitly below
+    // Composed subsystems that hold a back-ref to Game — never part of the data
+    // snapshot (each serializes its own state explicitly if it has any).
+    'fidchell', 'inspectView',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
