@@ -38,7 +38,7 @@ export class SaveGame {
     // snapshot (each serializes its own state explicitly if it has any; the duel
     // and fidchell round-trip via their own serialize()/restore()).
     'fidchell', 'causewayDuel', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact',
-    'npcEncounters', 'smithQuest', 'spawner', 'runSetup', 'saveGame', 'vendorOffers', 'bossEncounters',
+    'npcEncounters', 'smithQuest', 'spawner', 'runSetup', 'saveGame', 'vendorOffers', 'bossEncounters', 'waystation',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link restore}). */

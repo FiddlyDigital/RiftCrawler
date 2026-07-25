@@ -1468,12 +1468,11 @@ describe("Lugh's Spear questline (the three legendary smiths)", () => {
     const game = new Game(cb);
     const g = game as unknown as {
       spearPartsHeld: Set<string>; smithsMetCount: number; spearForged: boolean;
-      triggerSmithEncounter(smith: unknown, onClosed?: () => void): void;
     };
 
     for (const smith of SMITHS) {
       onFloorEvent.mockClear();
-      g.triggerSmithEncounter(smith);
+      game.smithQuest.triggerEncounter(smith);
       expect(onFloorEvent).toHaveBeenCalledTimes(1);
       const [event, onChoice] = onFloorEvent.mock.calls[0]!;
       expect(event.title).toBe(smith.name);
