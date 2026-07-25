@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
+import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
@@ -13,6 +13,7 @@ import { NpcEncounters } from './npcEncounters';
 import { SmithQuest } from './smithQuest';
 import { Spawner } from './spawning';
 import { RunSetup } from './runSetup';
+import { SaveGame } from './saveGame';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -152,7 +153,7 @@ export class Game {
   /** The captors' monster archetype, rolled with the rescue piece. Public for the falling-piece preview. */
   public pendingGuardKey: string | null = null;
   /** The live captor monsters — the captive can't be freed until every one is dead. */
-  private rescueGuards: Monster[] = [];
+  public rescueGuards: Monster[] = [];  // public: read/written by SaveGame
   /** ATK granted by Bricriu's Champion's Portion, reverted on the next descent. */
   private portionAtkBonus = 0;
 
@@ -179,8 +180,8 @@ export class Game {
   public inCausewayDuel = false;
   /** Tile ownership during a duel: 0 unclaimed, 1 player, 2 boss. */
   private duelOwner: number[][] = [];
-  /** The boss entity for the active duel (descends its causeway toward the hero; killing it wins the floor). */
-  private duelBoss: Monster | null = null;
+  /** The boss entity for the active duel (descends its causeway toward the hero; killing it wins the floor). Public: re-linked by SaveGame on restore. */
+  public duelBoss: Monster | null = null;
   /** The hero's home tile (the shore). The bridge "lands" — and the run is lost — when a boss tile reaches it. */
   private duelHome = { x: 0, y: 0 };
   /** Set once the duel has been decided, so late inputs can't re-trigger win/loss. */
@@ -216,6 +217,7 @@ export class Game {
   private readonly smithQuest: SmithQuest = new SmithQuest(this);
   private readonly spawner: Spawner = new Spawner(this);
   private readonly runSetup: RunSetup = new RunSetup(this);
+  private readonly saveGame: SaveGame = new SaveGame(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -268,7 +270,7 @@ export class Game {
   /** Set once his tier-3 Geis has been accepted — he departs for the rest of the run. */
   public dagdaGiftClaimed = false;
   public comboCount = 0;
-  private lastLineClearMs = 0;
+  public lastLineClearMs = 0;  // public: reset by SaveGame on restore
   public tattooTiles: Array<{ x: number; y: number }> = [];
   /** Caps Ogham Mark tiles per floor. */
   private tattooTilesSpawnedThisFloor = 0;
@@ -306,10 +308,11 @@ export class Game {
   /** Whether the run's first sub-15%-HP survival has already pushed a "close call" story beat. */
   private hadCloseCall = false;
 
-  // Active boss mechanics (set at spawn, cleared on floor reset)
-  private activeBossOnHalfHp: ((game: Game) => void) | null = null;
+  // Active boss mechanics (set at spawn, cleared on floor reset).
+  // Public: reattached by SaveGame around the restored boss instance.
+  public activeBossOnHalfHp: ((game: Game) => void) | null = null;
   public activeBossOnDeath:   ((game: Game, x: number, y: number) => void) | null = null;
-  private bossHalfHpTriggered = false;
+  public bossHalfHpTriggered = false;
 
   /**
    * Endgame: overflowing the stack summons Gorgoth the Returned. While
@@ -2584,7 +2587,7 @@ export class Game {
    * a factory so both {@link summonGorgoth} and a mid-duel save restore can
    * attach it around the live boss instance.
    */
-  private makeGorgothOnHalfHp(boss: Monster): (game: Game) => void {
+  public makeGorgothOnHalfHp(boss: Monster): (game: Game) => void {
     return (g) => {
       g.gorgothHalfTriggered = true;
       g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
@@ -3196,112 +3199,18 @@ export class Game {
 
   // ── Mid-run save/resume ──────────────────────────────────────────────────
 
-  /**
-   * Fields excluded from the generic scalar sweep in {@link serialize}:
-   * the host callbacks, live entity/content-instance references (serialized
-   * in re-resolvable forms instead), function-valued boss hooks (reattached
-   * by id/name on restore), Sets (stored as arrays), session-relative
-   * timestamps, and tutorial state (owned by the live TutorialController —
-   * a save is never taken mid-tutorial). Everything else — grids, counters,
-   * tile lists, flags — round-trips verbatim, so newly added plain fields
-   * are persisted without touching the save code.
-   */
-  private static readonly SAVE_SKIP = new Set([
-    'cb', 'player', 'monsters', 'rescueGuards',
-    'activeOmen', 'pendingFloorEvent',
-    'activeBossOnHalfHp', 'activeBossOnDeath',
-    'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
-    'activeGhost', 'availableGhosts',
-    'lastLineClearMs', 'tutorialSafety',
-    'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
-    // Composed subsystems that hold a back-ref to Game — never part of the data
-    // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters', 'smithQuest', 'spawner', 'runSetup',
-  ]);
-
-  /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
+  /** Snapshots the complete run state for the mid-run save. Delegates to {@link SaveGame}. */
   public serialize(): SavedRun {
-    const scalars: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(this)) {
-      if (!Game.SAVE_SKIP.has(k)) scalars[k] = v;
-    }
-    return {
-      version: SAVE_VERSION,
-      savedAt: Date.now(),
-      scalars,
-      player: this.player.serialize(),
-      monsters: this.monsters.map(m => m.serialize()),
-      rescueGuardIdx: this.rescueGuards.map(g => this.monsters.indexOf(g)).filter(i => i >= 0),
-      omenId: this.activeOmen?.id ?? null,
-      pendingFloorEventId: this.pendingFloorEvent?.id ?? null,
-      rescuedIds: [...this.rescuedIds],
-      spearPartsHeld: [...this.spearPartsHeld],
-      metFlavorNpcIds: [...this.metFlavorNpcIds],
-      activeGhost: this.activeGhost,
-      fidchell: this.fidchell.serialize(),
-    };
+    return this.saveGame.serialize();
   }
 
   /**
    * Restores a {@link serialize} snapshot onto a shell built with
-   * `new Game(cb, { forRestore: true })`. Content references (omen, pending
-   * floor event, boons/brands, boss mechanics) are re-resolved against the
-   * currently loaded data; a reference whose id no longer exists degrades to
-   * "absent" rather than crashing — except the falling piece's shape, without
-   * which the run can't continue.
+   * `new Game(cb, { forRestore: true })`. Delegates to {@link SaveGame}.
    * @throws {Error} If the save's version doesn't match, or its piece shapes no longer exist.
    */
   public applySave(save: SavedRun): void {
-    if (save.version !== SAVE_VERSION) {
-      throw new Error(`Game.applySave: save version ${save.version} is not ${SAVE_VERSION}`);
-    }
-    Object.assign(this, save.scalars);
-    this.fidchell.restore(save.fidchell);
-    if (!SHAPES[this.currentType] || !SHAPES[this.nextType] || (this.heldType !== null && !SHAPES[this.heldType])) {
-      throw new Error('Game.applySave: a saved piece shape no longer exists in shapes.json');
-    }
-    this.player.applySave(save.player, {
-      boon:  id => Boon.ALL.find(b => b.id === id),
-      brand: id => Brand.ALL.find(b => b.id === id),
-    });
-    this.monsters = save.monsters.map(m => Monster.fromSave(m));
-    this.rescueGuards = save.rescueGuardIdx
-      .map(i => this.monsters[i])
-      .filter((m): m is Monster => m !== undefined);
-    this.activeOmen = save.omenId === null ? null : Omen.ALL.find(o => o.id === save.omenId) ?? null;
-    this.pendingFloorEvent = save.pendingFloorEventId === null
-      ? null
-      : FloorEvent.ALL.find(f => f.id === save.pendingFloorEventId) ?? null;
-    this.rescuedIds = new Set(save.rescuedIds);
-    this.spearPartsHeld = new Set(save.spearPartsHeld as Array<'shaft' | 'bolts' | 'head'>);
-    this.metFlavorNpcIds = new Set(save.metFlavorNpcIds);
-    this.activeGhost = save.activeGhost;
-    // Boss mechanics are functions — reattach them from the live content
-    // definitions around the restored boss instance.
-    const boss = this.monsters.find(m => m.isBoss);
-    if (this.inCausewayDuel) {
-      // The duel owns its boss outright (no biome hooks) — just re-link the
-      // reference to the restored boss instance so the win path still fires.
-      this.duelBoss = boss ?? null;
-      this.activeBossOnHalfHp = null;
-      this.activeBossOnDeath = null;
-      this.bossHalfHpTriggered = true;
-    } else if (boss?.isGorgoth) {
-      this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
-      this.activeBossOnDeath = null;
-    } else if (boss) {
-      const def = BOSSES.find(b => b.name === boss.name);
-      this.activeBossOnHalfHp = def?.onHalfHp ?? null;
-      this.activeBossOnDeath  = def?.onDeath  ?? null;
-    }
-    // Session-relative state restarts clean: the combo window is long gone,
-    // and a snapshot is only ever taken of a live, unblocked, post-tutorial game.
-    this.lastLineClearMs = 0;
-    this.comboCount = 0;
-    this.active = true;
-    this.paused = false;
-    this.tutorialSafety = false;
-    this.pushUI();
+    this.saveGame.restore(save);
   }
 
   // ── UI push ──────────────────────────────────────────────────────────────
