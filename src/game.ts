@@ -1,7 +1,7 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
+import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
 import { GameMath } from './gameMath';
 import { AbilitySystem } from './systems/abilities';
@@ -14,6 +14,7 @@ import { SmithQuest } from './smithQuest';
 import { Spawner } from './spawning';
 import { RunSetup } from './runSetup';
 import { SaveGame } from './saveGame';
+import { VendorOffers } from './vendorOffers';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -155,7 +156,7 @@ export class Game {
   /** The live captor monsters — the captive can't be freed until every one is dead. */
   public rescueGuards: Monster[] = [];  // public: read/written by SaveGame
   /** ATK granted by Bricriu's Champion's Portion, reverted on the next descent. */
-  private portionAtkBonus = 0;
+  public portionAtkBonus = 0;  // public: read/written by VendorOffers (Bricriu) and descent revert
 
   /** While the first-run tutorial is teaching, natural enemy spawns are suppressed — the tutorial introduces its own single practice foe (see spawnTutorialFoe). */
   public tutorialSafety = false;
@@ -218,6 +219,7 @@ export class Game {
   private readonly spawner: Spawner = new Spawner(this);
   private readonly runSetup: RunSetup = new RunSetup(this);
   private readonly saveGame: SaveGame = new SaveGame(this);
+  private readonly vendorOffers: VendorOffers = new VendorOffers(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -1084,117 +1086,9 @@ export class Game {
    * ahead, and Bricriu serves the Champion's Portion (+ATK until the next
    * descent, one helping per floor).
    */
+  /** The service a freed nexus-rescue NPC offers. Delegates to {@link VendorOffers}. */
   private openRescueService(rescue: RescueDef): void {
-    if (!this.cb.onFloorEvent) { this.advanceTurn(); return; }
-    let event: FloorEventDef;
-    if (rescue.service === 'wright') {
-      const shapes: ShapeKey[] = ['I', 'O', 'T', 'L', 'J', 'S', 'Z'];
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: rescue.serviceFlavor,
-        options: [
-          ...shapes.map(k => ({
-            label: `The ${k}-stone`,
-            desc: `Your next falling stone will be the ${k} shape.`,
-            apply: (game: Game): string => {
-              game.nextType = k;
-              game.pushUI();
-              return `The Gobán Saor taps the plan twice. "One ${k}-stone, cut true." It will be your next piece.`;
-            },
-          })),
-          { label: 'No need', desc: '', apply: (): string => 'He shrugs and goes back to squaring a block that was already square.' },
-        ],
-      };
-    } else if (rescue.service === 'seer') {
-      const interval = Balance.CONFIG.floors.bossFloorInterval;
-      const nextBossFloor = (Math.floor(this.dungeonLevel / interval) + 1) * interval;
-      const boss = this.previewBossForFloor(nextBossFloor);
-      const smithsLeft = this.smithsMetCount < SMITHS.length && !this.spearForged;
-      const smithLine = smithsLeft
-        ? ` The anvils still ring below — ${SMITHS.length - this.smithsMetCount} smith${SMITHS.length - this.smithsMetCount === 1 ? '' : 's'} yet to find.`
-        : '';
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: `${rescue.serviceFlavor} "I see crimson at floor ${nextBossFloor} — ${boss.name} waits there, and knows you are coming.${smithLine}"`,
-        options: [{ label: 'Thank her', desc: '', apply: (): string => 'The flame gutters out. Fedelm is already looking at something else — something further down.' }],
-      };
-    } else if (rescue.service === 'healer') {
-      const cost = Balance.CONFIG.rescues.healerBaseCost + this.dungeonLevel * Balance.CONFIG.rescues.healerCostPerFloor;
-      const hpGain = Balance.CONFIG.rescues.healerHpGain;
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: rescue.serviceFlavor,
-        options: [
-          {
-            label: `Buy her herbs (${cost} gold)`,
-            desc: `+${hpGain} Max HP, permanently.`,
-            apply: (game: Game): string => {
-              if (game.gold < cost) return 'Airmed folds the herbs away. "Healing is costly. Dying is costlier — come back with gold."';
-              game.gold -= cost;
-              game.player.maxHp += hpGain;
-              game.player.hp += hpGain;
-              game.storyBeats.push("ate of the herbs of Miach's grave");
-              game.pushUI();
-              return `The herbs are bitter as grief and warm as a hearth. +${hpGain} Max HP, forever.`;
-            },
-          },
-          { label: 'Not today', desc: '', apply: (): string => '"Then don\'t come crying to me with your ribs showing," she says, not unkindly.' },
-        ],
-      };
-    } else if (rescue.service === 'harper') {
-      const played = this.harperLullFloor === this.dungeonLevel + 1;
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: played
-          ? 'Abcán is still playing, eyes closed. The suantraí already drifts down the stair ahead of you — one floor of it is all one harp can hold.'
-          : rescue.serviceFlavor,
-        options: played
-          ? [{ label: 'Leave him to it', desc: '', apply: (): string => 'You leave the harper to his slow, heavy tune.' }]
-          : [
-              {
-                label: 'Ask for the suantraí',
-                desc: 'Every monster on the NEXT floor arrives drowsy (stunned 2 turns).',
-                apply: (game: Game): string => {
-                  game.harperLullFloor = game.dungeonLevel + 1;
-                  game.storyBeats.push("descended under Abcán's sleep-strain");
-                  return 'Abcán bends to the strings, and the stairwell fills with a tune like falling snow. Whatever waits below will wake slowly.';
-                },
-              },
-              { label: 'Not now', desc: '', apply: (): string => '"Suit yourself," he says. "The deep is louder without me."' },
-            ],
-      };
-    } else {
-      const fed = this.portionAtkBonus > 0;
-      const atk = Balance.CONFIG.rescues.portionAtk;
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: fed
-          ? 'Bricriu spreads his hands over an empty table. "The Champion\'s Portion is one portion. That is the entire point of it, hero."'
-          : rescue.serviceFlavor,
-        options: fed
-          ? [{ label: 'Leave the table', desc: '', apply: (): string => 'You leave the table before he starts a feud about it.' }]
-          : [
-              {
-                label: "Eat the Champion's Portion",
-                desc: `+${atk} ATK until your next descent.`,
-                apply: (game: Game): string => {
-                  game.portionAtkBonus = atk;
-                  game.player.atk += atk;
-                  game.pushUI();
-                  return `You eat the hero's cut while Bricriu watches everyone else not eating it. +${atk} ATK until the next descent.`;
-                },
-              },
-              { label: 'Decline politely', desc: '', apply: (): string => '"Extraordinary," Bricriu says, delighted. "A hero with manners. The portion keeps."' },
-            ],
-      };
-    }
-    this.paused = true;
-    this.cb.onFloorEvent(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', rescue.char);
-      this.paused = false;
-      this.cb.onAction();
-    });
+    this.vendorOffers.rescueService(rescue);
   }
 
   /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
@@ -1854,98 +1748,19 @@ export class Game {
   // ── Tattoo Artist ─────────────────────────────────────────────────────────
 
   /** Opens the tattoo-artist brand-choice modal (reachable via a tattoo-artist tile). `onClosed` fires once a mark is chosen. */
+  /** Opens the tattoo-artist brand-choice modal. Delegates to {@link VendorOffers}. */
   private openTattooArtist(onClosed?: () => void): void {
-    this.paused = true;
-    const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
-    let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
-    let choices = Brand.pickThree(ownedIds());
-    const commit = (index: number): void => {
-      const slot = BODY_PARTS[this.player.brands.length % BODY_PARTS.length]!;
-      const chosen = choices[index]!;
-      this.player.addBrand(slot, chosen);
-      const setCompleted = this.player.brands.filter(b => b.brand.id === chosen.id).length % chosen.setSize === 0;
-      this.cb.onParticleBurst?.(this.player.x, this.player.y, setCompleted ? 14 : 6, setCompleted ? '#d9a441' : '#9d7bc7');
-      this.cb.log(`${choices[index]!.name} Ogham mark tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
-      this.paused = false;
-      this.pushUI();
-      this.cb.onAction?.();
-      onClosed?.();
-    };
-    this.cb.onOpenTattooArtist?.(choices, commit, {
-      gold: this.gold,
-      cost,
-      run: () => {
-        if (this.gold < cost) return null;
-        this.gold -= cost;
-        cost = Math.floor(cost * Balance.CONFIG.economy.ogmRerollCostGrowth);
-        choices = Brand.pickThree(ownedIds());
-        this.pushUI();
-        return { choices, gold: this.gold, cost };
-      },
-    });
+    this.vendorOffers.tattooArtist(onClosed);
   }
 
-  /**
-   * The Fear Dearg's stall — the gold sink. Prices scale with depth; each
-   * item can be bought once per visit.
-   */
+  /** The Fear Dearg's stall — the gold sink. Delegates to {@link VendorOffers}. */
   public openPeddler(): void {
-    if (!this.cb.onOpenShop) return;
-    this.paused = true;
-    const prices = Balance.CONFIG.economy.shop.prices;
-    const cost = (p: { base: number; perFloor: number }): number => p.base + p.perFloor * this.dungeonLevel;
-    const stock: ShopItem[] = [
-      { id: 'heal',  icon: 'sprite_potion',           name: 'Hearth Broth',       desc: 'Restore to full HP',                     cost: cost(prices.heal),  purchased: false },
-      { id: 'maxhp', icon: 'item_heart',              name: 'Bogwood Charm',      desc: '+10% Max HP',                            cost: cost(prices.maxhp), purchased: false },
-      { id: 'atk',   icon: 'sprite_equip_iron_sword', name: 'Ogham-Etched Edge',  desc: '+10% ATK',                               cost: cost(prices.atk),   purchased: false },
-      { id: 'ward',  icon: 'status_poison',           name: 'Deathward Sigil',    desc: 'Survive one killing blow (this floor)',  cost: cost(prices.ward),  purchased: false },
-    ];
-    const buy = (id: string): { gold: number; ok: boolean } => {
-      const item = stock.find(s => s.id === id);
-      if (!item || item.purchased || this.gold < item.cost) return { gold: this.gold, ok: false };
-      this.gold -= item.cost;
-      item.purchased = true;
-      switch (id) {
-        case 'heal':  this.player.heal(this.player.maxHp); break;
-        case 'maxhp': this.player.maxHp *= 1.10; this.player.hp = Math.min(this.player.hp * 1.10, this.player.maxHp); break;
-        case 'atk':   this.player.atk *= 1.10; break;
-        case 'ward':  this.player.deathwardCharges += 1; break;
-      }
-      this.cb.log(`Bought ${item.name} for ${item.cost}g.`, 'log-perk', item.icon);
-      this.pushUI();
-      return { gold: this.gold, ok: true };
-    };
-    this.cb.log('A red-capped peddler unfolds his stall...', 'log-perk', 'tile_merchant');
-    this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
+    this.vendorOffers.peddler();
   }
 
-  /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). `onClosed` fires once a boon is chosen. */
+  /** Opens the altar boon-choice modal for the given reward tier. Delegates to {@link VendorOffers}. */
   private openAltar(tier: 1 | 2 | 3, onClosed?: () => void): void {
-    this.paused = true;
-    const pool = Boon.BY_TIER[tier];
-    const ownedIds = (): string[] => this.player.boons.map(b => b.id);
-    let cost = Balance.CONFIG.economy.geasaRerollBaseCost;
-    let choices = Boon.pickThree(pool, ownedIds());
-    const commit = (index: number): void => {
-      this.player.addBoon(choices[index]!);
-      this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#b98fc4');
-      this.paused = false;
-      this.pushUI();
-      this.cb.onAction?.();
-      onClosed?.();
-    };
-    this.cb.onOpenAltar?.(tier, choices, commit, {
-      gold: this.gold,
-      cost,
-      run: () => {
-        if (this.gold < cost) return null;
-        this.gold -= cost;
-        cost = Math.floor(cost * Balance.CONFIG.economy.geasaRerollCostGrowth);
-        choices = Boon.pickThree(pool, ownedIds());
-        this.pushUI();
-        return { choices, gold: this.gold, cost };
-      },
-    });
+    this.vendorOffers.altar(tier, onClosed);
   }
 
   // ── Action handlers ──────────────────────────────────────────────────────
