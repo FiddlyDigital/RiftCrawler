@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
+import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
@@ -9,6 +9,7 @@ import { InspectView } from './views/inspect';
 import { CharacterSheetView } from './views/charSheet';
 import { UiStateBuilder } from './views/uiState';
 import { PactCeremony } from './pact';
+import { NpcEncounters } from './npcEncounters';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -208,6 +209,7 @@ export class Game {
   public readonly characterSheetView: CharacterSheetView = new CharacterSheetView(this);
   private readonly uiStateBuilder: UiStateBuilder = new UiStateBuilder(this);
   private readonly pact: PactCeremony = new PactCeremony(this);
+  private readonly npcEncounters: NpcEncounters = new NpcEncounters(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -286,13 +288,13 @@ export class Game {
    */
   public availableGhosts: GhostRecord[] = [];
   /** This floor's haunting, chosen at floor start when a stored ghost's level is within tolerance of the current hero's. */
-  private activeGhost: GhostRecord | null = null;
+  public activeGhost: GhostRecord | null = null;
   private ghostPlaced = false;
 
   /** Notable moments this run — feeds the death/victory screen's short "tale of the run" recap. */
   public storyBeats: string[] = [];
-  /** Flavor-kind NPC ids already met this run, so a repeat encounter shows {@link NpcDef.returnLine} instead of a fresh random line. */
-  private metFlavorNpcIds = new Set<string>();
+  /** Flavor-kind NPC ids already met this run, so a repeat encounter shows its return line instead of a fresh random line. */
+  public metFlavorNpcIds = new Set<string>();
   /** Whether the run's first elite kill has already pushed a story beat (elites can be felled many times a run — only the first is notable). */
   public firstEliteFelled = false;
   /** Whether the run's first sub-15%-HP survival has already pushed a "close call" story beat. */
@@ -1045,189 +1047,12 @@ export class Game {
   // fixed order, biome permitting), and biome is itself purely a function of
   // floor number — so this can truthfully preview a boss on a floor the
   // player hasn't reached yet (used by the vengeance-bounty NPC).
-  private previewBossForFloor(floor: number): BossDef {
+  public previewBossForFloor(floor: number): BossDef {
     const biome = Biome.forFloor(floor);
     const biomeBosses   = BOSSES.filter(b => b.biomeId === biome.id);
     const genericBosses = BOSSES.filter(b => !b.biomeId);
     const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
     return bossPool[(Math.floor(floor / Balance.CONFIG.floors.bossFloorInterval) - 1) % bossPool.length]!;
-  }
-
-  // ── Wandering NPCs ─────────────────────────────────────────────────────────
-  // Reuses the floor-event modal/plumbing entirely — an NPC encounter is just
-  // a FloorEventDef built at runtime instead of loaded from JSON, so no new
-  // UI or callback wiring is needed.
-
-  private triggerNpcEncounter(npc: NpcDef, onClosed?: () => void): void {
-    this.cb.onCodexDiscover?.('npc', npc.id);
-    let event: FloorEventDef;
-
-    if (npc.kind === 'bounty') {
-      const targetFloor = (Math.floor(this.dungeonLevel / Balance.CONFIG.floors.bossFloorInterval) + 1) * Balance.CONFIG.floors.bossFloorInterval;
-      const targetBoss = this.previewBossForFloor(targetFloor);
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name,
-        flavor: `${npc.introLine} ${targetBoss.name} still draws breath at Floor ${targetFloor} — finish what I started, and I'll see you rewarded.`,
-        options: [
-          {
-            label: `Swear vengeance on ${targetBoss.name}`,
-            desc: `Slay ${targetBoss.name} at Floor ${targetFloor} or beyond for a rare Geis.`,
-            apply: (game): string => {
-              game.activeBountyQuest = { bossName: targetBoss.name, floor: targetFloor };
-              game.storyBeats.push(`swore vengeance on ${targetBoss.name}`);
-              return `You swear vengeance upon ${targetBoss.name}, in ${npc.name}'s name.`;
-            },
-          },
-          { label: 'Not now', desc: '', apply: (): string => `${npc.name} nods, unsurprised, and fades back into the dark.` },
-        ],
-      };
-    } else if (npc.kind === 'trade' && this.player.boons.length === 0) {
-      // Still a real encounter (dialog + departure beam), just with nothing
-      // to trade yet — not a silent log line while the NPC vanishes.
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name,
-        flavor: `${npc.introLine} ...but you carry nothing worth trading. Come back once you've gathered some Geasa.`,
-        options: [{ label: 'Nothing to offer', desc: '', apply: (): string => `${npc.name} shrugs and fades back into the dark.` }],
-      };
-    } else if (npc.kind === 'trade') {
-      const boonOptions = this.player.boons.map(b => ({
-        label: `Give up ${b.def.name} (×${b.stacks})`,
-        desc: b.def.desc,
-        apply: (game: Game): string => {
-          game.player.removeBoon(b.id);
-          const pool = Boon.BY_TIER[3].filter(x => x.id !== b.def.id);
-          const reward = (pool.length > 0 ? pool : Boon.BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : Boon.BY_TIER[3].length))]!;
-          game.player.addBoon(reward);
-          game.storyBeats.push(`traded ${b.def.name} to a Fomorian tinker for ${reward.name}`);
-          return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
-        },
-      }));
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name, flavor: npc.introLine!,
-        options: [...boonOptions, { label: 'Never mind', desc: '', apply: (): string => 'You keep your Geasa close.' }],
-      };
-    } else {
-      const metBefore = this.metFlavorNpcIds.has(npc.id);
-      const lines = npc.lines!;
-      const flavor = metBefore && npc.returnLine ? npc.returnLine : lines[Math.floor(Math.random() * lines.length)]!;
-      this.metFlavorNpcIds.add(npc.id);
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name, flavor,
-        options: [{ label: 'Farewell', desc: '', apply: (): string => 'You part ways.' }],
-      };
-    }
-
-    this.storyBeats.push(`crossed paths with ${npc.name}`);
-    this.cb.onAudio?.('npcEncounter');
-    this.paused = true;
-    this.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', npc.char);
-      this.paused = false;
-      this.cb.onAction();
-      onClosed?.();
-    });
-  }
-
-  /** Your run's story so far, in the seanchaí's voice — built from {@link storyBeats}. */
-  private buildOwnTale(): string {
-    const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'a wanderer';
-    const beats = this.storyBeats.slice(0, 5);
-    const joined = beats.length === 0
-      ? 'you have only begun'
-      : beats.length === 1
-      ? `already you ${beats[0]!}`
-      : `already you ${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
-    const more = this.storyBeats.length > 5 ? ' …and more besides — the verse grows long.' : '';
-    return `He closes his eyes and speaks it like an old poem: "${cls}, ${this.dungeonLevel} floor${this.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}" He opens one eye. "The ending, now. That part is still yours."`;
-  }
-
-  /**
-   * The seanchaí of the mound: mound-lore flavor plus "ask for your own
-   * tale" — which opens a SECOND dialog whose body IS the tale, so the
-   * story is actually read on screen instead of scrolling past in the log
-   * (invisible on mobile, where the sidebar is a drawer). He never departs.
-   */
-  private triggerSeanchaiEncounter(): void {
-    const npc = NPCS.find(n => n.id === 'seanchai');
-    if (!npc || !this.cb.onFloorEvent) { this.advanceTurn(); return; }
-    this.cb.onCodexDiscover?.('npc', npc.id);
-    const metBefore = this.metFlavorNpcIds.has(npc.id);
-    const lines = npc.lines ?? [];
-    const flavor = (metBefore && npc.returnLine) || lines[Math.floor(Math.random() * Math.max(1, lines.length))] || npc.name;
-    this.metFlavorNpcIds.add(npc.id);
-    const event: FloorEventDef = {
-      id: npc.id, emoji: npc.char, title: npc.name, flavor,
-      options: [
-        { label: 'Ask for your own tale', desc: 'Hear the seanchaí recount your descent so far.', apply: (): string => '' },
-        { label: 'Farewell', desc: '', apply: (): string => 'The seanchaí nods and returns to watching the fire.' },
-      ],
-    };
-    this.cb.onAudio?.('npcEncounter');
-    this.paused = true;
-    this.cb.onFloorEvent(event, (index) => {
-      if (index === 0) {
-        // Chain straight into the tale dialog — the game stays paused between the two.
-        const tale = this.buildOwnTale();
-        this.cb.log(tale, 'log-perk', npc.char);
-        this.storyBeats.push('heard your own tale by the mound-fire');
-        const taleEvent: FloorEventDef = {
-          id: '__seanchai_tale__', emoji: npc.char, title: 'Your Tale, So Far', flavor: tale,
-          options: [{ label: 'Farewell', desc: '', apply: (): string => 'The seanchaí nods and returns to watching the fire.' }],
-        };
-        this.cb.onFloorEvent?.(taleEvent, () => {
-          this.paused = false;
-          this.cb.onAction();
-        });
-        return;
-      }
-      this.cb.log('The seanchaí nods and returns to watching the fire.', 'log-perk', npc.char);
-      this.paused = false;
-      this.cb.onAction();
-    });
-  }
-
-  // A fallen character from a previous run, met again. Laying them to rest
-  // grants a fragment of their old power and removes them from the ghost
-  // file permanently; turning away leaves them haunting future runs.
-  private triggerGhostEncounter(onClosed?: () => void): void {
-    const ghost = this.activeGhost;
-    if (!ghost) { onClosed?.(); return; }
-    const className = CLASSES.find(c => c.id === ghost.classId)?.name ?? 'wanderer';
-    const event: FloorEventDef = {
-      id: '__ghost__', emoji: 'sprite_boss_wraith', title: 'A Ghost of Yourself',
-      flavor: `The mist gathers into a familiar shape — a ${className} of level ${ghost.playerLevel}, who fell on Floor ${ghost.floor} (${ghost.date}). ${ghost.cause}. It watches you with your own eyes.`,
-      options: [
-        {
-          label: 'Lay them to rest',
-          desc: 'Receive a fragment of their power. They will not return.',
-          apply: (game: Game): string => {
-            const pool = Boon.BY_TIER[2];
-            const reward = pool[Math.floor(Math.random() * pool.length)]!;
-            game.player.addBoon(reward);
-            game.availableGhosts = game.availableGhosts.filter(g => g.id !== ghost.id);
-            game.cb.onGhostLaidToRest?.(ghost.id);
-            game.storyBeats.push('laid a ghost of yourself to rest');
-            return `The ghost smiles — your smile — and dissolves into light. Gained ${reward.name}.`;
-          },
-        },
-        {
-          label: 'Turn away',
-          desc: 'Leave them wandering. You may meet again.',
-          apply: (): string => 'The ghost lingers at the edge of sight, keening softly, waiting for another meeting.',
-        },
-      ],
-    };
-    this.activeGhost = null;
-    this.cb.onAudio?.('ghostEncounter');
-    this.paused = true;
-    this.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', 'sprite_boss_wraith');
-      this.paused = false;
-      this.cb.onAction();
-      onClosed?.();
-    });
   }
 
   // ── Lugh's Spear questline ───────────────────────────────────────────────
@@ -2642,11 +2467,11 @@ export class Game {
       // (no beam-away), and his tale gets a proper dialog of its own.
       if (npcTile.npcId === 'seanchai') {
         this.npcTiles.push(npcTile);
-        this.triggerSeanchaiEncounter();
+        this.npcEncounters.triggerSeanchai();
         return;
       }
       if (isGhost) {
-        this.triggerGhostEncounter(departOnClose);
+        this.npcEncounters.triggerGhost(departOnClose);
         return;
       }
       if (isSmith) {
@@ -2657,7 +2482,7 @@ export class Game {
         return;
       }
       const npc = NPCS.find(n => n.id === npcTile.npcId);
-      if (npc) this.triggerNpcEncounter(npc, departOnClose);
+      if (npc) this.npcEncounters.triggerEncounter(npc, departOnClose);
       else departOnClose();
       return;
     }
@@ -3572,7 +3397,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact',
+    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact', 'npcEncounters',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
