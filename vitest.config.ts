@@ -12,13 +12,19 @@ export default defineConfig({
       include: [
         'src/game.ts', 'src/entities.ts', 'src/balance.ts', 'src/storage.ts',
         'src/dataLoader.ts', 'src/errorReporting.ts', 'src/systems/**',
+        // Feature modules split out of game.ts (each a class composed onto Game).
+        'src/fidchell.ts', 'src/causewayDuel.ts', 'src/waystation.ts',
+        'src/bossEncounters.ts', 'src/vendorOffers.ts', 'src/spawning.ts',
+        'src/runSetup.ts', 'src/saveGame.ts', 'src/pact.ts',
+        'src/npcEncounters.ts', 'src/smithQuest.ts', 'src/gameMath.ts',
+        'src/views/**',
       ],
       // Ratchet: raise these as coverage grows; CI fails if a change drops below.
       thresholds: {
-        statements: 70,
-        branches: 60,
-        functions: 70,
-        lines: 73,
+        statements: 77,
+        branches: 68,
+        functions: 80,
+        lines: 80,
       },
     },
   },
