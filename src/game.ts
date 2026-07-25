@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun } from './types';
+import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, RESCUES, Omen, EffectResolver, type ClassDef, type PatronDef, type RescueDef } from './content';
 import { Fidchell } from './fidchell';
@@ -7,6 +7,7 @@ import { GameMath } from './gameMath';
 import { AbilitySystem } from './systems/abilities';
 import { InspectView } from './views/inspect';
 import { CharacterSheetView } from './views/charSheet';
+import { UiStateBuilder } from './views/uiState';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
@@ -235,7 +236,8 @@ export class Game {
   // instance and delegates entry, input, the HUD payload, and save/resume.
   public readonly fidchell: Fidchell = new Fidchell(this);
   private readonly inspectView: InspectView = new InspectView(this);
-  private readonly characterSheetView: CharacterSheetView = new CharacterSheetView(this);
+  public readonly characterSheetView: CharacterSheetView = new CharacterSheetView(this);
+  private readonly uiStateBuilder: UiStateBuilder = new UiStateBuilder(this);
   /** Whether a Fidchell match is currently in progress. */
   public get inFidchell(): boolean { return this.fidchell.active; }
   /** Read-only board views for the renderer. */
@@ -2189,7 +2191,7 @@ export class Game {
   };
 
   /** The active difficulty preset's tuning. */
-  private difficultyTuning(): DifficultyPreset {
+  public difficultyTuning(): DifficultyPreset {
     return Balance.CONFIG.difficulty.presets.find(p => p.id === this.activeDifficultyId)
       ?? Game.DIFFICULTY_FALLBACK;
   }
@@ -3669,7 +3671,7 @@ export class Game {
     'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
     // Composed subsystems that hold a back-ref to Game — never part of the data
     // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView',
+    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder',
   ]);
 
   /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
@@ -3759,91 +3761,32 @@ export class Game {
 
   // ── UI push ──────────────────────────────────────────────────────────────
 
-  /** Pushes a fresh {@link UIState} snapshot to the host UI via `cb.updateUI`. */
-  public pushUI(): void {
-    const activeMod = MODIFIERS.find(m => m.id === this.activeModifierId);
-    const activeCls = CLASSES.find(c => c.id === this.activeClassId);
-    const activePatron = PATRONS.find(p => p.id === this.activePatronId);
-    const biome = Biome.forFloor(this.dungeonLevel);
-    this.cb.updateUI({
-      // atk/maxHp/hp can carry fractional precision internally (percentage
-      // boons compound on them) — round only here, at the display boundary.
-      hp: Math.round(this.player.hp),
-      maxHp: Math.round(this.player.maxHp),
-      floor: this.dungeonLevel,
-      totalXpEarned: this.player.totalXpEarned,
-      gold: this.gold,
-      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct + this.difficultyGravityPct + this.heatGravityPct),
-      nextType: this.nextType,
-      heldType: this.heldType,
-      canHold: this.canHold,
-      pieceState: this.currentCursed ? 'cursed' : this.currentBlessed ? 'blessed' : 'normal',
-      xp: this.player.xp,
-      xpToNext: this.player.xpToNext,
-      playerLevel: this.player.playerLevel,
-      boons: this.player.boons.map(b => ({ char: b.def.char, name: b.def.name, stacks: b.stacks, desc: b.def.desc })),
-      brands: this.player.brands.map(b => {
-        const count = this.player.brands.filter(x => x.brand.id === b.brand.id).length;
-        return {
-          slot: b.slot, char: b.brand.char, name: b.brand.name,
-          setActive: count >= b.brand.setSize,
-          desc: b.brand.desc, setDesc: b.brand.setDesc, setSize: b.brand.setSize,
-        };
-      }),
-      brandsAcquiredTotal: this.player.brandsAcquiredTotal,
-      brandsMaxLifetime: Balance.CONFIG.brands.maxLifetime,
-      statuses: this.player.statuses,
-      activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
-      activeClass: activeCls
-        ? {
-            emoji: activePatron?.char ?? activeCls.emoji,
-            name: activePatron ? `${activeCls.name} — ${activePatron.name}` : activeCls.name,
-          }
-        : null,
-      // During a duel the boss's own causeway is the focus — the duel card names
-      // the boss, so the generic biome badge ("Bres's Causeway") is suppressed to
-      // avoid attributing the enemy bridge to the wrong name.
-      biomeName: this.inCausewayDuel ? '' : biome.name,
-      activeOmen: this.activeOmen ? { icon: this.activeOmen.icon, name: this.activeOmen.name } : null,
-      activeDifficulty: this.activeDifficultyId !== 'standard' && this.difficultyTuning().name !== ''
-        ? { icon: this.difficultyTuning().icon, name: this.difficultyTuning().name.split(' — ')[0]! }
-        : null,
-      heatLevel: this.heatLevel > 0 ? this.heatLevel : null,
-      duel: this.inCausewayDuel && this.duelBoss
-        ? {
-            bossName: this.duelBoss.name,
-            bossHp: Math.max(0, Math.round(this.duelBoss.hp)),
-            bossMaxHp: this.duelBoss.maxHp,
-            bridgeGap: Math.max(0, (GameConfig.ROWS - 1) - this.duelBossDeepestRow()),
-            bridgeSpan: GameConfig.ROWS - 1,
-            switchesLeft: this.duelSwitches.filter(s => !s.lit).length,
-          }
-        : null,
-      fidchell: this.fidchell.uiState(),
-      rangedAbility: this.player.rangedAbility
-        ? {
-            name:        this.player.rangedAbility.name,
-            emoji:       this.player.rangedAbility.emoji,
-            cooldown:    this.player.rangedCooldown,
-            cooldownMax: this.player.rangedAbility.cooldownMax,
-            ammo:        this.player.rangedAmmo >= 0 ? this.player.rangedAmmo : null,
-            hpCostPct:   typeof this.player.rangedAbility.params?.['hpCostPct'] === 'number'
-              ? this.player.rangedAbility.params['hpCostPct'] as number
-              : null,
-            spellIndex:  this.player.activeSpellIndex,
-            spellCount:  this.player.spellbook.length,
-          }
-        : null,
-      characterSheet: this.characterSheetView.build(),
-      floorProgress: {
-        pieces: this.blocksSpawnedThisFloor,
-        smithTarget: this.pendingSmithFloor ? Balance.CONFIG.smiths.pieceThreshold : null,
-        fillPct: Math.round(this.filledFraction() * 100),
-        bossFillTarget: this.pendingBossFloor ? Math.round(Game.BOSS_FILL_FRACTION * 100) : null,
-        stairsPity: this.stairsOnBoard()
-          ? null
-          : { placed: this.blocksPlacedSinceStairs, target: Balance.CONFIG.spawnRates.stairsForcedAfterBlocks },
-      },
-    });
+  /** Pushes a fresh {@link UIState} snapshot to the host UI via `cb.updateUI` (assembled by {@link UiStateBuilder}). */
+  public pushUI(): void { this.cb.updateUI(this.uiStateBuilder.build()); }
+
+  /** The Causeway-Duel HUD card payload, or null when not in a duel. Encapsulates the duel's private state for {@link UiStateBuilder}. */
+  public duelUiState(): UIState['duel'] {
+    if (!this.inCausewayDuel || !this.duelBoss) return null;
+    return {
+      bossName: this.duelBoss.name,
+      bossHp: Math.max(0, Math.round(this.duelBoss.hp)),
+      bossMaxHp: this.duelBoss.maxHp,
+      bridgeGap: Math.max(0, (GameConfig.ROWS - 1) - this.duelBossDeepestRow()),
+      bridgeSpan: GameConfig.ROWS - 1,
+      switchesLeft: this.duelSwitches.filter(s => !s.lit).length,
+    };
+  }
+
+  /** The floor-progress dial payload (smith/boss/stairs thresholds). Encapsulates the private per-floor counters for {@link UiStateBuilder}. */
+  public floorProgressState(): UIState['floorProgress'] {
+    return {
+      pieces: this.blocksSpawnedThisFloor,
+      smithTarget: this.pendingSmithFloor ? Balance.CONFIG.smiths.pieceThreshold : null,
+      fillPct: Math.round(this.filledFraction() * 100),
+      bossFillTarget: this.pendingBossFloor ? Math.round(Game.BOSS_FILL_FRACTION * 100) : null,
+      stairsPity: this.stairsOnBoard()
+        ? null
+        : { placed: this.blocksPlacedSinceStairs, target: Balance.CONFIG.spawnRates.stairsForcedAfterBlocks },
+    };
   }
 }
