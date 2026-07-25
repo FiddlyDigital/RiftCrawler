@@ -62,7 +62,7 @@ export class UiStateBuilder {
         ? { icon: g.difficultyTuning().icon, name: g.difficultyTuning().name.split(' — ')[0]! }
         : null,
       heatLevel: g.heatLevel > 0 ? g.heatLevel : null,
-      duel: g.duelUiState(),
+      duel: g.causewayDuel.uiState(),
       fidchell: g.fidchell.uiState(),
       rangedAbility: g.player.rangedAbility
         ? {

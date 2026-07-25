@@ -34,10 +34,10 @@ export class SaveGame {
     'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
     'activeGhost', 'availableGhosts',
     'lastLineClearMs', 'tutorialSafety',
-    'duelBoss',  // a live Monster ref — re-linked to the restored boss in restore()
     // Composed subsystems that hold a back-ref to Game — never part of the data
-    // snapshot (each serializes its own state explicitly if it has any).
-    'fidchell', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact',
+    // snapshot (each serializes its own state explicitly if it has any; the duel
+    // and fidchell round-trip via their own serialize()/restore()).
+    'fidchell', 'causewayDuel', 'inspectView', 'characterSheetView', 'uiStateBuilder', 'pact',
     'npcEncounters', 'smithQuest', 'spawner', 'runSetup', 'saveGame', 'vendorOffers', 'bossEncounters',
   ]);
 
@@ -62,6 +62,7 @@ export class SaveGame {
       metFlavorNpcIds: [...g.metFlavorNpcIds],
       activeGhost: g.activeGhost,
       fidchell: g.fidchell.serialize(),
+      causewayDuel: g.causewayDuel.serialize(),
     };
   }
 
@@ -81,6 +82,7 @@ export class SaveGame {
     }
     Object.assign(g, save.scalars);
     g.fidchell.restore(save.fidchell);
+    g.causewayDuel.restore(save.causewayDuel);
     if (!SHAPES[g.currentType] || !SHAPES[g.nextType] || (g.heldType !== null && !SHAPES[g.heldType])) {
       throw new Error('SaveGame.restore: a saved piece shape no longer exists in shapes.json');
     }
@@ -106,7 +108,7 @@ export class SaveGame {
     if (g.inCausewayDuel) {
       // The duel owns its boss outright (no biome hooks) — just re-link the
       // reference to the restored boss instance so the win path still fires.
-      g.duelBoss = boss ?? null;
+      g.causewayDuel.boss = boss ?? null;
       g.activeBossOnHalfHp = null;
       g.activeBossOnDeath = null;
       g.bossHalfHpTriggered = true;
