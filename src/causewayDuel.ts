@@ -200,14 +200,7 @@ export class CausewayDuel {
     const g = this.game;
     this.active = true;
     this.resolved = false;
-    g.map = g.emptyMap();
-    g.colors = g.emptyColors();
-    g.monsters = [];
-    g.hazards = [];
-    g.specialTiles = [];
-    g.npcTiles = [];
-    g.altarTiles = [];
-    g.tattooTiles = [];
+    g.clearBoardEntities();
     this.owner = Array.from({ length: GameConfig.COLS }, () => Array<number>(GameConfig.ROWS).fill(0));
     this.switches = [];
     this.wall = [];
@@ -242,10 +235,7 @@ export class CausewayDuel {
     g.activeBossOnDeath = null;  // win() handles the death path
     g.bossHalfHpTriggered = true;
 
-    // No fog in a duel — the whole causeway is in view.
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) { g.visibility[x]![y] = true; g.explored[x]![y] = true; }
-    }
+    g.revealAll();  // no fog in a duel — the whole causeway is in view
     this.setupObstacles();
     g.currentType = g.randomShapeKey();
     g.nextType = g.randomShapeKey();

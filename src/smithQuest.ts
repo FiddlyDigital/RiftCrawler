@@ -60,13 +60,6 @@ export class SmithQuest {
         },
       ],
     };
-    g.paused = true;
-    g.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(g) ?? 'Nothing happened.';
-      g.cb.log(msg, 'log-perk', smith.char);
-      g.paused = false;
-      g.cb.onAction();
-      onClosed?.();
-    });
+    g.presentChoice(event, smith.char, onClosed);
   }
 }

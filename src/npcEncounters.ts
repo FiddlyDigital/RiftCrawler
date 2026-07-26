@@ -75,14 +75,7 @@ export class NpcEncounters {
 
     g.storyBeats.push(`crossed paths with ${npc.name}`);
     g.cb.onAudio?.('npcEncounter');
-    g.paused = true;
-    g.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(g) ?? 'Nothing happened.';
-      g.cb.log(msg, 'log-perk', npc.char);
-      g.paused = false;
-      g.cb.onAction();
-      onClosed?.();
-    });
+    g.presentChoice(event, npc.char, onClosed);
   }
 
   /** Your run's story so far, in the seanchaí's voice — built from the game's story beats. */
@@ -180,13 +173,6 @@ export class NpcEncounters {
     };
     g.activeGhost = null;
     g.cb.onAudio?.('ghostEncounter');
-    g.paused = true;
-    g.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(g) ?? 'Nothing happened.';
-      g.cb.log(msg, 'log-perk', 'sprite_boss_wraith');
-      g.paused = false;
-      g.cb.onAction();
-      onClosed?.();
-    });
+    g.presentChoice(event, 'sprite_boss_wraith', onClosed);
   }
 }

@@ -1,4 +1,3 @@
-import { GameConfig } from './config';
 import { Tile, type FloorEventDef, type NpcTile } from './types';
 import { Boon, RESCUES, NPCS, SMITHS } from './content';
 import { Balance } from './balance';
@@ -58,14 +57,7 @@ export class Waystation {
     // Entered mid-floor, so the interrupted floor's whole state — stack,
     // monsters, hazards, tiles, ghost, omen, ritual — is swept away; the
     // mound is home ground, rebuilt from bare rock.
-    g.map = g.emptyMap();
-    g.colors = g.emptyColors();
-    g.monsters = [];
-    g.hazards = [];
-    g.specialTiles = [];
-    g.npcTiles = [];
-    g.altarTiles = [];
-    g.tattooTiles = [];
+    g.clearBoardEntities();
     g.activeGhost = null;
     g.activeOmen = null;
     g.omenGravityPct = 0;
@@ -112,12 +104,7 @@ export class Waystation {
     g.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
     // while the Blockbuilding layer is suspended, so set the full reveal directly).
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        g.visibility[x]![y] = true;
-        g.explored[x]![y] = true;
-      }
-    }
+    g.revealAll();
     g.cb.onAudio?.('waystationEnter');
     g.cb.log('You surface into a sídhe mound — a hush, a hearth, and friendly faces. The stairs will keep.', 'log-success', 'special_sacred');
     g.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');

@@ -354,6 +354,49 @@ export class Game {
     return Array.from({ length: GameConfig.COLS }, () => Array(GameConfig.ROWS).fill(val) as boolean[]);
   }
 
+  /**
+   * Wipes the floor to bare rock: fresh empty terrain/colors and every entity
+   * and tile-feature list cleared. Shared by the alternate play modes that take
+   * over the board (Fidchell, the Causeway Duel, the waystation). The falling
+   * piece (`blockMatrix`) is left to the caller, since each mode wants it
+   * differently. */
+  public clearBoardEntities(): void {
+    this.map = this.emptyMap();
+    this.colors = this.emptyColors();
+    this.monsters = [];
+    this.hazards = [];
+    this.specialTiles = [];
+    this.npcTiles = [];
+    this.altarTiles = [];
+    this.tattooTiles = [];
+  }
+
+  /** Reveals the entire arena (no fog) — used by the modes that light the whole board on entry. */
+  public revealAll(): void {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
+    }
+  }
+
+  /**
+   * Opens a one-off floor-event choice modal, pausing play; on dismissal it
+   * applies the chosen option, logs the outcome under `char`, resumes, and runs
+   * `onClosed`. The shared close-out for the run's encounter dialogs (NPCs,
+   * smiths, rescues, the pact, ghosts). Callers that need bespoke callback
+   * behaviour (re-pinning a fixture tile, chaining a second dialog) still wire
+   * `cb.onFloorEvent` themselves.
+   */
+  public presentChoice(event: FloorEventDef, char: string, onClosed?: () => void): void {
+    this.paused = true;
+    this.cb.onFloorEvent?.(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', char);
+      this.paused = false;
+      this.cb.onAction();
+      onClosed?.();
+    });
+  }
+
   /** Lays down the fixed 6×2 floor tile the hero stands on at run/floor start. */
   private generateStartPlatform(): void {
     for (let x = 2; x < 8; x++) {

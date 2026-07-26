@@ -69,13 +69,7 @@ export class PactCeremony {
       })),
     };
 
-    g.paused = true;
-    g.cb.onFloorEvent(event, (index) => {
-      const msg = event.options[index]?.apply(g) ?? 'Nothing happened.';
-      g.cb.log(msg, 'log-perk', 'fx_arcane');
-      g.paused = false;
-      g.cb.onAction();
-    });
+    g.presentChoice(event, 'fx_arcane');
     return true;
   }
 

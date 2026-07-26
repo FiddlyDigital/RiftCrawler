@@ -81,14 +81,7 @@ export class Fidchell {
     this.legal = [];
     this.playerSide = Math.random() < 0.5 ? 'king' : 'raider';
     this.turn = 'raider';
-    g.map = g.emptyMap();
-    g.colors = g.emptyColors();
-    g.monsters = [];
-    g.hazards = [];
-    g.specialTiles = [];
-    g.npcTiles = [];
-    g.altarTiles = [];
-    g.tattooTiles = [];
+    g.clearBoardEntities();
     g.blockMatrix = [];
     const n = Fidchell.N;
     this.origin = { x: Math.floor((GameConfig.COLS - n) / 2), y: Math.floor((GameConfig.ROWS - n) / 2) };
@@ -102,7 +95,7 @@ export class Fidchell {
     }
     // No fog — the whole board is in view. The hero isn't a piece; you command
     // from outside, so it's hidden by the renderer during a match.
-    for (let x = 0; x < GameConfig.COLS; x++) for (let y = 0; y < GameConfig.ROWS; y++) { g.visibility[x]![y] = true; g.explored[x]![y] = true; }
+    g.revealAll();
     const asKing = this.playerSide === 'king';
     g.cb.log(`Fidchell! A Fomorian gambler bars the crossing and sets the wooden wisdom. ${asKing ? 'You hold the High King — slip him to a corner dún to win free.' : 'You command the Fomorian raiders — surround the High King before he escapes.'}`, 'log-boss', 'ui_warning');
     g.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'ui_warning');

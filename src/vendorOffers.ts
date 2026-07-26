@@ -220,12 +220,6 @@ export class VendorOffers {
             ],
       };
     }
-    g.paused = true;
-    g.cb.onFloorEvent(event, (index) => {
-      const msg = event.options[index]?.apply(g) ?? 'Nothing happened.';
-      g.cb.log(msg, 'log-perk', rescue.char);
-      g.paused = false;
-      g.cb.onAction();
-    });
+    g.presentChoice(event, rescue.char);
   }
 }

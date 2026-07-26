@@ -123,13 +123,7 @@ export class BossEncounters {
     g.activeBossOnDeath = null;  // victory is fired from killMonster (covers every death path)
     g.bossHalfHpTriggered = g.gorgothHalfTriggered;
 
-    // Reveal the whole arena — no fog for the finale.
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        g.visibility[x]![y] = true;
-        g.explored[x]![y] = true;
-      }
-    }
+    g.revealAll();  // no fog for the finale
 
     g.cb.log('The causeway is complete! Bres the Beautiful now leads the charge to invade the Emerald Isle...', 'log-boss', 'ui_warning');
     g.cb.onParticle(gx, 0, 'BRES', '#ff1744', 18, 'sprite_boss_gorgoth');
