@@ -497,9 +497,14 @@ export class Renderer {
 
     // ── Falling block (always visible) ────────────────────────────────────
     ctx.font = `${TS * 0.7}px Arial`;
-    // Preview the terrain an S/L/J/Z piece lays down on lock so it isn't a surprise.
-    const TERRAIN_HINT: Record<string, string> = { S: 'special_swamp', L: 'special_sacred', J: 'special_ice', Z: 'trap_spike' };
-    const terrainHint = TERRAIN_HINT[game.currentType];
+    // Preview the terrain this piece lays on lock so it's not a surprise. Which
+    // shapes lay terrain is a biome trait (see biomes.json `terrainShapes`), so
+    // the hint is biome-aware; Z always fields spikes.
+    const TERRAIN_ICON: Record<string, string> = { swamp: 'special_swamp', sacred: 'special_sacred', ice: 'special_ice' };
+    const biome = Biome.forFloor(game.dungeonLevel);
+    const terrainHint = game.currentType === 'Z' ? 'trap_spike'
+      : biome.terrainShapes.includes(game.currentType) ? TERRAIN_ICON[biome.terrainType]
+      : undefined;
     for (let r = 0; r < game.blockMatrix.length; r++) {
       for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
         const cell = game.blockMatrix[r]![c]!;
@@ -882,7 +887,7 @@ export class Renderer {
     }
 
     // ── Biome tint overlay ────────────────────────────────────────────────
-    const biome = Biome.forFloor(game.dungeonLevel);
+    // `biome` is already resolved above for the terrain-hint; reuse it.
     if (biome.tileRgb) {
       ctx.fillStyle = `rgba(${biome.tileRgb},0.07)`;
       ctx.fillRect(0, 0, this.logicalW, this.logicalH);

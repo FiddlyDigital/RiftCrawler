@@ -39,6 +39,13 @@ export interface BiomeDef {
   desc: string;
   /** Terrain-effect tile type this biome's floor-piece locks lay down (see {@link SpecialTile}). */
   terrainType: 'swamp' | 'sacred' | 'ice';
+  /**
+   * Which falling-piece shapes lay down this biome's {@link terrainType} on
+   * lock — the lever that makes each biome *play* differently (the Sídhe
+   * Caverns freeze more shapes, so ice is everywhere; sacred stays rare).
+   * Optional; defaults to `['S','L','J']` (the historic set) when omitted.
+   */
+  terrainShapes?: string[];
 }
 
 /** One selectable choice within a {@link FloorEventDef}. */
