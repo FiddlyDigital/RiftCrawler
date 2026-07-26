@@ -1531,6 +1531,46 @@ describe('Ambient floor-entry toasts', () => {
   });
 });
 
+describe('Biome-signature terrain (per-biome density)', () => {
+  // Lock a single-cell piece of `type` on floor `floor` and report the special
+  // tiles it left behind. Drops it into empty air on the standard board so the
+  // lock lands cleanly on the floor row below.
+  const lockOne = (floor: number, type: string): { x: number; y: number; type: string }[] => {
+    const game = new Game(makeCallbacks());
+    game.dungeonLevel = floor;
+    const g = game as unknown as { blockMatrix: number[][]; blockX: number; blockY: number; currentType: string; currentBlessed: boolean; currentCursed: boolean; lockBlock(): void };
+    g.blockMatrix = [[Cell.FLOOR]] as number[][];
+    g.blockX = 4; g.blockY = 20; g.currentType = type;
+    // The constructor's initial spawnBlock() may have rolled a blessed/cursed
+    // piece; neutralise both so we measure only the biome's signature terrain.
+    g.currentBlessed = false; g.currentCursed = false;
+    g.lockBlock();
+    return game.specialTiles;
+  };
+
+  it('the Sídhe Caverns freeze I-pieces into ice — a shape the shallow halls leave bare', () => {
+    // Floor 5 is the cavern biome (terrainType ice, terrainShapes include I).
+    const cavernIce = lockOne(5, 'I');
+    expect(cavernIce.some(t => t.type === 'ice')).toBe(true);
+    // Floor 1 is the Cairn Halls (sacred), whose terrainShapes are only S/L/J,
+    // so an I-piece there lays no signature ground at all.
+    const stoneI = lockOne(1, 'I');
+    expect(stoneI.length).toBe(0);
+  });
+
+  it('each biome stamps its own single terrainType on a shared shape (S)', () => {
+    expect(lockOne(1, 'S').every(t => t.type === 'sacred')).toBe(true); // Cairn Halls
+    expect(lockOne(5, 'S').every(t => t.type === 'ice')).toBe(true);    // Sídhe Caverns
+    expect(lockOne(10, 'S').every(t => t.type === 'swamp')).toBe(true); // Bres's Causeway
+    expect(lockOne(1, 'S').length).toBeGreaterThan(0);
+  });
+
+  it('the deep Causeway lays swamp on O-pieces, which the Cairn Halls do not', () => {
+    expect(lockOne(10, 'O').some(t => t.type === 'swamp')).toBe(true);
+    expect(lockOne(1, 'O').length).toBe(0);
+  });
+});
+
 describe('Floor omens (per-floor modifiers)', () => {
   const asOmen = (g: Game): { maybeRollOmen(isBossFloor: boolean): void } =>
     g as unknown as { maybeRollOmen(isBossFloor: boolean): void };

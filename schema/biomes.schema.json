@@ -17,7 +17,14 @@
       "gravityPctBonus": { "type": "number" },
       "desc": { "type": "string", "minLength": 1 },
       "moteColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-      "terrainType": { "type": "string", "enum": ["swamp", "sacred", "ice"] }
+      "terrainType": { "type": "string", "enum": ["swamp", "sacred", "ice"] },
+      "terrainShapes": {
+        "type": "array",
+        "description": "Shape keys whose locks lay this biome's terrainType (denser signature terrain). Optional; defaults to S/L/J.",
+        "items": { "type": "string", "pattern": "^[A-Z]$" },
+        "minItems": 1,
+        "uniqueItems": true
+      }
     }
   }
 }

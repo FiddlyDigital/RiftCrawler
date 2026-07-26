@@ -808,10 +808,12 @@ export class Game {
 
     // Shape-based tile effects on lock
     if (lockedFloorCells.length > 0) {
-      if (this.currentType === 'S' || this.currentType === 'L' || this.currentType === 'J') {
-        // The terrain type is a biome trait, not a piece-shape trait — every
-        // biome lays down its own single kind of ground (see biomes.json).
-        const tileType = Biome.forFloor(this.dungeonLevel).terrainType;
+      const biome = Biome.forFloor(this.dungeonLevel);
+      if (biome.terrainShapes.includes(this.currentType)) {
+        // Terrain is a biome trait: each biome lays its own single kind of
+        // ground, and its `terrainShapes` set decides how *dense* that ground
+        // is (the Sídhe Caverns freeze more shapes, so ice is everywhere).
+        const tileType = biome.terrainType;
         const msgs = { swamp: 'Swamp — monsters take 1 dmg/turn!', sacred: 'Sacred ground — Wait here for bonus heal!', ice: 'Ice — entities slide across!' };
         const icons = { swamp: 'special_swamp', sacred: 'special_sacred', ice: 'special_ice' };
         for (const fc of lockedFloorCells) {

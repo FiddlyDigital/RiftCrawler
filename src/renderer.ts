@@ -30,6 +30,8 @@ export class Renderer {
   private comboOverlay: { text: string; alpha: number; mult: number } | null = null;
   private floorTransitionFrames = 0;
   private floorTransitionColor = '10,10,20';
+  /** Cached edge-vignette gradient; rebuilt when the canvas size changes. */
+  private vignette: CanvasGradient | null = null;
   private reducedMotion = false;
   /** Impact shake + damage flash, toggleable independently of reduced motion. */
   private screenEffects = true;
@@ -317,6 +319,18 @@ export class Renderer {
       this.damageFlashFrames--;
     }
 
+    // ── Cavern depth gradient ─────────────────────────────────────────────
+    // A faint biome-tinted wash top→bottom so the un-built void reads as depth,
+    // not a flat black rectangle. Unexplored tiles paint a translucent veil on
+    // top (see below), letting this show through where nothing's been built.
+    const worldH = GameConfig.ROWS * TS, worldW = GameConfig.COLS * TS;
+    const depth = ctx.createLinearGradient(0, 0, 0, worldH);
+    depth.addColorStop(0, `rgba(${this.floorTransitionColor},0.28)`);
+    depth.addColorStop(0.5, `rgba(${this.floorTransitionColor},0.10)`);
+    depth.addColorStop(1, 'rgba(0,0,0,0.28)');
+    ctx.fillStyle = depth;
+    ctx.fillRect(0, 0, worldW, worldH);
+
     // ── Subtle grid lines ─────────────────────────────────────────────────
     ctx.globalAlpha = 0.06;
     ctx.strokeStyle = '#aaaacc';
@@ -339,7 +353,9 @@ export class Renderer {
         const isMerchant = this.isMerchantTile(game, x, y);
 
         if (!seen && !visible) {
-          ctx.fillStyle = '#020204';
+          // Translucent veil (not opaque) so the depth gradient reads through
+          // the unexplored void as cavern darkness rather than a flat fill.
+          ctx.fillStyle = 'rgba(2,3,5,0.86)';
           ctx.fillRect(x * TS, y * TS, TS, TS);
           continue;
         }
@@ -481,9 +497,14 @@ export class Renderer {
 
     // ── Falling block (always visible) ────────────────────────────────────
     ctx.font = `${TS * 0.7}px Arial`;
-    // Preview the terrain an S/L/J/Z piece lays down on lock so it isn't a surprise.
-    const TERRAIN_HINT: Record<string, string> = { S: 'special_swamp', L: 'special_sacred', J: 'special_ice', Z: 'trap_spike' };
-    const terrainHint = TERRAIN_HINT[game.currentType];
+    // Preview the terrain this piece lays on lock so it's not a surprise. Which
+    // shapes lay terrain is a biome trait (see biomes.json `terrainShapes`), so
+    // the hint is biome-aware; Z always fields spikes.
+    const TERRAIN_ICON: Record<string, string> = { swamp: 'special_swamp', sacred: 'special_sacred', ice: 'special_ice' };
+    const biome = Biome.forFloor(game.dungeonLevel);
+    const terrainHint = game.currentType === 'Z' ? 'trap_spike'
+      : biome.terrainShapes.includes(game.currentType) ? TERRAIN_ICON[biome.terrainType]
+      : undefined;
     for (let r = 0; r < game.blockMatrix.length; r++) {
       for (let c = 0; c < game.blockMatrix[r]!.length; c++) {
         const cell = game.blockMatrix[r]![c]!;
@@ -866,7 +887,7 @@ export class Renderer {
     }
 
     // ── Biome tint overlay ────────────────────────────────────────────────
-    const biome = Biome.forFloor(game.dungeonLevel);
+    // `biome` is already resolved above for the terrain-hint; reuse it.
     if (biome.tileRgb) {
       ctx.fillStyle = `rgba(${biome.tileRgb},0.07)`;
       ctx.fillRect(0, 0, this.logicalW, this.logicalH);
@@ -892,6 +913,21 @@ export class Renderer {
     }
 
     // ── Pause overlay ─────────────────────────────────────────────────────
+    // ── Vignette ──────────────────────────────────────────────────────────
+    // A soft radial darkening of the edges — focuses the eye on the hero's
+    // column and gives the flat canvas a lit-from-within, underground feel.
+    if (!this.vignette) {
+      const g = ctx.createRadialGradient(
+        this.logicalW / 2, this.logicalH * 0.52, this.logicalH * 0.28,
+        this.logicalW / 2, this.logicalH * 0.52, this.logicalH * 0.72,
+      );
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.45)');
+      this.vignette = g;
+    }
+    ctx.fillStyle = this.vignette;
+    ctx.fillRect(0, 0, this.logicalW, this.logicalH);
+
     if (game.paused && game.player.hp > 0) {
       const W = this.logicalW, H = this.logicalH;
       ctx.save();

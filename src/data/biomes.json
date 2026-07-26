@@ -8,7 +8,13 @@
     "gravityPctBonus": -25,
     "desc": "Bres's unfinished bridge to Ériu warps the world around it. Blocks fall 25% faster.",
     "moteColor": "#e8a06a",
-    "terrainType": "swamp"
+    "terrainType": "swamp",
+    "terrainShapes": [
+      "S",
+      "L",
+      "J",
+      "O"
+    ]
   },
   {
     "id": "cavern",
@@ -19,7 +25,14 @@
     "gravityPctBonus": 0,
     "desc": "Otherworld light hardens all who dwell here. Monsters have +25% HP.",
     "moteColor": "#9fe3c0",
-    "terrainType": "ice"
+    "terrainType": "ice",
+    "terrainShapes": [
+      "S",
+      "L",
+      "J",
+      "O",
+      "I"
+    ]
   },
   {
     "id": "stone",
@@ -30,6 +43,11 @@
     "gravityPctBonus": 0,
     "desc": "Old passage-tombs, half-swallowed by moss. Standard difficulty.",
     "moteColor": "#cfc6b0",
-    "terrainType": "sacred"
+    "terrainType": "sacred",
+    "terrainShapes": [
+      "S",
+      "L",
+      "J"
+    ]
   }
 ]
