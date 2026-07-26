@@ -12,6 +12,13 @@
   --block-accent: #3f9e93;
   --hero-accent: #4c8c53;
   --font-pixel: 'VT323', monospace;
+
+  /* Semantic tokens (one source of truth for the polish pass) */
+  --accent-dim: #8a6a2c;                     /* muted gold for rules/dividers */
+  --gold-glow: rgba(217, 164, 65, .55);      /* the signature gold halo */
+  --shadow-deep: 0 6px 26px rgba(0,0,0,.75); /* raised surfaces */
+  --carve-hi: rgba(255,255,255,.05);         /* top bevel on carved-stone surfaces */
+  --carve-lo: rgba(0,0,0,.45);               /* bottom bevel on carved-stone surfaces */
 }
 
 /* A · VT323 pixel font on game chrome elements */
@@ -470,7 +477,65 @@ canvas {
   filter: brightness(1.15);
   box-shadow: 0 4px 18px rgba(102, 187, 106, 0.5);
 }
+/* Carved-stone bevel on the primary CTAs — top highlight, bottom shadow. */
+.restart-btn {
+  border-top: 1px solid var(--carve-hi);
+  border-bottom: 2px solid var(--carve-lo);
+}
+.restart-btn:active { transform: translateY(1px); filter: brightness(1.05); }
 #shop-close { box-shadow: none; }
+
+/* ── Balanced Celtic ornament (reusable) ─────────────────────────────────── */
+/* An ogham-style divider: a thin gold rule with a central lozenge. */
+.ogham-rule {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 8px auto 12px; max-width: 240px; color: var(--accent-dim);
+}
+.ogham-rule::before, .ogham-rule::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-dim));
+}
+.ogham-rule::after { background: linear-gradient(90deg, var(--accent-dim), transparent); }
+.ogham-rule > span {
+  width: 7px; height: 7px; transform: rotate(45deg);
+  background: var(--accent-color); box-shadow: 0 0 8px var(--gold-glow);
+}
+
+/* ── Title screen: an opaque, atmospheric backdrop (not the live board) ───── */
+#start-modal.modal-overlay {
+  background:
+    radial-gradient(120% 80% at 50% 12%, rgba(40,58,44,.55), transparent 60%),
+    radial-gradient(140% 90% at 50% 105%, rgba(217,164,65,.06), transparent 55%),
+    linear-gradient(180deg, #0a0d0b 0%, #060706 100%);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+/* Drifting motes behind the card — pure CSS, no assets. */
+#start-modal.modal-overlay::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, rgba(217,164,65,.5), transparent),
+    radial-gradient(1.5px 1.5px at 75% 20%, rgba(200,210,190,.35), transparent),
+    radial-gradient(1.5px 1.5px at 60% 70%, rgba(217,164,65,.35), transparent),
+    radial-gradient(1.5px 1.5px at 35% 85%, rgba(200,210,190,.3), transparent),
+    radial-gradient(1.5px 1.5px at 88% 60%, rgba(217,164,65,.3), transparent);
+  animation: moteDrift 14s ease-in-out infinite alternate;
+}
+@keyframes moteDrift {
+  from { transform: translateY(0) translateX(0); }
+  to   { transform: translateY(-14px) translateX(6px); }
+}
+/* The title itself: gold with a slow shimmering halo. */
+#start-title {
+  animation: titleShimmer 3.4s ease-in-out infinite;
+}
+@keyframes titleShimmer {
+  0%, 100% { text-shadow: 0 0 18px var(--gold-glow), 0 0 6px var(--gold-glow); }
+  50%      { text-shadow: 0 0 30px var(--gold-glow), 0 0 12px var(--gold-glow); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #start-modal.modal-overlay::before { animation: none; }
+  #start-title { animation: none; }
+}
 
 /* Perk selection */
 .perk-btn {

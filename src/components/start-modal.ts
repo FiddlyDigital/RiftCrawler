@@ -4,8 +4,11 @@ import { BaseModal } from './base-modal';
 export class StartModal extends BaseModal {
   protected template(): string {
     return `<div class="modal-card" style="max-width:340px;">
-      <div class="modal-title" id="start-title" style="color:var(--accent-color);font-size:26px;letter-spacing:3px;">CAUSEWAY TO ÉRIU</div>
-      <p style="color:#666;font-size:10px;letter-spacing:1px;margin:2px 0 14px 0;">BLOCK-BUILDING MEETS DUNGEON ROGUELIKE — DEFEAT THE FORMORIAN THREAT</p>
+      <div class="ogham-rule"><span></span></div>
+      <div class="modal-title" id="start-title" style="color:var(--accent-color);font-size:28px;letter-spacing:4px;margin-bottom:6px;">CAUSEWAY TO ÉRIU</div>
+      <p style="color:#8a8f80;font-size:10px;letter-spacing:1.5px;margin:0 0 4px 0;">BLOCK-BUILDING MEETS DUNGEON ROGUELIKE</p>
+      <p style="color:#666;font-size:10px;letter-spacing:1px;margin:0 0 4px 0;">Defeat the Fomorian threat</p>
+      <div class="ogham-rule"><span></span></div>
 
       <!-- How to play -->
       <div style="text-align:left;background:#0c0c12;border-radius:4px;padding:10px 12px;margin-bottom:10px;font-size:11px;line-height:1.8;">
