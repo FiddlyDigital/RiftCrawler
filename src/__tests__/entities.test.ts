@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Game } from '../game';
-import { Player, Monster, StatMath } from '../entities';
+import { Player, Monster, StatMath, Particle, ParticlePool } from '../entities';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { Balance } from '../balance';
 import { BOONS, BRANDS } from '../content';
@@ -173,5 +173,74 @@ describe('Monster AI', () => {
     game.monsters.push(m);
     for (let i = 0; i < 12; i++) MonsterAiSystem.processMonsterTurns(game);
     expect(game.map[m.x]![m.y]).not.toBe(0);  // still standing on real floor
+  });
+});
+
+// ── Particle system ──────────────────────────────────────────────────────────
+
+/** A no-op 2D context that records nothing but satisfies Particle.draw(). */
+function fakeCtx(): CanvasRenderingContext2D {
+  return {
+    save: () => {}, restore: () => {},
+    measureText: (t: string) => ({ width: t.length * 6 } as TextMetrics),
+    drawImage: () => {}, strokeText: () => {}, fillText: () => {},
+    globalAlpha: 1, font: '', fillStyle: '', strokeStyle: '', lineWidth: 1, lineJoin: 'round',
+  } as unknown as CanvasRenderingContext2D;
+}
+
+type PoolInternals = { pool: Particle[]; active: Particle[] };
+const poolPriv = (p: ParticlePool): PoolInternals => p as unknown as PoolInternals;
+
+describe('Particle', () => {
+  it('reset seeds a full lifetime and update counts it down', () => {
+    const p = new Particle();
+    p.reset(3, 4, '-5', '#fff');
+    expect(p.life).toBeCloseTo(1);
+    p.update();
+    expect(p.life).toBeLessThan(1);
+  });
+
+  it('draws text and icon frames without throwing (headless ctx)', () => {
+    const ctx = fakeCtx();
+    const text = new Particle(); text.reset(1, 1, '-9', '#f00');
+    const icon = new Particle(); icon.reset(1, 1, '', '#0f0', 12, 'fx_fire');
+    expect(() => { text.draw(ctx); icon.draw(ctx); }).not.toThrow();
+  });
+});
+
+describe('ParticlePool', () => {
+  it('rejects a non-finite size', () => {
+    expect(() => new ParticlePool(NaN)).toThrow(TypeError);
+  });
+
+  it('pre-fills the pool and moves particles to active on spawn', () => {
+    const pool = new ParticlePool(3);
+    expect(poolPriv(pool).pool.length).toBe(3);
+    pool.spawn(2, 2, '+1', '#fff');
+    expect(poolPriv(pool).active.length).toBe(1);
+    expect(poolPriv(pool).pool.length).toBe(2);
+  });
+
+  it('spawnBurst emits the requested number of particles', () => {
+    const pool = new ParticlePool(20);
+    pool.spawnBurst(4, 4, 6, '#d9a441', 'fx_arcane');
+    expect(poolPriv(pool).active.length).toBe(6);
+  });
+
+  it('allocates fresh particles when the pool is exhausted', () => {
+    const pool = new ParticlePool(1);
+    pool.spawn(0, 0, 'a', '#fff');
+    pool.spawn(0, 0, 'b', '#fff');   // pool empty → new Particle()
+    expect(poolPriv(pool).active.length).toBe(2);
+  });
+
+  it('tick advances particles and recycles the expired back to the pool', () => {
+    const pool = new ParticlePool(1);
+    const ctx = fakeCtx();
+    pool.spawn(0, 0, 'x', '#fff');
+    expect(poolPriv(pool).active.length).toBe(1);
+    for (let i = 0; i < 30; i++) pool.tick(ctx);   // life 1 → 0 within ~25 ticks
+    expect(poolPriv(pool).active.length).toBe(0);
+    expect(poolPriv(pool).pool.length).toBe(1);    // returned for reuse
   });
 });

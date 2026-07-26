@@ -24,6 +24,30 @@ export class AbilitySystem {
     return typeof v === 'string' ? v : fallback;
   }
 
+  /**
+   * Removes every monster in `targets` that an AoE spell just dropped to ≤0 HP,
+   * routing each through {@link CombatSystem.killMonster} so line-of-death
+   * rewards/victory still fire. Shared by the multi-target spells.
+   */
+  private static reap(game: Game, targets: Monster[]): void {
+    const killed = targets.filter(m => m.hp <= 0);
+    game.monsters = game.monsters.filter(m => m.hp > 0);
+    for (const m of killed) CombatSystem.killMonster(m, game);
+  }
+
+  /**
+   * Kills a single-target victim through {@link CombatSystem.killMonster} and
+   * fires its biome death hook (once). Shared by the single-target spells.
+   */
+  private static slayWithHooks(game: Game, target: Monster): void {
+    const bx = target.x, by = target.y;
+    CombatSystem.killMonster(target, game);
+    if (target.isBoss && game.activeBossOnDeath) {
+      game.activeBossOnDeath(game, bx, by);
+      game.activeBossOnDeath = null;
+    }
+  }
+
   /** Casts the player's active ranged ability/spell, dispatched by `abilityType`. HP-pact spells pre-check a valid target before charging the cost. */
   static cast(game: Game): void {
     if (game.player.hp <= 0 || game.paused) return;
@@ -110,9 +134,7 @@ export class AbilitySystem {
         game.cb.onParticle(m.x, m.y, 'TERROR', '#b98fc4', 11);
       }
     }
-    const killed = targets.filter(m => m.hp <= 0);
-    game.monsters = game.monsters.filter(m => m.hp > 0);
-    for (const m of killed) CombatSystem.killMonster(m, game);
+    AbilitySystem.reap(game, targets);
     game.player.rangedCooldown = ability.cooldownMax;
     game.cb.log(
       dmg > 0
@@ -209,12 +231,7 @@ export class AbilitySystem {
         const refunded = game.player.heal(hpPaid);
         if (refunded > 0) game.cb.log(`Tethra returns the tithe — +${refunded} HP.`, 'log-perk', ability.emoji);
       }
-      const bx = target.x, by = target.y;
-      CombatSystem.killMonster(target, game);
-      if (target.isBoss && game.activeBossOnDeath) {
-        game.activeBossOnDeath(game, bx, by);
-        game.activeBossOnDeath = null;
-      }
+      AbilitySystem.slayWithHooks(game, target);
     }
 
     game.player.rangedCooldown = ability.cooldownMax;
@@ -244,14 +261,7 @@ export class AbilitySystem {
     if (game.player.rangedAmmo > 0) game.player.rangedAmmo--;
     if (ability.cooldownMax > 0) game.player.rangedCooldown = ability.cooldownMax;
 
-    if (target.hp <= 0) {
-      const bx = target.x, by = target.y;
-      CombatSystem.killMonster(target, game);
-      if (target.isBoss && game.activeBossOnDeath) {
-        game.activeBossOnDeath(game, bx, by);
-        game.activeBossOnDeath = null;
-      }
-    }
+    if (target.hp <= 0) AbilitySystem.slayWithHooks(game, target);
 
     game.advanceTurn();
   }
@@ -330,9 +340,7 @@ export class AbilitySystem {
       m.hp -= dmg;
       game.cb.onParticle(m.x, m.y, `-${dmg}`, '#ff6d00', 16, 'fx_impact');
     }
-    const killed = targets.filter(m => m.hp <= 0);
-    game.monsters = game.monsters.filter(m => m.hp > 0);
-    for (const m of killed) CombatSystem.killMonster(m, game);
+    AbilitySystem.reap(game, targets);
     game.cb.log(`Overload! ${targets.length} monsters hit for ${dmg} dmg (${game.killsThisFloor} kills × ${perKillDmg}, min floor×${perFloorMinDmg}).`, 'log-combo', 'fx_impact');
     game.cb.onParticle(game.player.x, game.player.y, 'BOOM!', '#ff6d00', 18, 'fx_impact');
     game.killsThisFloor = 0;
@@ -352,9 +360,7 @@ export class AbilitySystem {
       m.hp -= dmg;
       game.cb.onParticle(m.x, m.y, `-${dmg}`, '#ffd54f', 16, 'fx_arcane');
     }
-    const killed = targets.filter(m => m.hp <= 0);
-    game.monsters = game.monsters.filter(m => m.hp > 0);
-    for (const m of killed) CombatSystem.killMonster(m, game);
+    AbilitySystem.reap(game, targets);
     game.cb.log(`${ability.name}! ${targets.length} foe(s) skewered for ${dmg} in the column above.`, 'log-combo', ability.emoji);
     game.cb.onParticleBurst?.(game.player.x, game.player.y, 10, '#ffd54f', 'fx_arcane');
     game.player.rangedCooldown = ability.cooldownMax;
