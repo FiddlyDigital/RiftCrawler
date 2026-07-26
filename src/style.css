@@ -143,12 +143,16 @@ body {
    vertical column tucked under the top-right buttons, not a long bar. */
 #hud-strip {
   position: absolute; top: 54px; right: 8px; z-index: 4;
-  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
-  background: rgba(10,10,18,.62); border: 1px solid var(--border-color);
-  border-radius: 6px; padding: 5px 6px; box-sizing: border-box;
-  font-size: 9px; color: var(--text-color); width: 52px;
-  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+  background: linear-gradient(180deg, rgba(18,24,18,.78), rgba(10,12,10,.72));
+  border: 1px solid var(--border-color); border-top: 2px solid var(--accent-color);
+  border-radius: 6px; padding: 6px 7px; box-sizing: border-box;
+  font-size: 9px; color: var(--text-color); width: 56px;
+  box-shadow: var(--shadow-deep), inset 0 1px 0 var(--carve-hi);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
+/* Hairline rules between HUD sections for at-a-glance legibility. */
+.hud-floor, .hud-gold { border-top: 1px solid rgba(255,255,255,.06); padding-top: 3px; }
 .hud-hp-block { text-align: center; }
 .hud-hp-block span { font-family: var(--font-pixel); font-size: 11px; }
 .hud-hp-bar-container {
@@ -383,7 +387,11 @@ canvas {
 /* G · D-pad tactile press */
 .dpad-btn {
   position: relative; overflow: hidden;
-  background-color: rgba(22,28,20,.35); border: 1px solid rgba(255,255,255,.14); color: #fff;
+  /* Carved-stone rest state: subtle top-lit gradient + bevel edges. */
+  background: linear-gradient(180deg, rgba(34,42,32,.42), rgba(14,18,13,.42));
+  border: 1px solid rgba(255,255,255,.14);
+  border-top-color: var(--carve-hi); border-bottom: 2px solid var(--carve-lo);
+  color: #fff;
   font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer;
   display: flex; justify-content: center; align-items: center;
   /* Discrete/translucent at rest on mobile; a real press pops it to full
