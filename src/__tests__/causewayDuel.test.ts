@@ -241,4 +241,25 @@ describe('Causeway Duel', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('reaching a gold boon-island pays out gold inline (no modal)', () => {
+    game.startCausewayDuel();
+    const duel = game.causewayDuel as unknown as {
+      boons: Array<{ x: number; y: number; kind: string; taken: boolean }>;
+      takeBoon: (b: { x: number; y: number; kind: string; taken: boolean }) => void;
+    };
+    const goldBoon = { x: 3, y: 3, kind: 'gold', taken: false };
+    duel.boons.push(goldBoon);
+    const before = game.gold;
+    duel.takeBoon(goldBoon);
+    expect(goldBoon.taken).toBe(true);
+    expect(game.gold).toBeGreaterThan(before);
+  });
+
+  it('restoring from a snapshot with no duel state leaves the duel inactive', () => {
+    game.startCausewayDuel();
+    game.causewayDuel.restore(undefined);
+    expect(game.inCausewayDuel).toBe(false);
+    expect(game.causewayDuel.boss).toBeNull();
+  });
 });

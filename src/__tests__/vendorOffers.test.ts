@@ -3,25 +3,28 @@ import { Game } from '../game';
 import { RESCUES } from '../content';
 import type { GameCallbacks, LogClass, FloorEventDef, ShopItem, BoonDef } from '../types';
 
+type Reroll = { run: () => { choices: BoonDef[]; gold: number; cost: number } | null };
 type Shop = { stock: ShopItem[]; buy: (id: string) => { gold: number; ok: boolean } } | null;
-type Altar = { tier: number; choices: BoonDef[]; commit: (i: number) => void } | null;
+type Altar = { tier: number; choices: BoonDef[]; commit: (i: number) => void; ctx: Reroll } | null;
+type Tattoo = { choices: BoonDef[]; commit: (i: number) => void; ctx: Reroll } | null;
 type Ev = { event: FloorEventDef; onChoice: (i: number) => void } | null;
 
-function makeCallbacks(): GameCallbacks & { logs: string[]; shop: () => Shop; altar: () => Altar; ev: () => Ev } {
+function makeCallbacks(): GameCallbacks & { logs: string[]; shop: () => Shop; altar: () => Altar; tattoo: () => Tattoo; ev: () => Ev } {
   const logs: string[] = [];
-  let shop: Shop = null, altar: Altar = null, ev: Ev = null;
+  let shop: Shop = null, altar: Altar = null, tattoo: Tattoo = null, ev: Ev = null;
   return {
-    logs, shop: () => shop, altar: () => altar, ev: () => ev,
+    logs, shop: () => shop, altar: () => altar, tattoo: () => tattoo, ev: () => ev,
     log: (t: string, _c: LogClass) => { logs.push(t); },
     onOpenShop: (stock: ShopItem[], _gold: number, buy: (id: string) => { gold: number; ok: boolean }) => { shop = { stock, buy }; },
-    onOpenAltar: (tier: number, choices: BoonDef[], commit: (i: number) => void) => { altar = { tier, choices, commit }; },
+    onOpenAltar: (tier: number, choices: BoonDef[], commit: (i: number) => void, ctx: Reroll) => { altar = { tier, choices, commit, ctx }; },
+    onOpenTattooArtist: (choices: BoonDef[], commit: (i: number) => void, ctx: Reroll) => { tattoo = { choices, commit, ctx }; },
     onFloorEvent: (event: FloorEventDef, onChoice: (i: number) => void) => { ev = { event, onChoice }; },
     updateUI: vi.fn(), onDeath: vi.fn(), onParticle: vi.fn(), onParticleBurst: vi.fn(),
-    onLevelUp: vi.fn(), onOpenTattooArtist: vi.fn(), onVictory: vi.fn(),
+    onLevelUp: vi.fn(), onVictory: vi.fn(),
     onBossWarning: (_b: unknown, done: () => void) => done(), onAction: vi.fn(), onBeam: vi.fn(),
     onToast: vi.fn(), onBlockLand: vi.fn(), onRingPulse: vi.fn(), onImpactGlow: vi.fn(), onAudio: vi.fn(),
     onCodexDiscover: vi.fn(),
-  } as unknown as GameCallbacks & { logs: string[]; shop: () => Shop; altar: () => Altar; ev: () => Ev };
+  } as unknown as GameCallbacks & { logs: string[]; shop: () => Shop; altar: () => Altar; tattoo: () => Tattoo; ev: () => Ev };
 }
 
 const rescue = (id: string): import('../types').RescueDef => RESCUES.find(r => r.id === id)!;
@@ -71,6 +74,37 @@ describe('VendorOffers', () => {
       altar.commit(0);
       expect(game.player.boons.some(b => b.def.id === chosen.id)).toBe(true);
       expect(game.paused).toBe(false);   // dialog closed
+    });
+
+    it('rerolling spends gold and returns a fresh set; a broke hero cannot reroll', () => {
+      game.gold = 100000;
+      game.vendorOffers.altar(2);
+      const goldBefore = game.gold;
+      const res = cb.altar()!.ctx.run();
+      expect(res).not.toBeNull();
+      expect(game.gold).toBeLessThan(goldBefore);
+
+      game.gold = 0;
+      game.vendorOffers.altar(2);
+      expect(cb.altar()!.ctx.run()).toBeNull();   // no gold → no reroll
+    });
+  });
+
+  describe('the tattoo artist', () => {
+    it('committing a mark adds an Ogham brand', () => {
+      const before = game.player.brands.length;
+      game.vendorOffers.tattooArtist();
+      cb.tattoo()!.commit(0);
+      expect(game.player.brands.length).toBe(before + 1);
+    });
+
+    it('rerolling the marks costs gold when affordable', () => {
+      game.gold = 100000;
+      game.vendorOffers.tattooArtist();
+      const goldBefore = game.gold;
+      const res = cb.tattoo()!.ctx.run();
+      expect(res).not.toBeNull();
+      expect(game.gold).toBeLessThan(goldBefore);
     });
   });
 
