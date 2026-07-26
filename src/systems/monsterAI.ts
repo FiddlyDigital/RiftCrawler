@@ -88,9 +88,20 @@ export class MonsterAiSystem {
     return true;
   }
 
+  /**
+   * The shared melee-family skeleton: `strike()` when orthogonally adjacent,
+   * else `chase()` when within `chaseRange`, else hold. Melee/berserker/swift
+   * all build on this — they differ only in what strike/chase do.
+   */
+  private static chaseOrStrike(m: Monster, game: Game, chaseRange: number, strike: () => void, chase: () => void): void {
+    if (MonsterAiSystem.inBaseContact(m, game)) strike();
+    else if (MonsterAiSystem.manhattanToPlayer(m, game) <= chaseRange) chase();
+  }
+
   private static processMeleeMonster(m: Monster, game: Game): void {
-    if (MonsterAiSystem.inBaseContact(m, game)) { CombatSystem.monsterAttackPlayer(m, game); }
-    else if (MonsterAiSystem.manhattanToPlayer(m, game) <= Balance.MONSTER_AI.melee.chaseRange) { MonsterAiSystem.moveMonsterToward(m, game); }
+    MonsterAiSystem.chaseOrStrike(m, game, Balance.MONSTER_AI.melee.chaseRange,
+      () => CombatSystem.monsterAttackPlayer(m, game),
+      () => MonsterAiSystem.moveMonsterToward(m, game));
   }
 
   private static processRangedMonster(m: Monster, game: Game): void {
@@ -123,27 +134,27 @@ export class MonsterAiSystem {
   }
 
   private static processBerserkerMonster(m: Monster, game: Game): void {
-    if (MonsterAiSystem.inBaseContact(m, game)) {
-      const enraged = m.hp < m.maxHp * Balance.MONSTER_AI.berserker.enrageHpFraction;
-      CombatSystem.monsterAttackPlayer(m, game);
-      if (enraged && game.player.hp > 0) {
-        game.cb.log(`${m.name} rages and strikes again!`, 'log-damage');
+    MonsterAiSystem.chaseOrStrike(m, game, Balance.MONSTER_AI.berserker.chaseRange,
+      () => {
+        const enraged = m.hp < m.maxHp * Balance.MONSTER_AI.berserker.enrageHpFraction;
         CombatSystem.monsterAttackPlayer(m, game);
-      }
-    } else if (MonsterAiSystem.manhattanToPlayer(m, game) <= Balance.MONSTER_AI.berserker.chaseRange) {
-      MonsterAiSystem.moveMonsterToward(m, game);
-    }
+        if (enraged && game.player.hp > 0) {
+          game.cb.log(`${m.name} rages and strikes again!`, 'log-damage');
+          CombatSystem.monsterAttackPlayer(m, game);
+        }
+      },
+      () => MonsterAiSystem.moveMonsterToward(m, game));
   }
 
   private static processSwiftMonster(m: Monster, game: Game): void {
-    if (MonsterAiSystem.inBaseContact(m, game)) {
-      CombatSystem.monsterAttackPlayer(m, game);
-    } else if (MonsterAiSystem.manhattanToPlayer(m, game) <= Balance.MONSTER_AI.swift.chaseRange) {
-      MonsterAiSystem.moveMonsterToward(m, game);
-      if (Balance.MONSTER_AI.swift.doubleMoveOnChase && game.player.hp > 0 && !MonsterAiSystem.inBaseContact(m, game)) {
+    MonsterAiSystem.chaseOrStrike(m, game, Balance.MONSTER_AI.swift.chaseRange,
+      () => CombatSystem.monsterAttackPlayer(m, game),
+      () => {
         MonsterAiSystem.moveMonsterToward(m, game);
-      }
-    }
+        if (Balance.MONSTER_AI.swift.doubleMoveOnChase && game.player.hp > 0 && !MonsterAiSystem.inBaseContact(m, game)) {
+          MonsterAiSystem.moveMonsterToward(m, game);
+        }
+      });
   }
 
   // Gorgoth the Returned: a slow, unstoppable descent from the top of the arena.

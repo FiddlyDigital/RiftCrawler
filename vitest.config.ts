@@ -21,10 +21,10 @@ export default defineConfig({
       ],
       // Ratchet: raise these as coverage grows; CI fails if a change drops below.
       thresholds: {
-        statements: 82,
-        branches: 73,
-        functions: 82,
-        lines: 85,
+        statements: 83,
+        branches: 74,
+        functions: 83,
+        lines: 86,
       },
     },
   },
