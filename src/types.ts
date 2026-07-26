@@ -565,6 +565,10 @@ export interface SavedRun {
   metFlavorNpcIds: string[];
   /** This floor's rolled ghost haunting (the cross-run ghost *file* is reloaded from storage instead). */
   activeGhost: GhostRecord | null;
+  /** Fidchell match state (its own module owns the shape); undefined for saves taken before this field or outside a match. */
+  fidchell?: Record<string, unknown>;
+  /** Causeway Duel state (its own module owns the shape; the boss ref is re-linked on restore); undefined outside a duel or for older saves. */
+  causewayDuel?: Record<string, unknown>;
 }
 
 /** The lore-codex category a discovery belongs to. */

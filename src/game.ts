@@ -1,12 +1,27 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, BODY_PARTS, SAVE_VERSION, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type NpcDef, type ShopItem, type CharacterSheetSection, type FloorEventDef, type BossDef, type GhostRecord, type EffectSpec, type SavedRun } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
 import { Player, Monster, StatMath } from './entities';
-import { MONSTERS, BOSSES, Boon, MODIFIERS, CLASSES, Biome, FloorEvent, Brand, Npc, NPCS, PATRONS, Smith, SMITHS, RESCUES, Omen, EffectResolver, type ClassDef, type PatronDef, type RescueDef } from './content';
+import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef } from './content';
+import { Fidchell } from './fidchell';
+import { GameMath } from './gameMath';
+import { AbilitySystem } from './systems/abilities';
+import { InspectView } from './views/inspect';
+import { CharacterSheetView } from './views/charSheet';
+import { UiStateBuilder } from './views/uiState';
+import { PactCeremony } from './pact';
+import { NpcEncounters } from './npcEncounters';
+import { SmithQuest } from './smithQuest';
+import { Spawner } from './spawning';
+import { RunSetup } from './runSetup';
+import { SaveGame } from './saveGame';
+import { VendorOffers } from './vendorOffers';
+import { BossEncounters } from './bossEncounters';
+import { CausewayDuel } from './causewayDuel';
+import { Waystation } from './waystation';
 import { StatusEffectSystem } from './systems/statusEffects';
 import { HazardSystem } from './systems/hazards';
 import { CombatSystem } from './systems/combat';
 import { MonsterAiSystem } from './systems/monsterAI';
-import { SpriteService } from './sprites';
 import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
 import { StorageService } from './storage';
@@ -15,68 +30,12 @@ const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
 };
 
-// Human-readable summary of a patron's signature spell for the pact ceremony.
-function describePatronSpell(p: PatronDef): string {
-  const spell = p.spells[0]!;
-  const params = spell.params ?? {};
-  const num = (k: string, d: number): number => typeof params[k] === 'number' ? params[k] as number : d;
-  const costPct = Math.round(num('hpCostPct', 0) * 100);
-  switch (spell.abilityType) {
-    case 'shriek':
-      return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to EVERY visible foe (${Math.round(num('stunChance', 0) * 100)}% terror-stun).`;
-    case 'veil':
-      return `pay ${costPct}% Max HP, vanish from mortal sight for ${num('veilTurns', 6)} turns.`;
-    case 'drain':
-      return `pay ${costPct}% Max HP, deal ${num('dmgMult', 2)}× the HP paid to the nearest foe, heal ${Math.round(num('healPct', 0) * 100)}% of it — a kill refunds the price.`;
-    default:
-      return `pay ${costPct}% Max HP.`;
-  }
-}
-
-// Human-readable summary of a spell's one-time toll, applied the moment the
-// patron grants it (at the pact, or at each later level-gated unlock).
-const TOLL_LABELS: Record<string, string> = { atk: 'ATK', maxHp: 'Max HP', tickSlowPercent: 'gravity speed' };
-function describeToll(effects: EffectSpec[] | undefined): string {
-  return (effects ?? []).map(e => {
-    const label = TOLL_LABELS[e.stat] ?? e.stat;
-    if (e.op === 'mul') {
-      const pct = Math.round((1 - (e.value as number)) * 100);
-      return `−${pct}% ${label}`;
-    }
-    const v = e.value as number;
-    return `${v > 0 ? '+' : ''}${v} ${label}`;
-  }).join(', ');
-}
 
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
-/** Pure tetromino/timing/scoring math shared by `Game` and the tick loop in `main.ts`. */
-export class GameMath {
-  /** Rotates a piece matrix 90° clockwise. @throws {TypeError} If `matrix` is null/undefined/empty. */
-  static rotateMatrix(matrix: CellValue[][]): CellValue[][] {
-    if (!matrix || matrix.length === 0) throw new TypeError('GameMath.rotateMatrix: "matrix" must be a non-empty 2D array');
-    const rows = matrix.length;
-    const cols = matrix[0]!.length;
-    const out: CellValue[][] = Array.from({ length: cols }, () => Array(rows).fill(0) as CellValue[]);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        out[c]![rows - 1 - r] = matrix[r]![c]!;
-      }
-    }
-    return out;
-  }
-
-  /** Milliseconds per gravity tick at the given dungeon level and slow percentage. */
-  static tickMsForLevel(level: number, slowPercent: number): number {
-    const base = Math.max(Balance.CONFIG.progression.tickMinMs, Balance.CONFIG.progression.tickBaseMs - (level - 1) * Balance.CONFIG.progression.tickMsPerDungeonLevel);
-    return Math.floor(base * (1 + slowPercent / 100));
-  }
-
-  /** Gold awarded for clearing `count` rows at dungeon level `level`. */
-  static scoreForLines(count: number, level: number): number {
-    return (Balance.CONFIG.progression.lineClearScoreBase[count] ?? Balance.CONFIG.progression.lineClearScoreOverflow) * level;
-  }
-}
+// GameMath moved to ./gameMath (so feature modules like the Causeway Duel can
+// use it without a circular import); re-exported here for existing importers.
+export { GameMath } from './gameMath';
 
 // ── Game class ───────────────────────────────────────────────────────────────
 
@@ -165,27 +124,8 @@ export class Game {
   /** Whether the hero is currently inside the waystation — no falling stone, no monsters, just the mound's residents. */
   public inWaystation = false;
 
-  /**
-   * The mound chamber layout: an 8×8 square hall centered on the canvas
-   * (inclusive bounds), the hearth at its heart with the seanchaí beside it,
-   * the emissary aloof in a corner, the stall along a wall, and the exit
-   * stairs in the far corner. Public so tests target positions by name.
-   */
-  public static readonly MOUND = {
-    x0: 1, y0: 9, x1: 8, y1: 16,
-    hero:       { x: 2, y: 15 },
-    emissary:   { x: 2, y: 10 },
-    seanchai:   { x: 5, y: 13 },
-    campfire:   { x: 4, y: 12 },
-    peddler:    { x: 7, y: 10 },
-    stranger:   { x: 6, y: 15 },
-    oghamStone: { x: 1, y: 12 },
-    well:       { x: 5, y: 10 },
-    aoife:      { x: 7, y: 13 },
-    tattooist:  { x: 3, y: 11 },
-    stash:      { x: 1, y: 15 },
-    stairs:     { x: 8, y: 16 },
-  } as const;
+  /** The mound chamber layout (owned by {@link Waystation}); aliased here so tests target positions by name. */
+  public static readonly MOUND = Waystation.MOUND;
   /** A floor event rolled on an interval descent but embodied as a waiting stranger in the mound — held until met, across floors if need be. */
   public pendingFloorEvent: FloorEvent | null = null;
 
@@ -198,9 +138,9 @@ export class Game {
   /** The captors' monster archetype, rolled with the rescue piece. Public for the falling-piece preview. */
   public pendingGuardKey: string | null = null;
   /** The live captor monsters — the captive can't be freed until every one is dead. */
-  private rescueGuards: Monster[] = [];
+  public rescueGuards: Monster[] = [];  // public: read/written by SaveGame
   /** ATK granted by Bricriu's Champion's Portion, reverted on the next descent. */
-  private portionAtkBonus = 0;
+  public portionAtkBonus = 0;  // public: read/written by VendorOffers (Bricriu) and descent revert
 
   /** While the first-run tutorial is teaching, natural enemy spawns are suppressed — the tutorial introduces its own single practice foe (see spawnTutorialFoe). */
   public tutorialSafety = false;
@@ -209,74 +149,53 @@ export class Game {
   public harperLullFloor = 0;
 
   /** Whether An Draoi's deity pact is still unsworn — the emissary waits in the mound until it is. */
-  private get pactPending(): boolean {
+  public get pactPending(): boolean {
     return this.activeClassId === 'draoi' && this.activePatronId === null && this.dungeonLevel >= 2;
   }
 
   /** Whether the BlockBuilding layer is currently frozen (the Gorgoth duel, a waystation rest floor, or a Causeway Duel — which runs its own placement layer). */
-  private get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel || this.inFidchell; }
+  public get blockBuildingSuspended(): boolean { return this.gorgothSummoned || this.inWaystation || this.inCausewayDuel || this.inFidchell; }
 
   // ── Causeway Duel (boss-floor play state) ────────────────────────────────
   // A no-gravity, turn-based duel on the shared grid: the player grows a
   // causeway up from the home row while the boss grows one down; climb yours
-  // to kill the boss (stairs then appear), or lose if the boss's causeway
-  // reaches your home row. See docs/causeway-duel.md.
-  /** Whether a Causeway Duel is currently in progress. */
-  public inCausewayDuel = false;
-  /** Tile ownership during a duel: 0 unclaimed, 1 player, 2 boss. */
-  private duelOwner: number[][] = [];
-  /** The boss entity for the active duel (descends its causeway toward the hero; killing it wins the floor). */
-  private duelBoss: Monster | null = null;
-  /** The hero's home tile (the shore). The bridge "lands" — and the run is lost — when a boss tile reaches it. */
-  private duelHome = { x: 0, y: 0 };
-  /** Set once the duel has been decided, so late inputs can't re-trigger win/loss. */
-  private duelResolved = false;
-  /** Switch-islands: routing the player's causeway to one flips it; all lit opens the center wall. */
-  private duelSwitches: Array<{ x: number; y: number; lit: boolean }> = [];
-  /** Center-wall tiles that block the two halves from connecting until every switch is lit. */
-  private duelWall: Array<{ x: number; y: number }> = [];
-  /** Off-the-line reward islands — routing the player's causeway onto one grants its boon. */
-  private duelBoons: Array<{ x: number; y: number; kind: 'geis' | 'gold' | 'heal'; taken: boolean }> = [];
-  /** Turns elapsed in the current duel (player placements). */
-  private duelTurns = 0;
-  /** One-time flag so the "bridge nears your shore" warning fires only once. */
-  private duelNearShoreWarned = false;
-  /** Set when the duel is won but the delve-or-rest choice is waiting for another modal (e.g. a level-up boon pick) to close first. */
-  private duelDescentPending = false;
-  private static readonly DUEL_PLAYER_COLOR = '#2f5c8a';
-  private static readonly DUEL_BOSS_COLOR = '#5c2530';
-  private static readonly DUEL_WALL_COLOR = '#3a3550';
-  private static readonly DUEL_SWITCH_COLOR = '#2a4a44';
-  private static readonly DUEL_BOON_COLOR = '#3a2e10';
+  // to kill the boss (the duel then ends), or lose if the boss's causeway
+  // reaches your home row. Self-contained in its own module (see
+  // src/causewayDuel.ts); Game holds the instance and delegates.
+  /** Whether a Causeway Duel is currently in progress (proxies the duel module's `active`). */
+  public get inCausewayDuel(): boolean { return this.causewayDuel.active; }
+  public set inCausewayDuel(v: boolean) { this.causewayDuel.active = v; }
 
   // ── Fidchell ("the wooden wisdom") — a brandub/tafl board challenge ────────
   // Every 7th floor a Fomorian gambler bars the crossing and sets the board.
-  // You're dealt one side at random (King's escape or the Raiders' hunt); win to
-  // take a shortcut past the floor with a prize, lose to fight through it.
-  // See docs/fidchell.md. Runs as its own suspended play-state on a centred 7×7.
+  // Self-contained in its own module (see src/fidchell.ts); Game just holds the
+  // instance and delegates entry, input, the HUD payload, and save/resume.
+  public readonly fidchell: Fidchell = new Fidchell(this);
+  public readonly causewayDuel: CausewayDuel = new CausewayDuel(this);
+  private readonly waystation: Waystation = new Waystation(this);
+  private readonly inspectView: InspectView = new InspectView(this);
+  public readonly characterSheetView: CharacterSheetView = new CharacterSheetView(this);
+  private readonly uiStateBuilder: UiStateBuilder = new UiStateBuilder(this);
+  public readonly pact: PactCeremony = new PactCeremony(this);
+  public readonly npcEncounters: NpcEncounters = new NpcEncounters(this);
+  public readonly smithQuest: SmithQuest = new SmithQuest(this);
+  private readonly spawner: Spawner = new Spawner(this);
+  private readonly runSetup: RunSetup = new RunSetup(this);
+  private readonly saveGame: SaveGame = new SaveGame(this);
+  public readonly vendorOffers: VendorOffers = new VendorOffers(this);
+  private readonly bossEncounters: BossEncounters = new BossEncounters(this);
   /** Whether a Fidchell match is currently in progress. */
-  public inFidchell = false;
-  /** Board cells (7×7, local coords): 0 empty, 1 King, 2 Defender, 3 Raider. */
-  private fidBoard: number[][] = [];
-  /** Which side the player controls this match ('king' = King + defenders escaping; 'raider' = the hunt). */
-  private fidPlayerSide: 'king' | 'raider' = 'king';
-  /** Whose turn it is ('king' side moves the King + defenders; raiders move first, tafl-style). */
-  private fidTurn: 'king' | 'raider' = 'raider';
-  /** The tapped piece awaiting a destination, in local board coords. */
-  private fidSelected: { x: number; y: number } | null = null;
-  /** Legal destinations for the selected piece (local coords). */
-  private fidLegal: Array<{ x: number; y: number }> = [];
-  /** Top-left of the 7×7 board in grid coords (centred on the play area). */
-  private fidOrigin = { x: 0, y: 0 };
-  /** Set once the match is decided so no further moves land. */
-  private fidResolved = false;
-  /** Total plies played (for the stalemate/repeat safety cap). */
-  private fidPlies = 0;
-  private static readonly FID_N = 7;                 // board is 7×7 (brandub)
-  private static readonly FID_EMPTY = 0;
-  private static readonly FID_KING = 1;
-  private static readonly FID_DEFENDER = 2;
-  private static readonly FID_RAIDER = 3;
+  public get inFidchell(): boolean { return this.fidchell.active; }
+  /** Read-only board views for the renderer. */
+  public get fidchellBoard(): ReadonlyArray<ReadonlyArray<number>> { return this.fidchell.board; }
+  public get fidchellOrigin(): { x: number; y: number } { return this.fidchell.origin; }
+  public get fidchellSelected(): { x: number; y: number } | null { return this.fidchell.selected; }
+  public get fidchellLegal(): ReadonlyArray<{ x: number; y: number }> { return this.fidchell.legal; }
+  public get fidchellPlayerSide(): 'king' | 'raider' { return this.fidchell.playerSide; }
+  /** Starts a Fidchell match (delegates to the module). */
+  public startFidchell(): void { this.fidchell.start(); }
+  /** Routes a board tap to the match (delegates to the module). */
+  public handleFidchellTap(gx: number, gy: number): void { this.fidchell.handleTap(gx, gy); }
 
   // Bealtaine Fires ritual state (the 'bealtaine' special omen)
   /** Braziers standing on the floor this level — walk into an unlit one to light it. */
@@ -284,7 +203,7 @@ export class Game {
   /** Need-fires lit this floor — banked progress, kept even if a lit brazier's row later clears. */
   public brazierLitCount = 0;
   /** Set once the ritual reward has been granted, stopping further brazier riders. */
-  private ritualComplete = false;
+  public ritualComplete = false;  // public: reset by Waystation.enter
 
   // Run stats
   public monstersKilled = 0;
@@ -296,11 +215,11 @@ export class Game {
   // Internal counters
   private floorsDescended = 0;
   private blocksPlacedSinceStairs = 0;
-  private pendingBossFloor = false;
+  public pendingBossFloor = false;  // public: set by BossEncounters.announceFloor
   /** Whole-board fill fraction a pending boss waits for before riding in (see spawnBlock); also drives the HUD dial's boss marker. */
   private static readonly BOSS_FILL_FRACTION = 0.5;
   /** Set on a smith-eligible floor entry; the smith rider doesn't inject until {@link blocksSpawnedThisFloor} passes the configured threshold. */
-  private pendingSmithFloor = false;
+  public pendingSmithFloor = false;
   private blocksSpawnedThisFloor = 0;
   /** Whether the "anvils are getting stronger" mid-floor warning has already fired this floor. */
   private smithWarningShown = false;
@@ -317,8 +236,8 @@ export class Game {
   /** Set once his tier-3 Geis has been accepted — he departs for the rest of the run. */
   public dagdaGiftClaimed = false;
   public comboCount = 0;
-  private lastLineClearMs = 0;
-  private tattooTiles: Array<{ x: number; y: number }> = [];
+  public lastLineClearMs = 0;  // public: reset by SaveGame on restore
+  public tattooTiles: Array<{ x: number; y: number }> = [];
   /** Caps Ogham Mark tiles per floor. */
   private tattooTilesSpawnedThisFloor = 0;
   public altarTiles: AltarTile[] = [];
@@ -343,22 +262,23 @@ export class Game {
    */
   public availableGhosts: GhostRecord[] = [];
   /** This floor's haunting, chosen at floor start when a stored ghost's level is within tolerance of the current hero's. */
-  private activeGhost: GhostRecord | null = null;
+  public activeGhost: GhostRecord | null = null;
   private ghostPlaced = false;
 
   /** Notable moments this run — feeds the death/victory screen's short "tale of the run" recap. */
   public storyBeats: string[] = [];
-  /** Flavor-kind NPC ids already met this run, so a repeat encounter shows {@link NpcDef.returnLine} instead of a fresh random line. */
-  private metFlavorNpcIds = new Set<string>();
+  /** Flavor-kind NPC ids already met this run, so a repeat encounter shows its return line instead of a fresh random line. */
+  public metFlavorNpcIds = new Set<string>();
   /** Whether the run's first elite kill has already pushed a story beat (elites can be felled many times a run — only the first is notable). */
   public firstEliteFelled = false;
   /** Whether the run's first sub-15%-HP survival has already pushed a "close call" story beat. */
   private hadCloseCall = false;
 
-  // Active boss mechanics (set at spawn, cleared on floor reset)
-  private activeBossOnHalfHp: ((game: Game) => void) | null = null;
-  private activeBossOnDeath:   ((game: Game, x: number, y: number) => void) | null = null;
-  private bossHalfHpTriggered = false;
+  // Active boss mechanics (set at spawn, cleared on floor reset).
+  // Public: reattached by SaveGame around the restored boss instance.
+  public activeBossOnHalfHp: ((game: Game) => void) | null = null;
+  public activeBossOnDeath:   ((game: Game, x: number, y: number) => void) | null = null;
+  public bossHalfHpTriggered = false;
 
   /**
    * Endgame: overflowing the stack summons Gorgoth the Returned. While
@@ -367,9 +287,9 @@ export class Game {
    */
   public gorgothSummoned = false;
   public won = false;
-  /** One-time nudge toward the win condition. */
-  private gorgothHintShown = false;
-  private gorgothHalfTriggered = false;
+  /** One-time nudge toward the win condition. Public: owned by BossEncounters. */
+  public gorgothHintShown = false;
+  public gorgothHalfTriggered = false;
 
   public readonly cb: GameCallbacks;
 
@@ -420,18 +340,61 @@ export class Game {
   // ── Grid helpers ─────────────────────────────────────────────────────────
 
   /** A fresh all-VOID terrain grid. */
-  private emptyMap(): TileValue[][] {
+  public emptyMap(): TileValue[][] {
     return Array.from({ length: GameConfig.COLS }, () => Array<TileValue>(GameConfig.ROWS).fill(Tile.VOID));
   }
 
   /** A fresh all-null tile-color grid. */
-  private emptyColors(): (string | null)[][] {
+  public emptyColors(): (string | null)[][] {
     return Array.from({ length: GameConfig.COLS }, () => Array<string | null>(GameConfig.ROWS).fill(null));
   }
 
   /** A fresh grid filled with `val` (used for visibility/explored state). */
   private emptyBoolGrid(val: boolean): boolean[][] {
     return Array.from({ length: GameConfig.COLS }, () => Array(GameConfig.ROWS).fill(val) as boolean[]);
+  }
+
+  /**
+   * Wipes the floor to bare rock: fresh empty terrain/colors and every entity
+   * and tile-feature list cleared. Shared by the alternate play modes that take
+   * over the board (Fidchell, the Causeway Duel, the waystation). The falling
+   * piece (`blockMatrix`) is left to the caller, since each mode wants it
+   * differently. */
+  public clearBoardEntities(): void {
+    this.map = this.emptyMap();
+    this.colors = this.emptyColors();
+    this.monsters = [];
+    this.hazards = [];
+    this.specialTiles = [];
+    this.npcTiles = [];
+    this.altarTiles = [];
+    this.tattooTiles = [];
+  }
+
+  /** Reveals the entire arena (no fog) — used by the modes that light the whole board on entry. */
+  public revealAll(): void {
+    for (let x = 0; x < GameConfig.COLS; x++) {
+      for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
+    }
+  }
+
+  /**
+   * Opens a one-off floor-event choice modal, pausing play; on dismissal it
+   * applies the chosen option, logs the outcome under `char`, resumes, and runs
+   * `onClosed`. The shared close-out for the run's encounter dialogs (NPCs,
+   * smiths, rescues, the pact, ghosts). Callers that need bespoke callback
+   * behaviour (re-pinning a fixture tile, chaining a second dialog) still wire
+   * `cb.onFloorEvent` themselves.
+   */
+  public presentChoice(event: FloorEventDef, char: string, onClosed?: () => void): void {
+    this.paused = true;
+    this.cb.onFloorEvent?.(event, (index) => {
+      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
+      this.cb.log(msg, 'log-perk', char);
+      this.paused = false;
+      this.cb.onAction();
+      onClosed?.();
+    });
   }
 
   /** Lays down the fixed 6×2 floor tile the hero stands on at run/floor start. */
@@ -449,14 +412,14 @@ export class Game {
   private static readonly SHAPE_WEIGHT_TOTAL: number =
     Object.values(Game.SHAPE_WEIGHTS).reduce((a, b) => a + b, 0);
 
-  private randomShapeKey(): ShapeKey {
+  public randomShapeKey(): ShapeKey {
     return Balance.weightedPick(Game.SHAPE_WEIGHTS, Math.random() * Game.SHAPE_WEIGHT_TOTAL) ?? 'I';
   }
 
   // ── Fog of war ───────────────────────────────────────────────────────────
 
   /** Recomputes visibility/explored state around the player (or reveals the whole arena during the Gorgoth duel). */
-  private updateVisibility(): void {
+  public updateVisibility(): void {
     // During the Gorgoth duel (and inside a waystation) the whole arena stays
     // lit — revealed on entry, so don't re-fog to the vision radius.
     if (this.blockBuildingSuspended) return;
@@ -722,7 +685,7 @@ export class Game {
     if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return false;
     // In a duel the hero can't walk the sealed wall, but switch- and boon-islands
     // are walked *onto* to activate them (build your causeway up, then step on).
-    if (this.inCausewayDuel && this.duelOwner[x]?.[y] === Game.DUEL_WALL) return false;
+    if (this.inCausewayDuel && this.causewayDuel.owner[x]?.[y] === CausewayDuel.WALL) return false;
     return this.map[x]![y] === Tile.FLOOR || this.map[x]![y] === Tile.STAIRS || this.isTattooTile(x, y) || this.isAltarTile(x, y);
   }
 
@@ -736,7 +699,7 @@ export class Game {
     return this.altarTiles.some(a => a.x === x && a.y === y);
   }
 
-  private getHazardAt(x: number, y: number): HazardTile | undefined {
+  public getHazardAt(x: number, y: number): HazardTile | undefined {
     return this.hazards.find(h => h.x === x && h.y === y);
   }
 
@@ -910,7 +873,7 @@ export class Game {
   }
 
   /** Row index of the highest built floor tile across every column (`GameConfig.ROWS` if the field is empty — row 0 is the field's top). */
-  private stackTopRow(): number {
+  public stackTopRow(): number {
     let stackTop: number = GameConfig.ROWS;
     for (let x = 0; x < GameConfig.COLS; x++) {
       for (let y = 0; y < GameConfig.ROWS; y++) {
@@ -941,14 +904,9 @@ export class Game {
     return filled / (GameConfig.COLS * GameConfig.ROWS);
   }
 
-  // One-time teaching nudge: when the stack climbs near the ceiling, tell the
-  // player that topping out summons Gorgoth — the win condition.
+  /** Near-ceiling "top out to win" nudge. Delegates to {@link BossEncounters}. */
   private maybeHintGorgoth(): void {
-    if (this.gorgothHintShown || this.blockBuildingSuspended) return;
-    if (this.stackTopRow() <= 5) {
-      this.gorgothHintShown = true;
-      this.cb.log('The stack climbs high — let it top out to summon BRES THE BEAUTIFUL and win the Rift!', 'log-boss', 'ui_warning');
-    }
+    this.bossEncounters.maybeHintGorgoth();
   }
 
   // ── Special tile processing ──────────────────────────────────────────────
@@ -975,316 +933,47 @@ export class Game {
 
   // ── Monster spawning helper ───────────────────────────────────────────────
 
-  /** Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the resulting `Monster` at `(tx, ty)`. */
-  /** `elite`: true forces an elite, false forbids one, undefined rolls the normal chance. */
-  private spawnMonster(key: string, tx: number, ty: number, elite?: boolean, nameOverride?: string): void {
-    const def = MONSTERS[key];
-    if (!def) return;
-    const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance + this.heatAdd('eliteChanceBonus'));
-    const diff = this.difficultyTuning();
-    const baseHp  = Math.floor((def.baseHp  + (this.dungeonLevel - 1) * def.hpPerLevel) * this.biomeMonsterHpMult * diff.monsterHpMult);
-    const baseAtk = def.baseAtk + (this.dungeonLevel - 1) * def.atkPerLevel;
-    const hp  = isElite ? baseHp * Balance.CONFIG.eliteMonsters.hpMult : baseHp;
-    // Omens like the Morrígan's Ravens or Crom's Tithe harden every spawn;
-    // New Game+ geasa stack on top of both omen and difficulty.
-    const omenAtkMult = this.activeOmen?.num('monsterAtkMult', 1) ?? 1;
-    const atk = Math.floor((isElite ? baseAtk * Balance.CONFIG.eliteMonsters.atkMult : baseAtk) * omenAtkMult * diff.monsterAtkMult * this.heatMult('monsterAtkMult'));
-    const name = nameOverride ?? (isElite ? `Elite ${def.name}` : def.name);
-    const m = new Monster(
-      tx, ty, def.char, name, hp, hp, atk, def.xpReward,
-      false,
-      def.behaviorType ?? 'melee',
-      def.attackRange  ?? 1,
-      def.moveSpeed    ?? 1,
-      def.statusInflict,
-    );
-    m.isElite = isElite;
-    m.combatLevel = Math.min(6, def.combatLevel + (isElite ? Balance.CONFIG.eliteMonsters.combatLevelBonus : 0));
-    if (this.frozenRift) {
-      m.statuses.push({ type: 'stun', duration: 1, power: 0 });
-    }
-    // Abcán's suantraí (sleep-strain) lulls everything that arrives on the
-    // floor it was played for.
-    if (this.dungeonLevel === this.harperLullFloor) {
-      m.statuses.push({ type: 'stun', duration: 2, power: 0 });
-    }
-    this.monsters.push(m);
-    if (isElite) {
-      this.cb.onParticle(tx, ty, 'ELITE!', '#ffd700', undefined, 'special_sacred');
-      this.cb.log(`Elite ${def.name} stalks out of the dark!`, 'log-boss', 'special_sacred');
-    } else {
-      this.cb.onParticle(tx, ty, def.spawnMsg, '#e57373', undefined, def.char);
-    }
+  /**
+   * Scales a `MonsterTemplate` by dungeon level/biome/elite-roll and places the
+   * resulting `Monster` at `(tx, ty)`. Thin delegate onto {@link Spawner}.
+   * `elite`: true forces an elite, false forbids one, undefined rolls the normal chance.
+   */
+  public spawnMonster(key: string, tx: number, ty: number, elite?: boolean, nameOverride?: string): void {
+    this.spawner.monster(key, tx, ty, elite, nameOverride);
   }
 
-  /** Spawns up to two Crystal Shard adds beside a fallen Cailleach's Stoneward. Called by that boss's `onDeath` hook. */
+  /** A monster key, weighted toward tougher species as the dungeon deepens. Delegates to {@link Spawner}. */
+  public getRandomMonsterKey(): string {
+    return this.spawner.randomMonsterKey();
+  }
+
+  /** Spawns up to two Crystal Shard adds beside a fallen Cailleach's Stoneward. Called by that boss's `onDeath` hook. Delegates to {@link BossEncounters}. */
   public spawnCrystalShards(bx: number, by: number): void {
-    const shardHp  = Balance.CONFIG.crystalShards.baseHp + this.dungeonLevel * Balance.CONFIG.crystalShards.hpPerDungeonLevel;
-    const shardAtk = Balance.CONFIG.crystalShards.baseAtk + Math.floor(this.dungeonLevel * Balance.CONFIG.crystalShards.atkPerDungeonLevel);
-    const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    let spawned = 0;
-    for (const [dx, dy] of dirs) {
-      if (spawned >= 2) break;
-      const sx = bx + dx, sy = by + dy;
-      if (this.isValidMove(sx, sy) && !this.getMonsterAt(sx, sy)) {
-        const shard = new Monster(sx, sy, 'sprite_crystal_shard', 'Crystal Shard', shardHp, shardHp, shardAtk, 30);
-        shard.combatLevel = 3;
-        this.monsters.push(shard);
-        this.cb.onParticle(sx, sy, '', '#80d8ff', undefined, 'sprite_crystal_shard');
-        spawned++;
-      }
-    }
-    this.cb.log("Cailleach's Stoneward shatters — shards emerge!", 'log-boss', 'sprite_boss_crystal_golem');
+    this.bossEncounters.spawnCrystalShards(bx, by);
   }
 
-  /** Yanks the falling piece 5 rows down. Called by Balor's Herald's `onHalfHp` hook. */
+  /** Yanks the falling piece 5 rows down. Called by Balor's Herald's `onHalfHp` hook. Delegates to {@link BossEncounters}. */
   public triggerGravityBurst(): void {
-    this.blockY = Math.max(0, this.blockY - 5);
-    this.cb.log("Balor's Herald tears the weave — gravity surges!", 'log-boss', 'fx_impact');
-    this.cb.onParticle(this.player.x, this.player.y, 'SURGE!', '#aa00ff', undefined, 'fx_impact');
-    this.cb.onAudio?.('bossWarn');
+    this.bossEncounters.triggerGravityBurst();
   }
 
   // ── Dungeon rooms ────────────────────────────────────────────────────────
 
+  /** Rolls the per-floor chance to carve a lateral vault/den room. Delegates to {@link Spawner}. */
   private maybeSpawnDungeonRoom(): void {
-    if (Math.random() > Balance.CONFIG.floors.dungeonRoomChance) return;
-    this.spawnRoom(Math.random() < 0.5 ? 'vault' : 'den');
-  }
-
-  /** A monster key, weighted toward tougher species as the dungeon deepens. */
-  private getRandomMonsterKey(): string {
-    const all = ['rat', 'skeleton', 'goblin_archer', 'cave_slime', 'berserker_orc', 'plague_bat'];
-    const maxIdx = Math.min(all.length - 1, 1 + Math.floor(this.dungeonLevel / 3));
-    return all[Math.floor(Math.random() * (maxIdx + 1))]!;
-  }
-
-  private spawnRoom(type: 'vault' | 'den'): void {
-    // Rooms are lateral 2×3 extensions of the starting platform (x=2..7, y=23..24).
-    // Left side: x=0..1. Right side: x=8..9. y=22..24 (one row above platform top).
-    // This keeps the centre columns clear so falling blocks are never intercepted.
-    const colors = { vault: '#3d2b00', den: '#2d0000' } as const;
-    const side = Math.random() < 0.5 ? 'left' : 'right';
-    const roomX = side === 'left' ? 0 : GameConfig.COLS - 2;  // 0 or 8
-    const roomY = GameConfig.ROWS - 3;                         // 22 (rows 22..24)
-    const color = colors[type];
-
-    for (let dx = 0; dx < 2; dx++) {
-      for (let dy = 0; dy < 3; dy++) {
-        const x = roomX + dx, y = roomY + dy;
-        this.map[x]![y]    = Tile.FLOOR;
-        this.colors[x]![y] = color;
-      }
-    }
-
-    const innerX = roomX + (side === 'left' ? 1 : 0);  // column closer to starting platform
-    const midY   = roomY + 1;                           // middle row of the room
-
-    if (type === 'vault') {
-      // Place a bonus altar in the vault, guarded by a monster.
-      const altarX = roomX + (side === 'left' ? 0 : 1);
-      const altarTier: 1 | 2 | 3 = this.dungeonLevel >= Balance.CONFIG.altars.vaultTierMinFloorT3 ? 3 : this.dungeonLevel >= Balance.CONFIG.altars.vaultTierMinFloorT2 ? 2 : 1;
-      const altarColor = Colors.forTier(altarTier).bg;
-      this.colors[altarX]![midY] = altarColor;
-      this.altarTiles.push({ x: altarX, y: midY, tier: altarTier });
-      this.spawnMonster(this.getRandomMonsterKey(), innerX, roomY);
-      this.cb.log(`A Treasure Vault lies to the ${side} — guarded.`, 'log-perk', 'item_gold_pouch');
-    } else {
-      const positions: Array<[number, number]> = [[0, 0], [1, 0], [0, 1]];
-      for (const [pdx, pdy] of positions) {
-        this.spawnMonster(this.getRandomMonsterKey(), roomX + pdx, roomY + pdy);
-      }
-      this.cb.log(`A Monster Den lurks to the ${side}...`, 'log-damage', 'status_poison');
-    }
+    this.spawner.maybeSpawnRoom();
   }
 
   // Boss selection is deterministic per floor (cycles through the pool in a
   // fixed order, biome permitting), and biome is itself purely a function of
   // floor number — so this can truthfully preview a boss on a floor the
   // player hasn't reached yet (used by the vengeance-bounty NPC).
-  private previewBossForFloor(floor: number): BossDef {
+  public previewBossForFloor(floor: number): BossDef {
     const biome = Biome.forFloor(floor);
     const biomeBosses   = BOSSES.filter(b => b.biomeId === biome.id);
     const genericBosses = BOSSES.filter(b => !b.biomeId);
     const bossPool = biomeBosses.length > 0 ? biomeBosses : genericBosses;
     return bossPool[(Math.floor(floor / Balance.CONFIG.floors.bossFloorInterval) - 1) % bossPool.length]!;
-  }
-
-  // ── Wandering NPCs ─────────────────────────────────────────────────────────
-  // Reuses the floor-event modal/plumbing entirely — an NPC encounter is just
-  // a FloorEventDef built at runtime instead of loaded from JSON, so no new
-  // UI or callback wiring is needed.
-
-  private triggerNpcEncounter(npc: NpcDef, onClosed?: () => void): void {
-    this.cb.onCodexDiscover?.('npc', npc.id);
-    let event: FloorEventDef;
-
-    if (npc.kind === 'bounty') {
-      const targetFloor = (Math.floor(this.dungeonLevel / Balance.CONFIG.floors.bossFloorInterval) + 1) * Balance.CONFIG.floors.bossFloorInterval;
-      const targetBoss = this.previewBossForFloor(targetFloor);
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name,
-        flavor: `${npc.introLine} ${targetBoss.name} still draws breath at Floor ${targetFloor} — finish what I started, and I'll see you rewarded.`,
-        options: [
-          {
-            label: `Swear vengeance on ${targetBoss.name}`,
-            desc: `Slay ${targetBoss.name} at Floor ${targetFloor} or beyond for a rare Geis.`,
-            apply: (game): string => {
-              game.activeBountyQuest = { bossName: targetBoss.name, floor: targetFloor };
-              game.storyBeats.push(`swore vengeance on ${targetBoss.name}`);
-              return `You swear vengeance upon ${targetBoss.name}, in ${npc.name}'s name.`;
-            },
-          },
-          { label: 'Not now', desc: '', apply: (): string => `${npc.name} nods, unsurprised, and fades back into the dark.` },
-        ],
-      };
-    } else if (npc.kind === 'trade' && this.player.boons.length === 0) {
-      // Still a real encounter (dialog + departure beam), just with nothing
-      // to trade yet — not a silent log line while the NPC vanishes.
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name,
-        flavor: `${npc.introLine} ...but you carry nothing worth trading. Come back once you've gathered some Geasa.`,
-        options: [{ label: 'Nothing to offer', desc: '', apply: (): string => `${npc.name} shrugs and fades back into the dark.` }],
-      };
-    } else if (npc.kind === 'trade') {
-      const boonOptions = this.player.boons.map(b => ({
-        label: `Give up ${b.def.name} (×${b.stacks})`,
-        desc: b.def.desc,
-        apply: (game: Game): string => {
-          game.player.removeBoon(b.id);
-          const pool = Boon.BY_TIER[3].filter(x => x.id !== b.def.id);
-          const reward = (pool.length > 0 ? pool : Boon.BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : Boon.BY_TIER[3].length))]!;
-          game.player.addBoon(reward);
-          game.storyBeats.push(`traded ${b.def.name} to a Fomorian tinker for ${reward.name}`);
-          return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
-        },
-      }));
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name, flavor: npc.introLine!,
-        options: [...boonOptions, { label: 'Never mind', desc: '', apply: (): string => 'You keep your Geasa close.' }],
-      };
-    } else {
-      const metBefore = this.metFlavorNpcIds.has(npc.id);
-      const lines = npc.lines!;
-      const flavor = metBefore && npc.returnLine ? npc.returnLine : lines[Math.floor(Math.random() * lines.length)]!;
-      this.metFlavorNpcIds.add(npc.id);
-      event = {
-        id: npc.id, emoji: npc.char, title: npc.name, flavor,
-        options: [{ label: 'Farewell', desc: '', apply: (): string => 'You part ways.' }],
-      };
-    }
-
-    this.storyBeats.push(`crossed paths with ${npc.name}`);
-    this.cb.onAudio?.('npcEncounter');
-    this.paused = true;
-    this.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', npc.char);
-      this.paused = false;
-      this.cb.onAction();
-      onClosed?.();
-    });
-  }
-
-  /** Your run's story so far, in the seanchaí's voice — built from {@link storyBeats}. */
-  private buildOwnTale(): string {
-    const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'a wanderer';
-    const beats = this.storyBeats.slice(0, 5);
-    const joined = beats.length === 0
-      ? 'you have only begun'
-      : beats.length === 1
-      ? `already you ${beats[0]!}`
-      : `already you ${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
-    const more = this.storyBeats.length > 5 ? ' …and more besides — the verse grows long.' : '';
-    return `He closes his eyes and speaks it like an old poem: "${cls}, ${this.dungeonLevel} floor${this.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}" He opens one eye. "The ending, now. That part is still yours."`;
-  }
-
-  /**
-   * The seanchaí of the mound: mound-lore flavor plus "ask for your own
-   * tale" — which opens a SECOND dialog whose body IS the tale, so the
-   * story is actually read on screen instead of scrolling past in the log
-   * (invisible on mobile, where the sidebar is a drawer). He never departs.
-   */
-  private triggerSeanchaiEncounter(): void {
-    const npc = NPCS.find(n => n.id === 'seanchai');
-    if (!npc || !this.cb.onFloorEvent) { this.advanceTurn(); return; }
-    this.cb.onCodexDiscover?.('npc', npc.id);
-    const metBefore = this.metFlavorNpcIds.has(npc.id);
-    const lines = npc.lines ?? [];
-    const flavor = (metBefore && npc.returnLine) || lines[Math.floor(Math.random() * Math.max(1, lines.length))] || npc.name;
-    this.metFlavorNpcIds.add(npc.id);
-    const event: FloorEventDef = {
-      id: npc.id, emoji: npc.char, title: npc.name, flavor,
-      options: [
-        { label: 'Ask for your own tale', desc: 'Hear the seanchaí recount your descent so far.', apply: (): string => '' },
-        { label: 'Farewell', desc: '', apply: (): string => 'The seanchaí nods and returns to watching the fire.' },
-      ],
-    };
-    this.cb.onAudio?.('npcEncounter');
-    this.paused = true;
-    this.cb.onFloorEvent(event, (index) => {
-      if (index === 0) {
-        // Chain straight into the tale dialog — the game stays paused between the two.
-        const tale = this.buildOwnTale();
-        this.cb.log(tale, 'log-perk', npc.char);
-        this.storyBeats.push('heard your own tale by the mound-fire');
-        const taleEvent: FloorEventDef = {
-          id: '__seanchai_tale__', emoji: npc.char, title: 'Your Tale, So Far', flavor: tale,
-          options: [{ label: 'Farewell', desc: '', apply: (): string => 'The seanchaí nods and returns to watching the fire.' }],
-        };
-        this.cb.onFloorEvent?.(taleEvent, () => {
-          this.paused = false;
-          this.cb.onAction();
-        });
-        return;
-      }
-      this.cb.log('The seanchaí nods and returns to watching the fire.', 'log-perk', npc.char);
-      this.paused = false;
-      this.cb.onAction();
-    });
-  }
-
-  // A fallen character from a previous run, met again. Laying them to rest
-  // grants a fragment of their old power and removes them from the ghost
-  // file permanently; turning away leaves them haunting future runs.
-  private triggerGhostEncounter(onClosed?: () => void): void {
-    const ghost = this.activeGhost;
-    if (!ghost) { onClosed?.(); return; }
-    const className = CLASSES.find(c => c.id === ghost.classId)?.name ?? 'wanderer';
-    const event: FloorEventDef = {
-      id: '__ghost__', emoji: 'sprite_boss_wraith', title: 'A Ghost of Yourself',
-      flavor: `The mist gathers into a familiar shape — a ${className} of level ${ghost.playerLevel}, who fell on Floor ${ghost.floor} (${ghost.date}). ${ghost.cause}. It watches you with your own eyes.`,
-      options: [
-        {
-          label: 'Lay them to rest',
-          desc: 'Receive a fragment of their power. They will not return.',
-          apply: (game: Game): string => {
-            const pool = Boon.BY_TIER[2];
-            const reward = pool[Math.floor(Math.random() * pool.length)]!;
-            game.player.addBoon(reward);
-            game.availableGhosts = game.availableGhosts.filter(g => g.id !== ghost.id);
-            game.cb.onGhostLaidToRest?.(ghost.id);
-            game.storyBeats.push('laid a ghost of yourself to rest');
-            return `The ghost smiles — your smile — and dissolves into light. Gained ${reward.name}.`;
-          },
-        },
-        {
-          label: 'Turn away',
-          desc: 'Leave them wandering. You may meet again.',
-          apply: (): string => 'The ghost lingers at the edge of sight, keening softly, waiting for another meeting.',
-        },
-      ],
-    };
-    this.activeGhost = null;
-    this.cb.onAudio?.('ghostEncounter');
-    this.paused = true;
-    this.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', 'sprite_boss_wraith');
-      this.paused = false;
-      this.cb.onAction();
-      onClosed?.();
-    });
   }
 
   // ── Lugh's Spear questline ───────────────────────────────────────────────
@@ -1294,205 +983,8 @@ export class Game {
   // just announces the floor; the actual encounter is triggered on bump,
   // in triggerSmithEncounter below.
 
-  /**
-   * Steps aside into the waystation: a safe sídhe-mound rest stop offered at
-   * every staircase (see {@link openStairsChoice}). The mound sits *between*
-   * floors — the level counter doesn't advance until its exit stairs are
-   * taken. The Blockbuilding layer is suspended (see {@link blockBuildingSuspended}) and
-   * the mound offers a seanchaí (lore), a hearth-fire (full heal), the Fear
-   * Dearg's stall (shop), and the stairs on.
-   */
-  private enterWaystation(): void {
-    this.inWaystation = true;
-    this.blockMatrix = [];  // no falling stone inside the mound
-    // Entered mid-floor, so the interrupted floor's whole state — stack,
-    // monsters, hazards, tiles, ghost, omen, ritual — is swept away; the
-    // mound is home ground, rebuilt from bare rock.
-    this.map = this.emptyMap();
-    this.colors = this.emptyColors();
-    this.monsters = [];
-    this.hazards = [];
-    this.specialTiles = [];
-    this.npcTiles = [];
-    this.altarTiles = [];
-    this.tattooTiles = [];
-    this.activeGhost = null;
-    this.activeOmen = null;
-    this.omenGravityPct = 0;
-    this.brazierTiles = [];
-    this.brazierLitCount = 0;
-    this.ritualComplete = false;
-    // The mound chamber: a broad square hall centered on the canvas.
-    const M = Game.MOUND;
-    for (let x = M.x0; x <= M.x1; x++) {
-      for (let y = M.y0; y <= M.y1; y++) {
-        this.map[x]![y] = Tile.FLOOR;
-        this.colors[x]![y] = '#2c2a40';
-      }
-    }
-    this.player.x = M.hero.x; this.player.y = M.hero.y;
-    this.npcTiles.push({ x: M.seanchai.x, y: M.seanchai.y, npcId: 'seanchai' });
-    this.npcTiles.push({ x: M.campfire.x, y: M.campfire.y, npcId: '__campfire__' });
-    this.npcTiles.push({ x: M.peddler.x, y: M.peddler.y, npcId: '__peddler__' });
-    // Between-floor choices stand here in person: An Draoi's unsworn pact as
-    // a deity emissary, and any pending floor event as a waiting stranger.
-    if (this.pactPending) this.npcTiles.push({ x: M.emissary.x, y: M.emissary.y, npcId: '__pact__' });
-    if (this.pendingFloorEvent) this.npcTiles.push({ x: M.stranger.x, y: M.stranger.y, npcId: '__event__' });
-    // Fixtures of the hall: the ogham stone (lore codex), the Well of
-    // Segais (gold for wisdom), and the Sídhe coffer (cross-run gold stash);
-    // Aoife takes a seat only while she has a vengeance contract to offer,
-    // and the Ogham-mark tattooist drifts through on some visits (never once
-    // the hero's five marks are spent).
-    this.npcTiles.push({ x: M.oghamStone.x, y: M.oghamStone.y, npcId: '__ogham_stone__' });
-    this.npcTiles.push({ x: M.well.x, y: M.well.y, npcId: '__well__' });
-    this.npcTiles.push({ x: M.stash.x, y: M.stash.y, npcId: '__stash__' });
-    if (!this.activeBountyQuest) this.npcTiles.push({ x: M.aoife.x, y: M.aoife.y, npcId: 'aoife' });
-    if (!this.player.brandsCapped && Math.random() < Balance.CONFIG.waystation.tattooistChance) {
-      this.tattooTiles.push({ x: M.tattooist.x, y: M.tattooist.y });
-    }
-    // An Dagda takes the north-west corner while his gift goes unclaimed.
-    if (this.dagdaGiftEarned && !this.dagdaGiftClaimed) {
-      this.npcTiles.push({ x: M.x0, y: M.y0, npcId: '__dagda__' });
-    }
-    // Everyone freed from Fomorian captivity settles along the north wall.
-    RESCUES.filter(r => this.rescuedIds.has(r.id)).forEach((r, i) => {
-      this.npcTiles.push({ x: 2 + i, y: M.y0, npcId: `__rescue_${r.id}__` });
-    });
-    this.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
-    this.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
-    // The mound is home ground — no fog here (updateVisibility early-returns
-    // while the Blockbuilding layer is suspended, so set the full reveal directly).
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        this.visibility[x]![y] = true;
-        this.explored[x]![y] = true;
-      }
-    }
-    this.cb.onAudio?.('waystationEnter');
-    this.cb.log('You surface into a sídhe mound — a hush, a hearth, and friendly faces. The stairs will keep.', 'log-success', 'special_sacred');
-    this.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');
-    this.storyBeats.push('rested in a sídhe mound');
-    this.pushUI();
-  }
-
-  /**
-   * A rescued resident's mound service, keyed by their `service` field:
-   * the Gobán Saor shapes your next piece to order, Fedelm reads the floors
-   * ahead, and Bricriu serves the Champion's Portion (+ATK until the next
-   * descent, one helping per floor).
-   */
-  private openRescueService(rescue: RescueDef): void {
-    if (!this.cb.onFloorEvent) { this.advanceTurn(); return; }
-    let event: FloorEventDef;
-    if (rescue.service === 'wright') {
-      const shapes: ShapeKey[] = ['I', 'O', 'T', 'L', 'J', 'S', 'Z'];
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: rescue.serviceFlavor,
-        options: [
-          ...shapes.map(k => ({
-            label: `The ${k}-stone`,
-            desc: `Your next falling stone will be the ${k} shape.`,
-            apply: (game: Game): string => {
-              game.nextType = k;
-              game.pushUI();
-              return `The Gobán Saor taps the plan twice. "One ${k}-stone, cut true." It will be your next piece.`;
-            },
-          })),
-          { label: 'No need', desc: '', apply: (): string => 'He shrugs and goes back to squaring a block that was already square.' },
-        ],
-      };
-    } else if (rescue.service === 'seer') {
-      const interval = Balance.CONFIG.floors.bossFloorInterval;
-      const nextBossFloor = (Math.floor(this.dungeonLevel / interval) + 1) * interval;
-      const boss = this.previewBossForFloor(nextBossFloor);
-      const smithsLeft = this.smithsMetCount < SMITHS.length && !this.spearForged;
-      const smithLine = smithsLeft
-        ? ` The anvils still ring below — ${SMITHS.length - this.smithsMetCount} smith${SMITHS.length - this.smithsMetCount === 1 ? '' : 's'} yet to find.`
-        : '';
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: `${rescue.serviceFlavor} "I see crimson at floor ${nextBossFloor} — ${boss.name} waits there, and knows you are coming.${smithLine}"`,
-        options: [{ label: 'Thank her', desc: '', apply: (): string => 'The flame gutters out. Fedelm is already looking at something else — something further down.' }],
-      };
-    } else if (rescue.service === 'healer') {
-      const cost = Balance.CONFIG.rescues.healerBaseCost + this.dungeonLevel * Balance.CONFIG.rescues.healerCostPerFloor;
-      const hpGain = Balance.CONFIG.rescues.healerHpGain;
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: rescue.serviceFlavor,
-        options: [
-          {
-            label: `Buy her herbs (${cost} gold)`,
-            desc: `+${hpGain} Max HP, permanently.`,
-            apply: (game: Game): string => {
-              if (game.gold < cost) return 'Airmed folds the herbs away. "Healing is costly. Dying is costlier — come back with gold."';
-              game.gold -= cost;
-              game.player.maxHp += hpGain;
-              game.player.hp += hpGain;
-              game.storyBeats.push("ate of the herbs of Miach's grave");
-              game.pushUI();
-              return `The herbs are bitter as grief and warm as a hearth. +${hpGain} Max HP, forever.`;
-            },
-          },
-          { label: 'Not today', desc: '', apply: (): string => '"Then don\'t come crying to me with your ribs showing," she says, not unkindly.' },
-        ],
-      };
-    } else if (rescue.service === 'harper') {
-      const played = this.harperLullFloor === this.dungeonLevel + 1;
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: played
-          ? 'Abcán is still playing, eyes closed. The suantraí already drifts down the stair ahead of you — one floor of it is all one harp can hold.'
-          : rescue.serviceFlavor,
-        options: played
-          ? [{ label: 'Leave him to it', desc: '', apply: (): string => 'You leave the harper to his slow, heavy tune.' }]
-          : [
-              {
-                label: 'Ask for the suantraí',
-                desc: 'Every monster on the NEXT floor arrives drowsy (stunned 2 turns).',
-                apply: (game: Game): string => {
-                  game.harperLullFloor = game.dungeonLevel + 1;
-                  game.storyBeats.push("descended under Abcán's sleep-strain");
-                  return 'Abcán bends to the strings, and the stairwell fills with a tune like falling snow. Whatever waits below will wake slowly.';
-                },
-              },
-              { label: 'Not now', desc: '', apply: (): string => '"Suit yourself," he says. "The deep is louder without me."' },
-            ],
-      };
-    } else {
-      const fed = this.portionAtkBonus > 0;
-      const atk = Balance.CONFIG.rescues.portionAtk;
-      event = {
-        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: fed
-          ? 'Bricriu spreads his hands over an empty table. "The Champion\'s Portion is one portion. That is the entire point of it, hero."'
-          : rescue.serviceFlavor,
-        options: fed
-          ? [{ label: 'Leave the table', desc: '', apply: (): string => 'You leave the table before he starts a feud about it.' }]
-          : [
-              {
-                label: "Eat the Champion's Portion",
-                desc: `+${atk} ATK until your next descent.`,
-                apply: (game: Game): string => {
-                  game.portionAtkBonus = atk;
-                  game.player.atk += atk;
-                  game.pushUI();
-                  return `You eat the hero's cut while Bricriu watches everyone else not eating it. +${atk} ATK until the next descent.`;
-                },
-              },
-              { label: 'Decline politely', desc: '', apply: (): string => '"Extraordinary," Bricriu says, delighted. "A hero with manners. The portion keeps."' },
-            ],
-      };
-    }
-    this.paused = true;
-    this.cb.onFloorEvent(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', rescue.char);
-      this.paused = false;
-      this.cb.onAction();
-    });
-  }
+  /** Steps aside into the safe sídhe-mound rest stop. Delegates to {@link Waystation}. */
+  private enterWaystation(): void { this.waystation.enter(); }
 
   /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
   private maybeRollOmen(isBossFloor: boolean): void {
@@ -1516,20 +1008,11 @@ export class Game {
     if (this.omenGravityPct !== 0) this.cb.onAction();
   }
 
-  /** Sets {@link pendingSmithFloor} and gives the player an ambient heads-up, on a smith-eligible floor entry. */
-  private maybeAnnounceSmithFloor(isBossFloor: boolean): void {
-    if (isBossFloor || this.pendingSmithFloor || this.smithsMetCount >= SMITHS.length) return;
-    if (this.dungeonLevel % Balance.CONFIG.smiths.floorInterval !== 0) return;
-    this.pendingSmithFloor = true;
-    this.cb.log('You hear the clang of an anvil in the distance...', 'log-perk', 'fx_impact');
-    this.cb.onToast?.('You hear the clang of an anvil in the distance...', 'fx_impact');
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#d9a441');
-  }
+  /** Ambient heads-up on a smith-eligible floor entry (delegates to {@link SmithQuest}). */
+  private maybeAnnounceSmithFloor(isBossFloor: boolean): void { this.smithQuest.announceFloor(isBossFloor); }
 
-  /** The next smith due to appear this run (Luchta → Credne → Goibniu), or `null` once all three have been met. */
-  private nextSmith(): Smith | null {
-    return (SMITHS as Smith[])[this.smithsMetCount] ?? null;
-  }
+  /** The next smith due to appear this run, or null once all three are met (delegates to {@link SmithQuest}). */
+  private nextSmith(): Smith | null { return this.smithQuest.next(); }
 
   /**
    * The tutorial's single practice foe: one ordinary rat on a floor tile
@@ -1557,128 +1040,12 @@ export class Game {
     return pool[Math.floor(Math.random() * pool.length)]!;
   }
 
-  /** Grants the smith's part, and — on the third meeting (Goibniu) — reforges the complete Spear of Lugh. */
-  private triggerSmithEncounter(smith: Smith, onClosed?: () => void): void {
-    const isReforge = smith.partKey === 'head' && this.spearPartsHeld.has('shaft') && this.spearPartsHeld.has('bolts');
-    const event: FloorEventDef = {
-      id: smith.id, emoji: smith.char, title: smith.name,
-      flavor: isReforge
-        ? `${smith.flavor} He takes the shaft and the bolts from your hands without asking, and sets to work.`
-        : smith.flavor,
-      options: [
-        {
-          label: isReforge ? 'Let him reforge the spear' : `Take ${smith.partName}`,
-          desc: isReforge ? 'Shaft, bolts, and head, made whole again.' : 'A piece of Lugh\'s Spear, freely given.',
-          apply: (game: Game): string => {
-            game.spearPartsHeld.add(smith.partKey);
-            game.smithsMetCount++;
-            game.storyBeats.push(`received ${smith.partName} from ${smith.name}`);
-            if (isReforge) {
-              game.spearForged = true;
-              game.player.rangedAbility = {
-                name: 'Spear of Lugh', emoji: 'item_spear_of_lugh', abilityType: 'spear_bolt',
-                range: 0, damageMult: Balance.CONFIG.spearOfLugh.dmgMult, cooldownMax: Balance.CONFIG.spearOfLugh.cooldownMax,
-              };
-              game.storyBeats.push('saw Lugh\'s Spear reforged whole');
-              return `Goibniu's forge roars once more — shaft, bolts, and head become one. The Spear of Lugh is whole again, and it answers to you now.`;
-            }
-            return `${smith.name} gives you ${smith.partName}.`;
-          },
-        },
-      ],
-    };
-    this.paused = true;
-    this.cb.onFloorEvent?.(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', smith.char);
-      this.paused = false;
-      this.cb.onAction();
-      onClosed?.();
-    });
-  }
 
-  // ── An Draoi's pact ceremony ───────────────────────────────────────────────
-  // Triggered by bumping the deity emissary in the waystation (see
-  // pactPending / enterWaystation): the deities call, and one must be
-  // answered — the pact IS the class, so there is no decline. Returns true
-  // if the ceremony modal was opened.
+  /** Swears An Draoi's pact with the named deity (delegates to {@link PactCeremony}). */
+  public applyPatron(id: string): void { this.pact.apply(id); }
 
-  private maybeOfferPact(): boolean {
-    if (this.activeClassId !== 'draoi' || this.activePatronId !== null) return false;
-    if (this.dungeonLevel < 2 || !this.cb.onFloorEvent) return false;
-
-    // Only 2 of the 3 deities call on any given run — which two is the rift's whim.
-    const offered = [...PATRONS].sort(() => Math.random() - 0.5).slice(0, 2);
-    const event: FloorEventDef = {
-      id: '__pact__', emoji: 'fx_arcane', title: 'The Deities Call',
-      flavor: 'Two voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',
-      options: offered.map(p => ({
-        label: p.deity,
-        desc: `${p.tagline} — ${p.spells[0]!.name}: ${describePatronSpell(p)} ${p.tollDesc} More spells unlock as you level.`,
-        apply: (game: Game): string => {
-          game.applyPatron(p.id);
-          return `The pact is sworn. ${p.deity} marks you as their own.`;
-        },
-      })),
-    };
-
-    this.paused = true;
-    this.cb.onFloorEvent(event, (index) => {
-      const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-      this.cb.log(msg, 'log-perk', 'fx_arcane');
-      this.paused = false;
-      this.cb.onAction();
-    });
-    return true;
-  }
-
-  /**
-   * Swears An Draoi's pact with the named deity: applies the patron's
-   * passive, grants the level-appropriate spells (paying each one's toll),
-   * and swaps in the signature spell as the active ranged ability.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
-  public applyPatron(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyPatron: "id" must be a non-empty string');
-    const patron = PATRONS.find(p => p.id === id);
-    if (!patron) return;
-    this.activePatronId = id;
-    EffectResolver.applyToPlayer(this.player, patron.effects);
-    this.player.spellbook = patron.spells
-      .filter(s => (s.unlockLevel ?? 1) <= this.player.playerLevel)
-      .map(s => ({ ...s }));
-    for (const spell of this.player.spellbook) EffectResolver.applyToPlayer(this.player, spell.toll);
-    this.player.hp = Math.min(this.player.hp, this.player.maxHp);
-    this.player.activeSpellIndex = 0;
-    this.player.rangedAbility = this.player.spellbook[0] ?? null;
-    this.player.rangedCooldown = 0;
-    this.storyBeats.push(`swore a pact with ${patron.deity}`);
-    this.cb.onCodexDiscover?.('patron', id);
-    this.cb.log(`${patron.name} — ${patron.spells[0]!.name} replaces Wild Surge. (Q)`, 'log-perk', patron.char);
-    this.cb.log(patron.tollDesc, 'log-neutral', patron.char);
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#8d6fd4', patron.char);
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '141,111,212');
-    this.cb.onAudio?.('pactSworn');
-    this.pushUI();
-  }
-
-  // Adds any patron spells whose unlockLevel the player has now reached.
-  // Called from openLevelUpBoons — the single choke point every level-up
-  // passes through (kills, tomes, scholars, line-clear XP).
-  private syncSpellUnlocks(): void {
-    const patron = PATRONS.find(p => p.id === this.activePatronId);
-    if (!patron) return;
-    for (const spell of patron.spells) {
-      if ((spell.unlockLevel ?? 1) > this.player.playerLevel) continue;
-      if (this.player.spellbook.some(s => s.name === spell.name)) continue;
-      this.player.spellbook.push({ ...spell });
-      EffectResolver.applyToPlayer(this.player, spell.toll);
-      this.player.hp = Math.min(this.player.hp, this.player.maxHp);
-      const toll = describeToll(spell.toll);
-      this.cb.log(`${patron.deity} grants a new spell: ${spell.name}! (${toll} — E cycles spells)`, 'log-perk', spell.emoji);
-      this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4', spell.emoji);
-    }
-  }
+  /** Adds any patron spells the player has now reached the level for (delegates to {@link PactCeremony}); called from the level-up choke point. */
+  private syncSpellUnlocks(): void { this.pact.syncUnlocks(); }
 
   /**
    * Cycles the active spell (An Draoi with 2+ unlocked spells). Shared
@@ -1932,10 +1299,9 @@ export class Game {
 
   // ── Floor transitions ────────────────────────────────────────────────────
 
-  /** Ambient heads-up on entering a boss-eligible floor — mirrors {@link maybeAnnounceSmithFloor}. The boss itself doesn't spawn until the floor is built up (see `instantiateRider`'s `Cell.BOSS` case). */
+  /** Ambient heads-up on entering a boss-eligible floor. Delegates to {@link BossEncounters}. */
   private announceBossFloor(): void {
-    this.pendingBossFloor = true;
-    this.cb.onToast?.('You sense dark forces lie in ambush!', 'ui_warning');
+    this.bossEncounters.announceFloor();
   }
 
   /** Advances the dungeon level counter and rebuilds the floor (used when the stack's top row itself scrolls off the bottom). */
@@ -2074,6 +1440,7 @@ export class Game {
   public autoTick(): void {
     if (this.player.hp <= 0 || this.paused) return;
     this.settleDuel();  // end a won duel / open its descent choice the moment the boss is gone
+    this.fidchell.maybeShowRules();  // open the fidchell rules modal on the first safe tick of a match
     StatusEffectSystem.applyStatusEffects(this);
     StatusEffectSystem.applyRegen(this);
     StatusEffectSystem.applyAuraStun(this);
@@ -2099,7 +1466,7 @@ export class Game {
   // ── Player turn (action-driven) ──────────────────────────────────────────
 
   /** The action-driven counterpart to {@link autoTick} — runs the same per-turn resolution, then notifies the host to reset its tick timer. */
-  private advanceTurn(): void {
+  public advanceTurn(): void {
     if (this.player.hp <= 0) return;
     this.settleDuel();  // end a won duel / open its descent choice the moment the boss is gone
     StatusEffectSystem.applyStatusEffects(this);
@@ -2181,31 +1548,14 @@ export class Game {
 
   // ── Class selection ──────────────────────────────────────────────────────
 
-  /**
-   * The classes offered on the start-screen picker.
-   * @throws {TypeError} If `count` is not a positive finite number.
-   */
+  /** The classes offered on the start-screen picker. Delegates to {@link RunSetup}. */
   public getRandomClasses(count = 2): ClassDef[] {
-    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
-      throw new TypeError('Game.getRandomClasses: "count" must be a positive finite number');
-    }
-    return CLASSES.slice(0, count);
+    return this.runSetup.getRandomClasses(count);
   }
 
-  /**
-   * Applies the chosen starting class's stat effects/ability and sets the
-   * hero's board sprite to match.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
+  /** Applies the chosen starting class's stat effects/ability. Delegates to {@link RunSetup}. */
   public applyClass(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyClass: "id" must be a non-empty string');
-    const cls = CLASSES.find(c => c.id === id);
-    if (!cls) return;
-    cls.apply(this.player);
-    this.player.char = cls.emoji;  // the hero looks like the card you picked
-    this.activeClassId = id;
-    this.cb.log(`Playing as ${cls.name}: ${cls.tagline}`, 'log-perk', cls.emoji);
-    this.pushUI();
+    this.runSetup.applyClass(id);
   }
 
   // ── Difficulty selection ─────────────────────────────────────────────────
@@ -2217,7 +1567,7 @@ export class Game {
   };
 
   /** The active difficulty preset's tuning. */
-  private difficultyTuning(): DifficultyPreset {
+  public difficultyTuning(): DifficultyPreset {
     return Balance.CONFIG.difficulty.presets.find(p => p.id === this.activeDifficultyId)
       ?? Game.DIFFICULTY_FALLBACK;
   }
@@ -2227,28 +1577,9 @@ export class Game {
     return this.difficultyTuning().gravityPct;
   }
 
-  /**
-   * Applies the chosen run difficulty. Called once at run start, after the
-   * class is applied so the Max-HP multiplier covers class bonuses too; the
-   * monster/gold/gravity multipliers are read live from the preset at their
-   * respective choke points for the rest of the run.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
+  /** Applies the chosen run difficulty at run start. Delegates to {@link RunSetup}. */
   public applyDifficulty(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyDifficulty: "id" must be a non-empty string');
-    const preset = Balance.CONFIG.difficulty.presets.find(p => p.id === id);
-    if (!preset) return;
-    this.activeDifficultyId = id;
-    if (preset.playerHpMult !== 1) {
-      this.player.maxHp = Math.round(this.player.maxHp * preset.playerHpMult);
-      this.player.hp = Math.min(Math.round(this.player.hp * preset.playerHpMult), this.player.maxHp);
-    }
-    this.xpMultiplier *= preset.xpMult;
-    if (id !== 'standard') {
-      this.storyBeats.push(`chose ${preset.name.split(' — ')[0]!}`);
-      this.cb.log(`${preset.name}. ${preset.desc}`, 'log-perk', preset.icon);
-    }
-    this.pushUI();
+    this.runSetup.applyDifficulty(id);
   }
 
   // ── New Game+ heat ───────────────────────────────────────────────────────
@@ -2257,7 +1588,7 @@ export class Game {
   // whole run, in exchange for bonus XP. Heat N applies every tier ≤ N.
 
   /** Cumulative multiplicative heat param for `key` across the active tiers (identity 1). */
-  private heatMult(key: string): number {
+  public heatMult(key: string): number {
     let v = 1;
     for (const t of Balance.CONFIG.ngplus.tiers) {
       const p = t.params[key];
@@ -2267,7 +1598,7 @@ export class Game {
   }
 
   /** Cumulative additive heat param for `key` across the active tiers (identity 0). */
-  private heatAdd(key: string): number {
+  public heatAdd(key: string): number {
     let v = 0;
     for (const t of Balance.CONFIG.ngplus.tiers) {
       const p = t.params[key];
@@ -2281,149 +1612,39 @@ export class Game {
     return this.heatAdd('gravityPct');
   }
 
-  /**
-   * Applies the chosen New Game+ heat. Called once at run start (only
-   * offered after a victory has unlocked the ladder); each active geis
-   * pays +`ngplus.xpBonusPerHeat` XP.
-   * @throws {TypeError} If `level` is not a finite number.
-   */
+  /** Applies the chosen New Game+ heat at run start. Delegates to {@link RunSetup}. */
   public applyHeat(level: number): void {
-    if (typeof level !== 'number' || !Number.isFinite(level)) throw new TypeError('Game.applyHeat: "level" must be a finite number');
-    const tiers = Balance.CONFIG.ngplus.tiers;
-    this.heatLevel = Math.max(0, Math.min(Math.floor(level), tiers.length));
-    if (this.heatLevel === 0) return;
-    this.xpMultiplier *= 1 + Balance.CONFIG.ngplus.xpBonusPerHeat * this.heatLevel;
-    for (const t of tiers) {
-      if (t.level <= this.heatLevel) this.cb.log(`${t.name} — ${t.desc}`, 'log-boss', t.icon);
-    }
-    this.cb.log(`Heat ${this.heatLevel}: +${Math.round(Balance.CONFIG.ngplus.xpBonusPerHeat * this.heatLevel * 100)}% XP for the burden.`, 'log-perk', 'special_sacred');
-    this.storyBeats.push(`took up ${this.heatLevel} ${this.heatLevel === 1 ? 'geis' : 'geasa'} of the victorious`);
-    this.pushUI();
+    this.runSetup.applyHeat(level);
   }
 
   // ── Modifier selection ───────────────────────────────────────────────────
 
-  /**
-   * A random selection of run modifiers (Rift Curses) for the start-screen picker.
-   * @throws {TypeError} If `count` is not a positive finite number.
-   */
+  /** A random selection of run modifiers (Rift Curses) for the start-screen picker. Delegates to {@link RunSetup}. */
   public getRandomModifiers(count = 3): ModifierDef[] {
-    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
-      throw new TypeError('Game.getRandomModifiers: "count" must be a positive finite number');
-    }
-    const shuffled = [...MODIFIERS].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
+    return this.runSetup.getRandomModifiers(count);
   }
 
-  /**
-   * Applies the chosen run modifier's effect for the whole run.
-   * @throws {TypeError} If `id` is not a non-empty string.
-   */
+  /** Applies the chosen run modifier's effect for the whole run. Delegates to {@link RunSetup}. */
   public applyModifier(id: string): void {
-    if (typeof id !== 'string' || id.length === 0) throw new TypeError('Game.applyModifier: "id" must be a non-empty string');
-    const mod = MODIFIERS.find(m => m.id === id);
-    if (!mod) return;
-    mod.apply(this);
-    this.activeModifierId = id;
-    this.cb.log(`Rift Curse active: ${mod.name} — ${mod.desc}`, 'log-perk', mod.emoji);
-    this.pushUI();
+    this.runSetup.applyModifier(id);
   }
 
   // ── Tattoo Artist ─────────────────────────────────────────────────────────
 
   /** Opens the tattoo-artist brand-choice modal (reachable via a tattoo-artist tile). `onClosed` fires once a mark is chosen. */
+  /** Opens the tattoo-artist brand-choice modal. Delegates to {@link VendorOffers}. */
   private openTattooArtist(onClosed?: () => void): void {
-    this.paused = true;
-    const ownedIds = (): string[] => this.player.brands.map(b => b.brand.id);
-    let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
-    let choices = Brand.pickThree(ownedIds());
-    const commit = (index: number): void => {
-      const slot = BODY_PARTS[this.player.brands.length % BODY_PARTS.length]!;
-      const chosen = choices[index]!;
-      this.player.addBrand(slot, chosen);
-      const setCompleted = this.player.brands.filter(b => b.brand.id === chosen.id).length % chosen.setSize === 0;
-      this.cb.onParticleBurst?.(this.player.x, this.player.y, setCompleted ? 14 : 6, setCompleted ? '#d9a441' : '#9d7bc7');
-      this.cb.log(`${choices[index]!.name} Ogham mark tattooed on ${slot.replace('_', ' ')}!`, 'log-perk', 'tile_altar');
-      this.paused = false;
-      this.pushUI();
-      this.cb.onAction?.();
-      onClosed?.();
-    };
-    this.cb.onOpenTattooArtist?.(choices, commit, {
-      gold: this.gold,
-      cost,
-      run: () => {
-        if (this.gold < cost) return null;
-        this.gold -= cost;
-        cost = Math.floor(cost * Balance.CONFIG.economy.ogmRerollCostGrowth);
-        choices = Brand.pickThree(ownedIds());
-        this.pushUI();
-        return { choices, gold: this.gold, cost };
-      },
-    });
+    this.vendorOffers.tattooArtist(onClosed);
   }
 
-  /**
-   * The Fear Dearg's stall — the gold sink. Prices scale with depth; each
-   * item can be bought once per visit.
-   */
+  /** The Fear Dearg's stall — the gold sink. Delegates to {@link VendorOffers}. */
   public openPeddler(): void {
-    if (!this.cb.onOpenShop) return;
-    this.paused = true;
-    const prices = Balance.CONFIG.economy.shop.prices;
-    const cost = (p: { base: number; perFloor: number }): number => p.base + p.perFloor * this.dungeonLevel;
-    const stock: ShopItem[] = [
-      { id: 'heal',  icon: 'sprite_potion',           name: 'Hearth Broth',       desc: 'Restore to full HP',                     cost: cost(prices.heal),  purchased: false },
-      { id: 'maxhp', icon: 'item_heart',              name: 'Bogwood Charm',      desc: '+10% Max HP',                            cost: cost(prices.maxhp), purchased: false },
-      { id: 'atk',   icon: 'sprite_equip_iron_sword', name: 'Ogham-Etched Edge',  desc: '+10% ATK',                               cost: cost(prices.atk),   purchased: false },
-      { id: 'ward',  icon: 'status_poison',           name: 'Deathward Sigil',    desc: 'Survive one killing blow (this floor)',  cost: cost(prices.ward),  purchased: false },
-    ];
-    const buy = (id: string): { gold: number; ok: boolean } => {
-      const item = stock.find(s => s.id === id);
-      if (!item || item.purchased || this.gold < item.cost) return { gold: this.gold, ok: false };
-      this.gold -= item.cost;
-      item.purchased = true;
-      switch (id) {
-        case 'heal':  this.player.heal(this.player.maxHp); break;
-        case 'maxhp': this.player.maxHp *= 1.10; this.player.hp = Math.min(this.player.hp * 1.10, this.player.maxHp); break;
-        case 'atk':   this.player.atk *= 1.10; break;
-        case 'ward':  this.player.deathwardCharges += 1; break;
-      }
-      this.cb.log(`Bought ${item.name} for ${item.cost}g.`, 'log-perk', item.icon);
-      this.pushUI();
-      return { gold: this.gold, ok: true };
-    };
-    this.cb.log('A red-capped peddler unfolds his stall...', 'log-perk', 'tile_merchant');
-    this.cb.onOpenShop(stock, this.gold, buy, () => { this.paused = false; this.pushUI(); });
+    this.vendorOffers.peddler();
   }
 
-  /** Opens the altar boon-choice modal for the given reward tier (reached by stepping on an altar tile). `onClosed` fires once a boon is chosen. */
+  /** Opens the altar boon-choice modal for the given reward tier. Delegates to {@link VendorOffers}. */
   private openAltar(tier: 1 | 2 | 3, onClosed?: () => void): void {
-    this.paused = true;
-    const pool = Boon.BY_TIER[tier];
-    const ownedIds = (): string[] => this.player.boons.map(b => b.id);
-    let cost = Balance.CONFIG.economy.geasaRerollBaseCost;
-    let choices = Boon.pickThree(pool, ownedIds());
-    const commit = (index: number): void => {
-      this.player.addBoon(choices[index]!);
-      this.cb.onParticleBurst?.(this.player.x, this.player.y, 6, '#b98fc4');
-      this.paused = false;
-      this.pushUI();
-      this.cb.onAction?.();
-      onClosed?.();
-    };
-    this.cb.onOpenAltar?.(tier, choices, commit, {
-      gold: this.gold,
-      cost,
-      run: () => {
-        if (this.gold < cost) return null;
-        this.gold -= cost;
-        cost = Math.floor(cost * Balance.CONFIG.economy.geasaRerollCostGrowth);
-        choices = Boon.pickThree(pool, ownedIds());
-        this.pushUI();
-        return { choices, gold: this.gold, cost };
-      },
-    });
+    this.vendorOffers.altar(tier, onClosed);
   }
 
   // ── Action handlers ──────────────────────────────────────────────────────
@@ -2475,13 +1696,13 @@ export class Game {
 
       if (monster.hp <= 0) {
         const bx = monster.x, by = monster.y;
-        const wasDuelBoss = this.inCausewayDuel && monster === this.duelBoss;
+        const wasDuelBoss = this.inCausewayDuel && monster === this.causewayDuel.boss;
         CombatSystem.killMonster(monster, this);
         if (monster.isBoss && this.activeBossOnDeath) {
           this.activeBossOnDeath(this, bx, by);
           this.activeBossOnDeath = null;
         }
-        if (wasDuelBoss) { this.duelWin(); return; }
+        if (wasDuelBoss) { this.causewayDuel.win(); return; }
       }
       this.advanceTurn(); return;
     }
@@ -2516,17 +1737,17 @@ export class Game {
 
     // Causeway-Duel islands — walk onto one to activate it.
     if (this.inCausewayDuel) {
-      const sw = this.duelSwitches.find(s => s.x === nx && s.y === ny && !s.lit);
+      const sw = this.causewayDuel.switches.find(s => s.x === nx && s.y === ny && !s.lit);
       if (sw) {
         this.player.x = nx; this.player.y = ny;
-        this.duelLightSwitch(sw);
+        this.causewayDuel.lightSwitch(sw);
         this.advanceTurn();
         return;
       }
-      const boon = this.duelBoons.find(b => b.x === nx && b.y === ny && !b.taken);
+      const boon = this.causewayDuel.boons.find(b => b.x === nx && b.y === ny && !b.taken);
       if (boon) {
         this.player.x = nx; this.player.y = ny;
-        this.duelTakeBoon(boon);
+        this.causewayDuel.takeBoon(boon);
         this.advanceTurn();
         return;
       }
@@ -2558,234 +1779,9 @@ export class Game {
       return;
     }
 
-    // Wandering NPC / ghost — bump to talk, consumed on interaction
+    // Wandering NPC / ghost / mound resident — bump to run its verb (see Waystation).
     const npcTile = this.npcTiles.find(n => n.x === nx && n.y === ny);
-    if (npcTile) {
-      this.player.x = nx; this.player.y = ny;
-      this.npcTiles = this.npcTiles.filter(n => n !== npcTile);
-      // Waystation residents: the deity emissary swears An Draoi's pact, the
-      // waiting stranger delivers the held floor event, the hearth-fire heals
-      // in full once, and the Fear Dearg's stall opens the regular peddler shop.
-      // An Dagda: the once-per-run gift for a perfect (4-line) clear.
-      if (npcTile.npcId === '__dagda__') {
-        const pool = Boon.BY_TIER[3];
-        const gift = pool[Math.floor(Math.random() * pool.length)]!;
-        const grant = (): void => {
-          this.player.addBoon(gift);
-          this.dagdaGiftClaimed = true;
-          this.storyBeats.push("took a gift from An Dagda's cauldron");
-          this.cb.onBeam?.(nx, '217,164,65');
-          this.cb.onParticleBurst?.(nx, ny, 12, '#d9a441', 'fx_arcane');
-          this.pushUI();
-        };
-        if (!this.cb.onFloorEvent) { grant(); this.advanceTurn(); return; }
-        const event: FloorEventDef = {
-          id: '__dagda__', emoji: 'npc_dagda', title: 'An Dagda',
-          flavor: 'A vast old man fills the corner of the mound, a club that could level a house resting easy across his knees and a cauldron steaming beside him. "A fourfold clearing," he rumbles, approving. "Few enough manage that above ground, let alone under it. Come — no one leaves my cauldron unsatisfied."',
-          options: [{
-            label: 'Accept the gift',
-            desc: `${gift.name} — ${gift.desc}`,
-            apply: (): string => `He ladles something bright out of the cauldron and presses it into your hands. You gain ${gift.name}!`,
-          }],
-        };
-        this.paused = true;
-        this.cb.onFloorEvent(event, (index) => {
-          const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-          grant();
-          this.cb.log(msg, 'log-perk', 'npc_dagda');
-          this.paused = false;
-          this.cb.onAction();
-        });
-        return;
-      }
-      if (npcTile.npcId === '__pact__') {
-        this.cb.onBeam?.(nx, '141,111,212');
-        if (!this.maybeOfferPact()) this.advanceTurn();
-        return;
-      }
-      // A rescuable captive (on the floor) or rescued resident (in the mound).
-      if (npcTile.npcId.startsWith('__rescue_')) {
-        const rescueId = npcTile.npcId.slice('__rescue_'.length, -2);
-        const rescue = RESCUES.find(r => r.id === rescueId);
-        if (!rescue) { this.advanceTurn(); return; }
-        if (this.inWaystation) {
-          this.npcTiles.push(npcTile);  // residents stay
-          this.openRescueService(rescue);
-          return;
-        }
-        // Still guarded: no rescue until every captor is dead.
-        if (this.rescueGuards.some(g => g.hp > 0 && this.monsters.includes(g))) {
-          this.npcTiles.push(npcTile);
-          this.cb.log(rescue.captiveLine, 'log-neutral', rescue.char);
-          this.advanceTurn();
-          return;
-        }
-        // Freed — thanks, then away to the mounds.
-        const free = (): void => {
-          this.rescuedIds.add(rescue.id);
-          this.storyBeats.push(`freed ${rescue.name} from Fomorian captors`);
-          this.cb.onBeam?.(nx, '230,180,90');
-          this.cb.onAudio?.('bountyFulfilled');
-        };
-        if (!this.cb.onFloorEvent) { free(); this.advanceTurn(); return; }
-        const event: FloorEventDef = {
-          id: npcTile.npcId, emoji: rescue.char, title: rescue.name,
-          flavor: rescue.thanksLine,
-          options: [{
-            label: 'See them off', desc: 'They will wait for you in the sídhe mounds.',
-            apply: (): string => `${rescue.name} steps into a pillar of light and is gone — away to the mounds, where the deep cannot follow.`,
-          }],
-        };
-        this.paused = true;
-        this.cb.onFloorEvent(event, (index) => {
-          const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-          free();
-          this.cb.log(msg, 'log-perk', rescue.char);
-          this.paused = false;
-          this.cb.onAction();
-        });
-        return;
-      }
-      // The ogham stone is a fixture — reading it never consumes it.
-      if (npcTile.npcId === '__ogham_stone__') {
-        this.npcTiles.push(npcTile);
-        this.cb.log('You trace the ogham strokes. Old names surface: everything the deep has shown you.', 'log-perk', 'tile_ogham_stone');
-        this.cb.onOpenCodex?.();
-        return;
-      }
-      if (npcTile.npcId === '__stash__') {
-        const stashed = StorageService.loadStash();
-        const pct = Math.round(Balance.CONFIG.waystation.stashRecoveryPct * 100);
-        const stashEvent: FloorEventDef = {
-          id: '__stash__', emoji: 'item_gold_pouch', title: 'The Sídhe Coffer',
-          flavor: `A stone coffer, older than the mound around it. ${stashed > 0 ? `Inside, ${stashed} gold glints — left by those who came before.` : 'It sits empty, waiting for an offering.'} What is left with the Sídhe passes on when you fall — less their tithe.`,
-          options: [
-            {
-              label: this.gold > 0 ? `Leave your gold (${this.gold})` : 'Leave your gold',
-              desc: `Your next self inherits ${pct}% of everything in the coffer.`,
-              apply: (game: Game): string => {
-                if (game.gold <= 0) return 'Your purse is empty. The coffer keeps its silence.';
-                const left = game.gold;
-                const total = StorageService.addToStash(left);
-                game.gold = 0;
-                game.storyBeats.push('left gold in the keeping of the Sídhe');
-                return `You pour ${left} gold into the coffer — ${total} now waits in the Sídhe's keeping.`;
-              },
-            },
-            { label: 'Keep your purse', desc: '', apply: (): string => 'Gold spends better in living hands. You leave the coffer be.' },
-          ],
-        };
-        this.cb.onBeam?.(nx, '217,164,65');
-        if (!this.cb.onFloorEvent) { this.npcTiles.push(npcTile); this.advanceTurn(); return; }
-        this.paused = true;
-        this.cb.onFloorEvent(stashEvent, (index) => {
-          const msg = stashEvent.options[index]?.apply(this) ?? 'Nothing happened.';
-          this.cb.log(msg, 'log-perk', 'item_gold_pouch');
-          // The coffer is a fixture — it stays whether you gave or not.
-          this.npcTiles.push(npcTile);
-          this.paused = false;
-          this.pushUI();
-          this.cb.onAction();
-        });
-        return;
-      }
-      if (npcTile.npcId === '__well__') {
-        const cost = Balance.CONFIG.well.baseCost + this.dungeonLevel * Balance.CONFIG.well.costPerFloor;
-        const xpGain = Balance.CONFIG.well.baseXp + this.dungeonLevel * Balance.CONFIG.well.xpPerFloor;
-        const wellEvent: FloorEventDef = {
-          id: '__well__', emoji: 'tile_well', title: 'The Well of Segais',
-          flavor: 'Nine hazels lean over black water. The salmon below watches you, unblinking. Wisdom has a price — it always has.',
-          options: [
-            {
-              label: `Drink deep (${cost} gold)`,
-              desc: `+${xpGain} XP, if you can pay.`,
-              apply: (game: Game): string => {
-                if (game.gold < cost) return 'The water turns dark and shows you nothing. The well does not extend credit.';
-                game.gold -= cost;
-                const levelled = game.player.gainXP(xpGain);
-                if (levelled) {
-                  game.cb.log(`LEVEL UP! Now level ${game.player.playerLevel}!`, 'log-perk', 'special_sacred');
-                  game.openLevelUpBoons();
-                }
-                game.storyBeats.push('drank from the Well of Segais');
-                return `The water is cold enough to burn. Knowing floods in behind it. +${xpGain} XP.`;
-              },
-            },
-            { label: 'Leave it', desc: '', apply: (): string => 'The salmon sinks back into the dark, unoffended. Wisdom keeps.' },
-          ],
-        };
-        if (!this.cb.onFloorEvent) { this.npcTiles.push(npcTile); this.advanceTurn(); return; }
-        this.paused = true;
-        this.cb.onFloorEvent(wellEvent, (index) => {
-          const msg = wellEvent.options[index]?.apply(this) ?? 'Nothing happened.';
-          this.cb.log(msg, 'log-perk', 'tile_well');
-          // The well is a fixture — it stays whether you drink or not.
-          this.npcTiles.push(npcTile);
-          this.paused = false;
-          this.cb.onAction();
-        });
-        return;
-      }
-      if (npcTile.npcId === '__event__') {
-        const event = this.pendingFloorEvent;
-        this.pendingFloorEvent = null;
-        this.cb.onBeam?.(nx, '89,159,124');
-        if (event && this.cb.onFloorEvent) {
-          this.paused = true;
-          this.cb.onFloorEvent(event, (index) => {
-            const msg = event.options[index]?.apply(this) ?? 'Nothing happened.';
-            this.cb.log(msg, 'log-perk', event.emoji);
-            this.storyBeats.push(`answered the call of "${event.title}"`);
-            this.paused = false;
-            this.cb.onAction();
-          });
-        } else {
-          this.advanceTurn();
-        }
-        return;
-      }
-      if (npcTile.npcId === '__campfire__') {
-        const healed = this.player.heal(this.player.maxHp);
-        this.cb.onParticle(nx, ny, healed > 0 ? `+${healed} HP` : 'warm', '#ff8c32', 14, 'tile_brazier');
-        this.cb.onParticleBurst?.(nx, ny, 8, '#ff8c32');
-        this.cb.log('You rest by the hearth-fire of the mound. Warmth returns to your bones — fully healed.', 'log-success', 'tile_brazier');
-        this.cb.onBeam?.(nx, '255,140,50');
-        this.advanceTurn();
-        return;
-      }
-      if (npcTile.npcId === '__peddler__') {
-        this.cb.onBeam?.(nx, '198,58,50');
-        this.openPeddler();
-        return;
-      }
-      const isGhost = npcTile.npcId === '__ghost__';
-      const isSmith = npcTile.npcId.startsWith('__smith_');
-      const departOnClose = (): void => {
-        this.cb.onBeam?.(nx, isGhost ? '176,196,222' : isSmith ? '184,115,51' : '89,159,124');
-      };
-      // The seanchaí is a permanent mound resident — he stays by his fire
-      // (no beam-away), and his tale gets a proper dialog of its own.
-      if (npcTile.npcId === 'seanchai') {
-        this.npcTiles.push(npcTile);
-        this.triggerSeanchaiEncounter();
-        return;
-      }
-      if (isGhost) {
-        this.triggerGhostEncounter(departOnClose);
-        return;
-      }
-      if (isSmith) {
-        const smithId = npcTile.npcId.slice('__smith_'.length, -2);
-        const smith = SMITHS.find(s => s.id === smithId);
-        if (smith) this.triggerSmithEncounter(smith, departOnClose);
-        else departOnClose();
-        return;
-      }
-      const npc = NPCS.find(n => n.id === npcTile.npcId);
-      if (npc) this.triggerNpcEncounter(npc, departOnClose);
-      else departOnClose();
-      return;
-    }
+    if (npcTile) { this.waystation.interact(npcTile); return; }
 
     this.player.x = nx; this.player.y = ny;
 
@@ -2824,7 +1820,7 @@ export class Game {
    * be dodged by resting). Falls back to a direct descent when no dialog
    * callback is wired (headless tests).
    */
-  private openStairsChoice(): void {
+  public openStairsChoice(): void {
     if (!this.cb.onFloorEvent) { this.descendFloor(); return; }
     // The rest option's pitch names whoever is actually waiting inside.
     const waiting: string[] = [];
@@ -2870,7 +1866,7 @@ export class Game {
   }
 
   /** The actual floor descent: advances the level, rebuilds the floor, and fires every floor-entry hook (omen, smith, pending-event roll). */
-  private descendFloor(): void {
+  public descendFloor(): void {
     this.inWaystation = false;
     this.dungeonLevel++;
     this.floorsDescended++;
@@ -2940,386 +1936,8 @@ export class Game {
     this.advanceTurn();
   }
 
-  /** Reads a numeric tuning param off an ability, or `fallback` if absent/non-numeric. */
-  private abilityNum(ability: import('./types').RangedAbility, key: string, fallback: number): number {
-    const v = ability.params?.[key];
-    return typeof v === 'number' ? v : fallback;
-  }
-
-  /** Reads a string tuning param off an ability, or `fallback` if absent/non-string. */
-  private abilityStr(ability: import('./types').RangedAbility, key: string, fallback: string): string {
-    const v = ability.params?.[key];
-    return typeof v === 'string' ? v : fallback;
-  }
-
-  /** Casts the player's active ranged ability/spell, dispatched by `abilityType`. HP-pact spells pre-check a valid target before charging the cost. */
-  public handleRangedAttack(): void {
-    if (this.player.hp <= 0 || this.paused) return;
-    const ability = this.player.rangedAbility;
-    if (!ability) {
-      this.cb.log('Your class has no ranged ability. (Q)', 'log-neutral');
-      return;
-    }
-    if (this.player.isStunned) {
-      this.cb.log('You are stunned!', 'log-damage');
-      this.advanceTurn();
-      return;
-    }
-    if (this.player.rangedCooldown > 0) {
-      this.cb.log(`${ability.name} on cooldown (${this.player.rangedCooldown} turns).`, 'log-neutral', ability.emoji);
-      return;
-    }
-
-    // HP-pact gate (An Draoi): spells are paid for in life, as a fraction of
-    // Max HP. The cost bypasses damage reduction — a pact ignores armor — and
-    // is deducted up front; the activation receives the amount paid so spell
-    // power can scale off it (Max HP is both mana pool and spellpower).
-    let hpPaid = 0;
-    const hpCostPctRaw = ability.params?.['hpCostPct'];
-    if (typeof hpCostPctRaw === 'number' && hpCostPctRaw > 0) {
-      const cost = StatMath.pctOf(this.player.maxHp, hpCostPctRaw);
-      if (this.player.hp <= cost) {
-        this.cb.log(`The pact will not take your last breath. (${ability.name} costs ${cost} HP — you have ${Math.round(this.player.hp)})`, 'log-neutral', ability.emoji);
-        return;
-      }
-      // Targeted spells need a target BEFORE the price is paid — a whiffed
-      // cast shouldn't cost blood.
-      if (ability.abilityType === 'drain' && !this.findRangedTarget(ability.range)) {
-        this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
-        return;
-      }
-      if (ability.abilityType === 'gravity_well') {
-        const anyInRange = this.monsters.some(m =>
-          Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y) <= ability.range
-          && (this.visibility[m.x]?.[m.y] ?? false));
-        if (!anyInRange) {
-          this.cb.log(`Nothing within reach of the tide (${ability.range} tiles).`, 'log-neutral', ability.emoji);
-          return;
-        }
-      }
-      this.player.hp -= cost;
-      hpPaid = cost;
-      this.damageTaken += cost;
-      this.cb.onParticle(this.player.x, this.player.y, `-${cost}`, '#c1443c', 14);
-      this.cb.onAudio?.('playerDamage');
-    }
-
-    switch (ability.abilityType) {
-      case 'time_dilation': this.activateTimeDilation(ability); break;
-      case 'gravity_well':  this.activateGravityWell(ability);  break;
-      case 'consecrate':    this.activateConsecrate(ability);    break;
-      case 'overload':      this.activateOverload(ability);      break;
-      case 'shriek':        this.activateShriek(ability, hpPaid); break;
-      case 'veil':          this.activateVeil(ability);           break;
-      case 'drain':         this.activateDrain(ability, hpPaid);  break;
-      case 'blight':        this.activateBlight(ability, hpPaid); break;
-      case 'blink':         this.activateBlink(ability);          break;
-      case 'spear_bolt':    this.activateSpearBolt(ability);      break;
-      default:              this.activateBolt(ability);          break;
-    }
-  }
-
-  // Badb's Shriek (the Morrígan): raining fire and mass terror — damage every
-  // visible monster for a multiple of the HP paid; survivors may be stunned.
-  private activateShriek(ability: import('./types').RangedAbility, hpPaid: number): void {
-    const dmgMult = this.abilityNum(ability, 'dmgMult', 2);
-    // dmgMult 0 = a pure-terror variant (Fog of Blood): stun-only, no damage
-    const dmg = dmgMult > 0 ? Math.max(1, Math.round(hpPaid * dmgMult)) : 0;
-    const stunChance = this.abilityNum(ability, 'stunChance', 0.35);
-    const stunDuration = this.abilityNum(ability, 'stunDuration', 1);
-    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
-    for (const m of targets) {
-      if (dmg > 0) {
-        m.hp -= dmg;
-        this.cb.onParticle(m.x, m.y, `-${dmg}`, '#c3272a', 16, 'fx_fire');
-      }
-      if (m.hp > 0 && !m.isStunned && Math.random() < stunChance) {
-        m.statuses.push({ type: 'stun', duration: stunDuration, power: 0 });
-        this.cb.onParticle(m.x, m.y, 'TERROR', '#b98fc4', 11);
-      }
-    }
-    const killed = targets.filter(m => m.hp <= 0);
-    this.monsters = this.monsters.filter(m => m.hp > 0);
-    for (const m of killed) CombatSystem.killMonster(m, this);
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(
-      dmg > 0
-        ? `${ability.name.toUpperCase()}! ${targets.length} foe(s) seared for ${dmg} — the Morrígan takes her due.`
-        : `${ability.name.toUpperCase()}! Terror grips ${targets.length} foe(s) — the Morrígan takes her due.`,
-      'log-combo', ability.emoji,
-    );
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '195,39,42');
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 12, '#c3272a', 'fx_fire');
-    this.cb.onAudio?.('bossWarn');
-    this.advanceTurn();
-  }
-
-  // Blight of the Deep (Tethra): poison every visible monster; the venom's
-  // power scales with the HP paid.
-  private activateBlight(ability: import('./types').RangedAbility, hpPaid: number): void {
-    const duration = this.abilityNum(ability, 'poisonDuration', 4);
-    const power = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'poisonPowerPct', 0.5)));
-    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
-    for (const m of targets) {
-      m.statuses = m.statuses.filter(s => s.type !== 'poison');
-      m.statuses.push({ type: 'poison', duration, power });
-      this.cb.onParticle(m.x, m.y, 'BLIGHT', '#7cb342', 11, 'status_poison');
-    }
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`${ability.name}! ${targets.length} foe(s) wither — ${power} poison/turn for ${duration} turns.`, 'log-combo', ability.emoji);
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '124,179,66');
-    this.cb.onAudio?.('poison');
-    this.advanceTurn();
-  }
-
-  // Sea-Road (Manannán): step through the Otherworld to a random floor tile,
-  // trailing a brief wisp of the Féth Fíada.
-  private activateBlink(ability: import('./types').RangedAbility): void {
-    const fromX = this.player.x, fromY = this.player.y;
-    HazardSystem.teleportEntity(this.player, this);
-    this.player.veiledTurns = Math.max(this.player.veiledTurns, this.abilityNum(ability, 'veilTurns', 2));
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.onParticle(fromX, fromY, '', '#9fe3c0', undefined, 'trap_smoke');
-    this.cb.onParticle(this.player.x, this.player.y, '', '#9fe3c0', undefined, 'trap_teleport');
-    this.cb.log(`${ability.name} — you step through the Otherworld and out again.`, 'log-perk', ability.emoji);
-    this.cb.onAudio?.('teleport');
-    this.updateVisibility();
-    this.advanceTurn();
-  }
-
-  // Féth Fíada (Manannán mac Lir): the god-mist — monsters cannot see, chase,
-  // or strike you while veiled. Bres alone sees through it.
-  private activateVeil(ability: import('./types').RangedAbility): void {
-    this.player.veiledTurns = this.abilityNum(ability, 'veilTurns', 6);
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`The Féth Fíada rises — you fade from mortal sight for ${this.player.veiledTurns} turns.`, 'log-perk', ability.emoji);
-    if (this.gorgothSummoned) this.cb.log('Bres laughs — a god-king sees through god-mist.', 'log-boss', 'sprite_boss_gorgoth');
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '63,158,147');
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#9fe3c0', 'trap_smoke');
-    this.cb.onAudio?.('teleport');
-    this.advanceTurn();
-  }
-
-  // Tethra's Tithe: parasitic drain — a multiple of the HP paid as damage to
-  // the nearest target, healing back a share; a kill refunds the entire cost.
-  private activateDrain(ability: import('./types').RangedAbility, hpPaid: number): void {
-    const target = this.findRangedTarget(ability.range);
-    if (!target) {
-      // Only reachable for a cost-free drain variant; paid casts pre-check the target.
-      this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
-      return;
-    }
-    let dmg = Math.max(1, Math.round(hpPaid * this.abilityNum(ability, 'dmgMult', 2)));
-    const healPct = this.abilityNum(ability, 'healPct', 0);
-    const refundOnKill = this.abilityNum(ability, 'refundOnKill', 0) > 0;
-    // Tethra's Maw: a target already near death is devoured outright
-    const executeBelowPct = this.abilityNum(ability, 'executeBelowPct', 0);
-    const executed = executeBelowPct > 0 && target.hp <= target.maxHp * executeBelowPct;
-    if (executed) dmg = target.hp;
-
-    this.emitProjectileTrail(target.x, target.y, ability.emoji);
-    target.hp -= dmg;
-    this.cb.onParticle(target.x, target.y, executed ? 'DEVOURED' : `-${dmg}`, '#8d6fd4', 16, ability.emoji);
-    this.cb.log(
-      executed
-        ? `${ability.name} DEVOURS ${target.name} whole!`
-        : `${ability.name} rends ${target.name} for ${dmg}!`,
-      'log-combo', ability.emoji,
-    );
-
-    if (healPct > 0) {
-      const healed = this.player.heal(Math.round(dmg * healPct));
-      if (healed > 0) this.cb.onParticle(this.player.x, this.player.y, `+${healed} HP`, '#69f0ae');
-    }
-
-    if (target.hp <= 0) {
-      if (refundOnKill && hpPaid > 0) {
-        const refunded = this.player.heal(hpPaid);
-        if (refunded > 0) this.cb.log(`Tethra returns the tithe — +${refunded} HP.`, 'log-perk', ability.emoji);
-      }
-      const bx = target.x, by = target.y;
-      CombatSystem.killMonster(target, this);
-      if (target.isBoss && this.activeBossOnDeath) {
-        this.activeBossOnDeath(this, bx, by);
-        this.activeBossOnDeath = null;
-      }
-    }
-
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.advanceTurn();
-  }
-
-  private activateBolt(ability: import('./types').RangedAbility): void {
-    if (this.player.rangedAmmo === 0) {
-      this.cb.log(`No ${ability.name}s left! (Replenish on next floor)`, 'log-neutral');
-      return;
-    }
-
-    const target = this.findRangedTarget(ability.range);
-    if (!target) {
-      this.cb.log(`No target in range (${ability.range} tiles).`, 'log-neutral', ability.emoji);
-      return;
-    }
-
-    this.emitProjectileTrail(target.x, target.y, ability.emoji);
-    CombatSystem.playerAttackMonster(target, this, false, ability.damageMult);
-
-    if (ability.statusEffect === 'stun' && target.hp > 0 && !target.isStunned) {
-      target.statuses.push({ type: 'stun', duration: this.abilityNum(ability, 'stunDuration', 1), power: 0 });
-      this.cb.log(`${target.name} is smited and stunned!`, 'log-success');
-    }
-
-    if (this.player.rangedAmmo > 0) this.player.rangedAmmo--;
-    if (ability.cooldownMax > 0) this.player.rangedCooldown = ability.cooldownMax;
-
-    if (target.hp <= 0) {
-      const bx = target.x, by = target.y;
-      CombatSystem.killMonster(target, this);
-      if (target.isBoss && this.activeBossOnDeath) {
-        this.activeBossOnDeath(this, bx, by);
-        this.activeBossOnDeath = null;
-      }
-    }
-
-    this.advanceTurn();
-  }
-
-  private activateTimeDilation(ability: import('./types').RangedAbility): void {
-    const slowTurns = this.abilityNum(ability, 'slowTurns', 15);
-    this.timeDilationTurns = slowTurns;
-    this.timeDilationSlowPct = this.abilityNum(ability, 'slowPct', 100);
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`Time Dilation! Gravity slowed for ${slowTurns} turns.`, 'log-perk', ability.emoji);
-    this.cb.onParticle(this.player.x, this.player.y, 'SLOW!', '#b39ddb', 16, ability.emoji);
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '63,158,147');  // time ripples outward
-    this.cb.onAction();  // immediately restart tick interval with new slow value
-    this.advanceTurn();
-  }
-
-  private activateGravityWell(ability: import('./types').RangedAbility): void {
-    const pullSteps = this.abilityNum(ability, 'pullSteps', 2);
-    const stunDuration = this.abilityNum(ability, 'stunDuration', 1);
-    const mdist = (m: Monster) => Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-    const eligible = [...this.monsters]
-      .filter(m => mdist(m) <= ability.range && (this.visibility[m.x]?.[m.y] ?? false))
-      .sort((a, b) => mdist(a) - mdist(b));
-    const moved = new Set<Monster>();
-    for (let step = 0; step < pullSteps; step++) {
-      for (const m of eligible) {
-        const sx = Math.sign(this.player.x - m.x);
-        const sy = Math.sign(this.player.y - m.y);
-        for (const [dx, dy] of [[sx, 0], [0, sy]] as [number, number][]) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = m.x + dx, ny = m.y + dy;
-          if (this.map[nx]?.[ny] === Tile.FLOOR && !this.getMonsterAt(nx, ny)) {
-            m.x = nx; m.y = ny; moved.add(m);
-            this.cb.onParticle(nx, ny, '', '#7e57c2', undefined, 'trap_teleport');
-            break;
-          }
-        }
-      }
-    }
-    for (const m of moved) {
-      if (!m.isStunned) m.statuses.push({ type: 'stun', duration: stunDuration, power: 0 });
-    }
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`Gravity Well! ${moved.size} monster(s) pulled & stunned.`, 'log-perk', 'trap_teleport');
-    this.advanceTurn();
-  }
-
-  private activateConsecrate(ability: import('./types').RangedAbility): void {
-    const radiusParam = ability.params?.['radius'];
-    const r = typeof radiusParam === 'number' ? radiusParam : this.player.visionRadius;
-    const tileType = this.abilityStr(ability, 'tileType', 'sacred') as SpecialTile['type'];
-    let count = 0;
-    for (let cx = 0; cx < GameConfig.COLS; cx++) {
-      for (let cy = 0; cy < GameConfig.ROWS; cy++) {
-        if (Math.hypot(cx - this.player.x, cy - this.player.y) > r) continue;
-        if (this.map[cx]?.[cy] !== Tile.FLOOR) continue;
-        if (this.specialTiles.some(t => t.x === cx && t.y === cy)) continue;
-        this.specialTiles.push({ x: cx, y: cy, type: tileType });
-        count++;
-      }
-    }
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.cb.log(`Sacred Grounds! ${count} tiles consecrated.`, 'log-perk', 'special_sacred');
-    this.cb.onParticle(this.player.x, this.player.y, 'HOLY', '#fff176', 18, 'special_sacred');
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '217,164,65');  // golden blessing wave
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 10, '#ffd98a', 'special_sacred');
-    this.advanceTurn();
-  }
-
-  private activateOverload(ability: import('./types').RangedAbility): void {
-    const perKillDmg = this.abilityNum(ability, 'perKillDmg', 8);
-    const perFloorMinDmg = this.abilityNum(ability, 'perFloorMinDmg', 5);
-    const dmg = Math.max(this.dungeonLevel * perFloorMinDmg, perKillDmg * this.killsThisFloor);
-    const targets = this.monsters.filter(m => this.visibility[m.x]?.[m.y]);
-    for (const m of targets) {
-      m.hp -= dmg;
-      this.cb.onParticle(m.x, m.y, `-${dmg}`, '#ff6d00', 16, 'fx_impact');
-    }
-    const killed = targets.filter(m => m.hp <= 0);
-    this.monsters = this.monsters.filter(m => m.hp > 0);
-    for (const m of killed) CombatSystem.killMonster(m, this);
-    this.cb.log(`Overload! ${targets.length} monsters hit for ${dmg} dmg (${this.killsThisFloor} kills × ${perKillDmg}, min floor×${perFloorMinDmg}).`, 'log-combo', 'fx_impact');
-    this.cb.onParticle(this.player.x, this.player.y, 'BOOM!', '#ff6d00', 18, 'fx_impact');
-    this.killsThisFloor = 0;
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.advanceTurn();
-  }
-
-  // Spear of Lugh (Lugh's Spear questline, reforged by Goibniu): pierces
-  // straight up the hero's own vertical column, skewering every monster
-  // standing on a built tile above them — a direct answer to a lane packed
-  // with enemies, rather than another flat-damage nuke.
-  private activateSpearBolt(ability: import('./types').RangedAbility): void {
-    const dmg = Math.max(1, Math.round(this.player.atk * this.abilityNum(ability, 'dmgMult', 3)));
-    const targets = this.monsters.filter(m => m.x === this.player.x && m.y < this.player.y);
-    this.emitProjectileTrail(this.player.x, 0, ability.emoji);
-    for (const m of targets) {
-      m.hp -= dmg;
-      this.cb.onParticle(m.x, m.y, `-${dmg}`, '#ffd54f', 16, 'fx_arcane');
-    }
-    const killed = targets.filter(m => m.hp <= 0);
-    this.monsters = this.monsters.filter(m => m.hp > 0);
-    for (const m of killed) CombatSystem.killMonster(m, this);
-    this.cb.log(`${ability.name}! ${targets.length} foe(s) skewered for ${dmg} in the column above.`, 'log-combo', ability.emoji);
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 10, '#ffd54f', 'fx_arcane');
-    this.player.rangedCooldown = ability.cooldownMax;
-    this.advanceTurn();
-  }
-
-  /** The nearest visible, line-of-sight monster within `range`, or `null`. */
-  private findRangedTarget(range: number): import('./entities').Monster | null {
-    const inRange = this.monsters.filter(m => {
-      const dist = Math.abs(m.x - this.player.x) + Math.abs(m.y - this.player.y);
-      return dist <= range
-        && (this.visibility[m.x]?.[m.y] ?? false)
-        && MonsterAiSystem.hasLineOfSight(this.player.x, this.player.y, m.x, m.y, this);
-    });
-    inRange.sort((a, b) => {
-      const da = Math.abs(a.x - this.player.x) + Math.abs(a.y - this.player.y);
-      const db = Math.abs(b.x - this.player.x) + Math.abs(b.y - this.player.y);
-      return da - db;
-    });
-    return inRange[0] ?? null;
-  }
-
-  /** Emits a dotted particle trail from the player to `(tx, ty)`, for ranged-attack visual feedback. */
-  private emitProjectileTrail(tx: number, ty: number, icon: string): void {
-    // Bresenham path from player to target, emit a dot particle at each step
-    let x = this.player.x, y = this.player.y;
-    const dx = Math.abs(tx - x), dy = Math.abs(ty - y);
-    const sx = x < tx ? 1 : -1, sy = y < ty ? 1 : -1;
-    let err = dx - dy;
-    while (!(x === tx && y === ty)) {
-      const e2 = 2 * err;
-      if (e2 > -dy) { err -= dy; x += sx; }
-      if (e2 < dx)  { err += dx; y += sy; }
-      if (x !== tx || y !== ty) this.cb.onParticle(x, y, '·', '#ffcc02');
-    }
-    this.cb.onParticle(tx, ty, '', '#ffcc02', undefined, icon);
-  }
+  /** Casts the player's active ranged ability/spell (delegates to {@link AbilitySystem}). */
+  public handleRangedAttack(): void { AbilitySystem.cast(this); }
 
   /** Holds the current piece for later (swapping with any already-held piece), once per lock. */
   public handleBlockHold(): void {
@@ -3362,113 +1980,25 @@ export class Game {
 
   // ── Endgame: Gorgoth the Returned ─────────────────────────────────────────
 
-  /** Overflowing the stack summons the final boss into a cleared arena. */
+  /** Overflowing the stack summons the final boss into a cleared arena. Delegates to {@link BossEncounters}. */
   public summonGorgoth(): void {
-    if (this.gorgothSummoned) return;
-    this.gorgothSummoned = true;
-    this.storyBeats.push('called Bres the Beautiful forth to battle');
-
-    // The board the player built stays exactly as it is — no arena reset; only
-    // the tetromino supply stops.
-    this.blockMatrix = [];
-    this.heldType = null;
-
-    // The causeway is complete — there's no more "descend and try again
-    // later." Every remaining stairs tile becomes plain floor, beaming away
-    // like any other departing tile-feature (NPCs, altars, the tattoo artist).
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        if (this.map[x]![y] === Tile.STAIRS) {
-          this.map[x]![y] = Tile.FLOOR;
-          this.colors[x]![y] = this.blockColor;
-          this.cb.onBeam?.(x, '109,63,122');
-        }
-      }
-    }
-
-    // Gorgoth looms in at the very top-centre and grinds his way down to the
-    // hero — slow, unstoppable, phasing through the stack. Fixed, brutal stats
-    // so descending floors only ever helps you.
-    const gx = Math.floor(GameConfig.COLS / 2);
-    const gDiff = this.difficultyTuning();
-    const gHp = Math.floor(Balance.CONFIG.gorgoth.maxHp * gDiff.monsterHpMult);
-    const gAtk = Math.floor(Balance.CONFIG.gorgoth.atk * gDiff.monsterAtkMult * this.heatMult('monsterAtkMult'));
-    const boss = new Monster(gx, 0, 'sprite_boss_gorgoth', 'Bres the Beautiful', gHp, gHp, gAtk, Balance.CONFIG.gorgoth.xpReward, true, 'gorgoth', 1, 1);
-    boss.combatLevel = Balance.CONFIG.gorgoth.combatLevel;  // D20 — even a maxed hero misses ~half the time
-    boss.isGorgoth = true;
-    this.monsters.push(boss);
-
-    // Fomorian escort — an invasion party at his side, scaled the same as any
-    // other floor monster (not buffed to match Bres) so it reads as a raiding
-    // party, not a second boss.
-    let escorts = 0;
-    for (const [dx, dy] of [[-2, 0], [-1, 0], [1, 0], [2, 0]] as Array<[number, number]>) {
-      if (escorts >= 3) break;
-      const ex = gx + dx, ey = 0 + dy;
-      if (ex >= 0 && ex < GameConfig.COLS && ey >= 0 && ey < GameConfig.ROWS && this.isValidMove(ex, ey) && !this.getMonsterAt(ex, ey)) {
-        this.spawnMonster(this.getRandomMonsterKey(), ex, ey);
-        escorts++;
-      }
-    }
-    if (escorts > 0) this.cb.log('Fomorian raiders pour across the finished causeway behind him!', 'log-boss', 'sprite_boss_gorgoth');
-
-    // Half-HP: roar and raise two of the Returned beside him — but only the
-    // first time he crosses the threshold this run (persists across summons).
-    this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
-    this.activeBossOnDeath = null;  // victory is fired from killMonster (covers every death path)
-    this.bossHalfHpTriggered = this.gorgothHalfTriggered;
-
-    // Reveal the whole arena — no fog for the finale.
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        this.visibility[x]![y] = true;
-        this.explored[x]![y] = true;
-      }
-    }
-
-    this.cb.log('The causeway is complete! Bres the Beautiful now leads the charge to invade the Emerald Isle...', 'log-boss', 'ui_warning');
-    this.cb.onParticle(gx, 0, 'BRES', '#ff1744', 18, 'sprite_boss_gorgoth');
-    this.cb.onCodexDiscover?.('boss', 'gorgoth');
-
-    this.paused = true;
-    this.cb.onBossWarning?.(
-      { char: 'sprite_boss_gorgoth', name: 'Bres the Beautiful', hpMult: 1, atkMult: 1, xpReward: Balance.CONFIG.gorgoth.xpReward, flavorText: 'The bridge home is finished — and he means to be first across it.' },
-      () => { this.paused = false; },
-    );
-    this.pushUI();
+    this.bossEncounters.summonGorgoth();
   }
 
-  /**
-   * Bres's half-HP mechanic (roar + two Fomorian adds beside him), built as
-   * a factory so both {@link summonGorgoth} and a mid-duel save restore can
-   * attach it around the live boss instance.
-   */
-  private makeGorgothOnHalfHp(boss: Monster): (game: Game) => void {
-    return (g) => {
-      g.gorgothHalfTriggered = true;
-      g.cb.log('BRES ROARS — his Fomorian kin claw their way up!', 'log-boss', 'sprite_boss_gorgoth');
-      for (const [dx, dy] of [[-1, 0], [1, 0]] as Array<[number, number]>) {
-        const ax = boss.x + dx, ay = boss.y + dy;
-        if (ax >= 0 && ax < GameConfig.COLS && ay >= 0 && ay < GameConfig.ROWS && g.isValidMove(ax, ay) && !g.getMonsterAt(ax, ay)) {
-          g.spawnMonster(g.getRandomMonsterKey(), ax, ay);
-        }
-      }
-    };
+  /** Bres's half-HP mechanic factory (roar + two Fomorian adds). Delegates to {@link BossEncounters}. */
+  public makeGorgothOnHalfHp(boss: Monster): (game: Game) => void {
+    return this.bossEncounters.makeGorgothOnHalfHp(boss);
   }
 
-  /** Gorgoth defeated — the run is won. Idempotent. */
+  /** Gorgoth defeated — the run is won. Idempotent. Delegates to {@link BossEncounters}. */
   public triggerVictory(): void {
-    if (this.won) return;
-    this.won = true;
-    this.cb.log('BRES THE BEAUTIFUL FALLS — the bridge collapses, the rift is sealed. You win!', 'log-boss', 'item_trophy');
-    this.cb.onParticle(this.player.x, this.player.y, 'VICTORY', '#ffd54f', 20, 'item_trophy');
-    this.cb.onVictory?.(this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('victory'));
+    this.bossEncounters.triggerVictory();
   }
 
   /** Shifts the falling piece one column left, if unobstructed. */
   public handleBlockLeft(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (this.inCausewayDuel) { this.duelSteerPiece(-1); return; }
+    if (this.inCausewayDuel) { this.causewayDuel.steerPiece(-1); return; }
     if (this.blockBuildingSuspended) return;
     if (!this.checkBlockCollision(this.blockX - 1, this.blockY, this.blockMatrix)) { this.blockX--; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
@@ -3476,7 +2006,7 @@ export class Game {
   /** Shifts the falling piece one column right, if unobstructed. */
   public handleBlockRight(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (this.inCausewayDuel) { this.duelSteerPiece(1); return; }
+    if (this.inCausewayDuel) { this.causewayDuel.steerPiece(1); return; }
     if (this.blockBuildingSuspended) return;
     if (!this.checkBlockCollision(this.blockX + 1, this.blockY, this.blockMatrix)) { this.blockX++; this.cb.onAudio?.('blockMove'); this.advanceTurn(); }
   }
@@ -3490,7 +2020,7 @@ export class Game {
    */
   public handleBlockRotate(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (this.inCausewayDuel) { this.duelRotatePiece(); return; }
+    if (this.inCausewayDuel) { this.causewayDuel.rotatePiece(); return; }
     if (this.blockBuildingSuspended) return;
     const rotated = GameMath.rotateMatrix(this.blockMatrix);
     if (!this.checkBlockCollision(this.blockX, this.blockY, rotated)) { this.blockMatrix = rotated; this.cb.onAudio?.('blockRotate'); }
@@ -3499,7 +2029,7 @@ export class Game {
   /** Drops the falling piece one row, locking it in place if it can't descend further. */
   public handleBlockSoftDrop(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (this.inCausewayDuel) { this.duelPlacePiece(); return; }  // soft-drop doubles as "place" in a duel
+    if (this.inCausewayDuel) { this.causewayDuel.placePiece(); return; }  // soft-drop doubles as "place" in a duel
     if (this.blockBuildingSuspended) return;
     if (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) { this.blockY++; this.advanceTurn(); }
     else { this.lockBlock(); this.advanceTurn(); }
@@ -3508,7 +2038,7 @@ export class Game {
   /** Instantly drops the falling piece to the floor and locks it, with an afterimage trail along its travel path. */
   public handleBlockDrop(): void {
     if (this.player.hp <= 0 || this.paused) return;
-    if (this.inCausewayDuel) { this.duelPlacePiece(); return; }
+    if (this.inCausewayDuel) { this.causewayDuel.placePiece(); return; }
     if (this.blockBuildingSuspended) return;
     const startY = this.blockY;
     while (!this.checkBlockCollision(this.blockX, this.blockY + 1, this.blockMatrix)) this.blockY++;
@@ -3535,793 +2065,30 @@ export class Game {
     this.advanceTurn();
   }
 
-  // ── Causeway Duel implementation ─────────────────────────────────────────
+  // ── Causeway Duel — thin delegators onto the CausewayDuel module ──────────
 
-  /** The board cells occupied by `matrix` placed at `(bx, by)`, clamped to the grid. */
-  private duelPieceCells(matrix: CellValue[][], bx: number, by: number): Array<{ x: number; y: number }> {
-    const cells: Array<{ x: number; y: number }> = [];
-    for (let r = 0; r < matrix.length; r++) {
-      for (let c = 0; c < matrix[r]!.length; c++) {
-        if (matrix[r]![c] === Cell.EMPTY) continue;
-        const x = bx + c, y = by + r;
-        if (x >= 0 && x < GameConfig.COLS && y >= 0 && y < GameConfig.ROWS) cells.push({ x, y });
-      }
-    }
-    return cells;
-  }
-
-  /** Whether any of `cells` is orthogonally adjacent to a tile owned by `owner` (1 = player, 2 = boss). */
-  private duelCellsTouch(cells: Array<{ x: number; y: number }>, owner: number): boolean {
-    return cells.some(({ x, y }) =>
-      [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].some(([nx, ny]) =>
-        nx! >= 0 && nx! < GameConfig.COLS && ny! >= 0 && ny! < GameConfig.ROWS && this.duelOwner[nx!]![ny!] === owner),
-    );
-  }
-
-  /** Claims `cells` for `owner`, laying them as walkable causeway tiles in the given color. */
-  private duelClaim(cells: Array<{ x: number; y: number }>, owner: number, color: string): void {
-    for (const { x, y } of cells) {
-      this.duelOwner[x]![y] = owner;
-      this.map[x]![y] = Tile.FLOOR;
-      this.colors[x]![y] = color;
-    }
-  }
-
-  // Duel obstacle owner codes (in duelOwner, all non-zero so they block builds).
-  private static readonly DUEL_WALL = 3;
-  private static readonly DUEL_SWITCH = 4;
-  private static readonly DUEL_BOON = 5;
-
-  /**
-   * Lays the mid-field furniture for a duel: a sealed center wall the boss
-   * can't cross, two switch-islands the player must route their causeway to
-   * (lighting both opens the wall), and two boon-islands above the wall worth
-   * a detour. Scales lightly with depth but is deliberately fixed-shape so the
-   * puzzle reads clearly.
-   */
-  private duelSetupObstacles(): void {
-    const wallY = Math.floor(GameConfig.ROWS * 0.55);  // ~row 13
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      this.duelOwner[x]![wallY] = Game.DUEL_WALL;
-      this.map[x]![wallY] = Tile.FLOOR;
-      this.colors[x]![wallY] = Game.DUEL_WALL_COLOR;
-      this.duelWall.push({ x, y: wallY });
-    }
-    // Switch-islands sit just below the wall, off to either side — reaching
-    // them means routing the causeway laterally, not just straight up.
-    for (const sx of [1, GameConfig.COLS - 2]) {
-      const sy = wallY + 2;
-      this.duelOwner[sx]![sy] = Game.DUEL_SWITCH;
-      this.map[sx]![sy] = Tile.FLOOR;
-      this.colors[sx]![sy] = Game.DUEL_SWITCH_COLOR;
-      this.duelSwitches.push({ x: sx, y: sy, lit: false });
-    }
-    // Boon-islands hang above the wall — a detour on the climb to the boss.
-    const boonKinds: Array<'geis' | 'gold' | 'heal'> = ['geis', 'heal'];
-    [1, GameConfig.COLS - 2].forEach((bx, i) => {
-      const by = wallY - 3;
-      this.duelOwner[bx]![by] = Game.DUEL_BOON;
-      this.map[bx]![by] = Tile.FLOOR;
-      this.colors[bx]![by] = Game.DUEL_BOON_COLOR;
-      this.duelBoons.push({ x: bx, y: by, kind: boonKinds[i % boonKinds.length]!, taken: false });
-    });
-  }
+  /** Starts a Causeway Duel on a boss floor. Delegates to {@link CausewayDuel}. */
+  public startCausewayDuel(): void { this.causewayDuel.start(); }
 
   /** Wall tiles still sealed (for the renderer). */
-  public get duelWallTiles(): ReadonlyArray<{ x: number; y: number }> { return this.duelWall; }
+  public get duelWallTiles(): ReadonlyArray<{ x: number; y: number }> { return this.causewayDuel.wall; }
   /** Switch-islands (for the renderer). */
-  public get duelSwitchTiles(): ReadonlyArray<{ x: number; y: number; lit: boolean }> { return this.duelSwitches; }
+  public get duelSwitchTiles(): ReadonlyArray<{ x: number; y: number; lit: boolean }> { return this.causewayDuel.switches; }
   /** Unclaimed boon-islands (for the renderer). */
-  public get duelBoonTiles(): ReadonlyArray<{ x: number; y: number; kind: string; taken: boolean }> { return this.duelBoons; }
-
-  /**
-   * The hero stepped onto an unlit ogham switch: light it, claim it as walkable
-   * player ground, and open the wall once every switch is lit. Switches follow
-   * the game's established "activate on step" verb (like braziers/altars) — you
-   * build your causeway up to one, then walk your hero onto it.
-   */
-  private duelLightSwitch(sw: { x: number; y: number; lit: boolean }): void {
-    sw.lit = true;
-    this.duelClaim([{ x: sw.x, y: sw.y }], 1, '#3fb0a2');  // lit switch becomes walkable player ground
-    this.cb.log('An ogham switch flares underfoot — the wards on the wall weaken.', 'log-perk', 'fx_arcane');
-    this.cb.onRingPulse?.(sw.x, sw.y, '63,176,162');
-    this.cb.onParticleBurst?.(sw.x, sw.y, 8, '#3fb0a2', 'fx_arcane');
-    this.cb.onAudio?.('pactSworn');
-    if (this.duelWall.length > 0 && this.duelSwitches.every(s => s.lit)) this.duelOpenWall();
-  }
-
-  /**
-   * The hero stepped onto a boon-island: grant its reward and claim it as
-   * walkable player ground. Boons sit on the enemy side of the wall, so
-   * reaching one means opening the wall and venturing into contested territory.
-   */
-  private duelTakeBoon(boon: { x: number; y: number; kind: 'geis' | 'gold' | 'heal'; taken: boolean }): void {
-    boon.taken = true;
-    this.duelClaim([{ x: boon.x, y: boon.y }], 1, Game.DUEL_PLAYER_COLOR);
-    this.duelGrantBoon(boon.kind, boon.x, boon.y);
-  }
-
-  /** Opens the sealed center wall once every switch is lit. */
-  private duelOpenWall(): void {
-    for (const w of this.duelWall) {
-      this.duelOwner[w.x]![w.y] = 0;
-      this.map[w.x]![w.y] = Tile.VOID;
-      this.colors[w.x]![w.y] = null;
-    }
-    this.duelWall = [];
-    this.cb.log('The center wall grinds open — the way to the enemy causeway is clear!', 'log-boss', 'special_sacred');
-    this.cb.onToast?.('The wall opens — climb to the bridge and break it!', 'special_sacred');
-    this.cb.onAudio?.('bossWarn');
-  }
-
-  /** Grants a reached boon-island's reward inline (no modal — the duel keeps flowing). */
-  private duelGrantBoon(kind: 'geis' | 'gold' | 'heal', x: number, y: number): void {
-    if (kind === 'gold') {
-      const g = 200 + this.dungeonLevel * 40;
-      this.gold += g;
-      this.cb.log(`A cache on the causeway — ${g} gold!`, 'log-perk', 'item_gold_pouch');
-      this.cb.onParticleBurst?.(x, y, 8, '#d9a441', 'item_gold_pouch');
-    } else if (kind === 'heal') {
-      const healed = this.player.heal(Math.round(this.player.maxHp * 0.4));
-      this.cb.log(`A well-spring on the causeway — +${healed} HP.`, 'log-success', 'special_sacred');
-      this.cb.onParticleBurst?.(x, y, 8, '#69f0ae');
-    } else {
-      const pool = Boon.BY_TIER[this.dungeonLevel >= 10 ? 3 : 2];
-      const boon = pool[Math.floor(Math.random() * pool.length)]!;
-      this.player.addBoon(boon);
-      this.cb.log(`A Geis-stone stands on the causeway — you gain ${boon.name}!`, 'log-perk', boon.char);
-      this.cb.onParticleBurst?.(x, y, 10, '#b98fc4', boon.char);
-    }
-    this.cb.onRingPulse?.(x, y, '217,164,65');
-    this.cb.onAudio?.('comboMilestone', 2);
-  }
-
-  /**
-   * Starts a Causeway Duel: clears the board, seeds the player's home tile at
-   * the bottom and the boss's at the top, spawns the boss, and deals the
-   * first piece. Reachable on a boss floor (and, for now, a debug entry).
-   */
-  public startCausewayDuel(): void {
-    this.inCausewayDuel = true;
-    this.duelResolved = false;
-    this.map = this.emptyMap();
-    this.colors = this.emptyColors();
-    this.monsters = [];
-    this.hazards = [];
-    this.specialTiles = [];
-    this.npcTiles = [];
-    this.altarTiles = [];
-    this.tattooTiles = [];
-    this.duelOwner = Array.from({ length: GameConfig.COLS }, () => Array<number>(GameConfig.ROWS).fill(0));
-    this.duelSwitches = [];
-    this.duelWall = [];
-    this.duelBoons = [];
-    this.duelTurns = 0;
-    this.duelNearShoreWarned = false;
-
-    const midX = Math.floor(GameConfig.COLS / 2);
-    const homeY = GameConfig.ROWS - 1, topY = 0;
-    // Player home tile (bottom, the shore) and the hero on it.
-    this.duelClaim([{ x: midX, y: homeY }], 1, Game.DUEL_PLAYER_COLOR);
-    this.duelHome = { x: midX, y: homeY };
-    this.player.x = midX; this.player.y = homeY;
-    // Boss home base (top) — a 3-wide root so its tetromino bridge reads as a
-    // broad landing being built out, not a thread. The boss stands on the centre.
-    this.duelClaim([{ x: midX - 1, y: topY }, { x: midX, y: topY }, { x: midX + 1, y: topY }], 2, Game.DUEL_BOSS_COLOR);
-    const bossDef = this.previewBossForFloor(this.dungeonLevel);
-    const diff = this.difficultyTuning();
-    const baseHp = Balance.CONFIG.boss.baseHpFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseHpPerDungeonLevel;
-    const baseAtk = Balance.CONFIG.boss.baseAtkFloor1 + (this.dungeonLevel - 1) * Balance.CONFIG.boss.baseAtkPerDungeonLevel;
-    const boss = new Monster(midX, topY, bossDef.char, bossDef.name,
-      Math.floor(baseHp * bossDef.hpMult * diff.monsterHpMult),
-      Math.floor(baseHp * bossDef.hpMult * diff.monsterHpMult),
-      Math.floor(baseAtk * bossDef.atkMult * diff.monsterAtkMult * this.heatMult('monsterAtkMult')),
-      bossDef.xpReward, true);
-    boss.combatLevel = Balance.CONFIG.boss.combatLevel;
-    this.duelBoss = boss;
-    this.monsters.push(boss);
-    // The duel owns the boss outright — biome half-HP/death hooks (some of
-    // which pause for a cinematic or spawn adds) would fight the duel flow.
-    this.activeBossOnHalfHp = null;
-    this.activeBossOnDeath = null;  // duelWin handles the death path
-    this.bossHalfHpTriggered = true;
-
-    // No fog in a duel — the whole causeway is in view.
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
-    }
-    this.duelSetupObstacles();
-    this.currentType = this.randomShapeKey();
-    this.nextType = this.randomShapeKey();
-    this.duelDealPiece();
-    this.cb.log(`${bossDef.name} raises a causeway from the dark — build yours to meet it, and cut them down before the bridge lands!`, 'log-boss', 'ui_warning');
-    this.cb.onToast?.('CAUSEWAY DUEL — build up, break through, before the bridge reaches you!', 'ui_warning');
-    this.cb.onAudio?.('bossWarn');
-    this.pushUI();
-  }
-
-  /** Deals the next placement piece as a free-floating cursor at the top-centre. */
-  private duelDealPiece(): void {
-    this.currentType = this.nextType;
-    this.nextType = this.randomShapeKey();
-    const shape = SHAPES[this.currentType];
-    this.blockColor = Game.DUEL_PLAYER_COLOR;
-    this.currentCursed = false;
-    this.currentBlessed = false;
-    this.blockMatrix = shape.matrix.map(row => row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR));
-    // Deal the stone at the top of the player's OWN causeway (their build
-    // frontier), not the top of the board — the cursor lives on your side,
-    // exactly where it will land, instead of floating in the boss's territory.
-    const w = this.blockMatrix[0]!.length;
-    this.blockX = Math.max(0, Math.min(this.duelPlayerPeakColumn() - Math.floor(w / 2), GameConfig.COLS - w));
-    this.duelSnapPiece();
-  }
-
-  /** The column carrying the player's highest (build-frontier) causeway tile — the home column until they've built. */
-  private duelPlayerPeakColumn(): number {
-    let bestX = this.duelHome.x, bestY = GameConfig.ROWS;
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = 0; y < GameConfig.ROWS; y++) {
-        if (this.duelOwner[x]![y] === 1 && y < bestY) { bestY = y; bestX = x; }
-      }
-    }
-    return bestX;
-  }
-
-  /** Snaps the cursor's row to where it would land — so the piece you steer is always shown resting on your causeway. */
-  private duelSnapPiece(): void {
-    this.blockY = Math.max(0, this.duelLandingY());
-  }
-
-  /** Moves the cursor piece one column (kept fully on the board), re-snapping it onto the causeway. */
-  private duelSteerPiece(dir: number): void {
-    if (this.duelResolved) return;
-    const nx = this.blockX + dir;
-    const cells = this.duelPieceCells(this.blockMatrix, nx, this.blockY);
-    if (cells.length === this.pieceCellCount() && cells.every(c => c.x >= 0 && c.x < GameConfig.COLS)) {
-      this.blockX = nx;
-      this.duelSnapPiece();
-      this.cb.onAudio?.('blockMove');
-      this.pushUI();
-    }
-  }
-
-  /** Rotates the cursor piece, nudging it back on-board if the rotation pushed it off an edge, then re-snapping. */
-  private duelRotatePiece(): void {
-    if (this.duelResolved) return;
-    const rotated = GameMath.rotateMatrix(this.blockMatrix);
-    const width = rotated[0]!.length;
-    this.blockX = Math.max(0, Math.min(this.blockX, GameConfig.COLS - width));
-    this.blockMatrix = rotated;
-    this.duelSnapPiece();
-    this.cb.onAudio?.('blockRotate');
-    this.pushUI();
-  }
-
-  /** Total filled cells in the current piece (used to detect off-board clipping while steering). */
-  private pieceCellCount(): number {
-    let n = 0;
-    for (const row of this.blockMatrix) for (const c of row) if (c !== Cell.EMPTY) n++;
-    return n;
-  }
-
-  /**
-   * The row offset at which the cursor piece rests when placed: it climbs to
-   * sit directly on top of the tallest player-owned column it spans (so the
-   * causeway grows *upward* toward the boss rather than pooling at the floor).
-   * Columns with no player support fall through to the board floor, which the
-   * connectivity check then rejects unless a neighbour bridges them in.
-   */
-  private duelLandingY(): number {
-    const matrix = this.blockMatrix, bx = this.blockX;
-    const colBottom = new Map<number, number>();  // piece column → its lowest filled local row
-    for (let r = 0; r < matrix.length; r++) {
-      for (let c = 0; c < matrix[r]!.length; c++) {
-        if (matrix[r]![c] !== Cell.EMPTY) colBottom.set(c, Math.max(colBottom.get(c) ?? -1, r));
-      }
-    }
-    let by = Infinity;  // rest on the FIRST support hit descending = the tallest = smallest offset
-    for (const [c, lb] of colBottom) {
-      const boardCol = bx + c;
-      if (boardCol < 0 || boardCol >= GameConfig.COLS) continue;
-      let frontierY = GameConfig.ROWS;  // no player tile in this column → the board floor
-      for (let y = 0; y < GameConfig.ROWS; y++) { if (this.duelOwner[boardCol]![y] === 1) { frontierY = y; break; } }
-      by = Math.min(by, frontierY - 1 - lb);
-    }
-    return Number.isFinite(by) ? by : 0;
-  }
-
-  /**
-   * Places the cursor piece: it climbs to rest on top of the player's causeway
-   * (see {@link duelLandingY}), and the placement only takes if it connects to
-   * the player's own tiles and stays on-board without overlapping. A valid
-   * placement claims the tiles and hands the turn to the boss.
-   */
-  private duelPlacePiece(): void {
-    if (this.duelResolved) return;
-    const by = this.duelLandingY();
-    const cells = this.duelPieceCells(this.blockMatrix, this.blockX, by);
-    const reject = (): void => {
-      this.cb.log('The stone will not hold there — build out from your own causeway.', 'log-neutral', 'ui_warning');
-      this.cb.onToast?.('Place it touching your own causeway.', 'ui_warning');
-    };
-    if (cells.length === 0) return;
-    // In-bounds (a rotation near the ceiling can push it off the top) and no overlap.
-    if (cells.some(c => c.y < 0) || cells.some(c => this.duelOwner[c.x]![c.y] !== 0)) { reject(); return; }
-    if (!this.duelCellsTouch(cells, 1)) { reject(); return; }
-    this.duelClaim(cells, 1, Game.DUEL_PLAYER_COLOR);
-    this.duelTurns++;
-    this.cb.onBlockLand?.(cells);
-    this.cb.onAudio?.('blockLand');
-    this.duelDealPiece();
-    this.duelBossTurn();
-    this.updateVisibility();
-    this.pushUI();
-    this.cb.onAction();
-  }
-
-  /** The deepest (largest-y) row the boss's causeway has reached, for the HUD threat meter. */
-  private duelBossDeepestRow(): number {
-    let deepest = 0;
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = GameConfig.ROWS - 1; y >= 0; y--) {
-        if (this.duelOwner[x]?.[y] === 2) { if (y > deepest) deepest = y; break; }
-      }
-    }
-    return deepest;
-  }
-
-  /** Whether `(x, y)` is the home tile or orthogonally abutting it — the shore the bridge lands on. */
-  private duelAtShore(x: number, y: number): boolean {
-    return y >= GameConfig.ROWS - 1
-      || (Math.abs(x - this.duelHome.x) + Math.abs(y - this.duelHome.y)) === 1;
-  }
-
-  /**
-   * The lane the boss steers its bridge toward: the column that reaches the
-   * shore with the least resistance — fewest player tiles blocking the way
-   * down and nearest the home. So if the hero walls off the centre, the boss
-   * routes around toward an open flank instead of butting against the wall.
-   */
-  private duelBossLaneColumn(): number {
-    let bestX = this.duelHome.x, bestCost = Infinity;
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      let blockers = 0;
-      for (let y = 0; y < GameConfig.ROWS; y++) if (this.duelOwner[x]![y] === 1) blockers++;
-      const cost = blockers * 3 + Math.abs(x - this.duelHome.x);
-      if (cost < bestCost) { bestCost = cost; bestX = x; }
-    }
-    return bestX;
-  }
-
-  /**
-   * The boss's placement turn: it is dealt a random tetromino (exactly like the
-   * hero) and drops it as a connected extension of its own causeway, biased to
-   * reach as deep as possible toward the open shore lane. The boss pawn walks to
-   * the new leading edge — reaching the shore lands the bridge and loses the run.
-   * Because the boss builds in tetromino chunks rather than flooding the board,
-   * it leaves flanking columns open for the hero to climb (e.g. to the boons).
-   */
-  private duelBossTurn(): void {
-    if (this.duelResolved || !this.duelBoss) return;
-    const laneX = this.duelBossLaneColumn();  // the open lane to the shore
-    const shapeKey = this.randomShapeKey();
-    const frontier = this.duelBossDeepestRow();  // the boss's current leading row
-    // How broad the bridge is near its leading edge. When it has narrowed to a
-    // thread the boss widens before pushing on, so the causeway advances as a
-    // chunky mass of tetrominoes rather than a single-file column.
-    let edgeWidth = 0;
-    for (let x = 0; x < GameConfig.COLS; x++) {
-      for (let y = frontier - 1; y <= frontier; y++) if (y >= 0 && this.duelOwner[x]![y] === 2) { edgeWidth++; break; }
-    }
-    const wantWiden = edgeWidth < 3;
-    // Search every rotation × board position for the best legal placement: it
-    // must connect to boss territory and not overlap anything. Scoring rewards
-    // making at least one row of downward progress, then hugging the target lane
-    // and building a chunky, varied bridge — so it reads as tetromino blocks
-    // being laid, not a thin line racing straight for the shore.
-    let best: { cells: Array<{ x: number; y: number }>; score: number } | null = null;
-    let matrix: CellValue[][] = SHAPES[shapeKey].matrix.map(row => row.map((cell): CellValue => cell === 0 ? Cell.EMPTY : Cell.FLOOR));
-    for (let rot = 0; rot < 4; rot++) {
-      const w = matrix[0]!.length, h = matrix.length;
-      for (let bx = 0; bx <= GameConfig.COLS - w; bx++) {
-        for (let by = 0; by <= GameConfig.ROWS - h; by++) {
-          const cells = this.duelPieceCells(matrix, bx, by);
-          if (cells.length === 0) continue;
-          if (cells.some(c => this.duelOwner[c.x]![c.y] !== 0)) continue;  // overlap / wall / island
-          if (!this.duelCellsTouch(cells, 2)) continue;                    // must grow from the boss causeway
-          const deepest = Math.max(...cells.map(c => c.y));
-          const deepens = deepest > frontier;
-          const fillsEdge = deepest >= frontier - 1;  // adds mass at/just above the leading edge
-          // When the edge is a thread, prefer widening it; once broad, push down.
-          const progress = wantWiden
-            ? (fillsEdge && !deepens ? 1000 : deepens ? 200 : 0)
-            : (deepens ? 1000 : (fillsEdge ? 300 : 0));
-          const nearLane = -Math.min(...cells.map(c => Math.abs(c.x - laneX)));  // gentle pull toward the lane
-          const score = progress + deepest * 2 + nearLane + cells.length + Math.random() * 6;
-          if (!best || score > best.score) best = { cells, score };
-        }
-      }
-      matrix = GameMath.rotateMatrix(matrix);
-    }
-    if (!best) return;  // truly walled off this turn — the player has blocked every landing
-
-    this.duelClaim(best.cells, 2, Game.DUEL_BOSS_COLOR);
-    this.cb.onBlockLand?.(best.cells);
-    this.cb.onAudio?.('blockLand');
-    // The boss pawn advances to the deepest new cell (breaking ties toward the lane).
-    const edge = best.cells.reduce((a, c) =>
-      (c.y > a.y || (c.y === a.y && Math.abs(c.x - laneX) < Math.abs(a.x - laneX))) ? c : a, best.cells[0]!);
-    this.duelBoss.x = edge.x; this.duelBoss.y = edge.y;
-    this.cb.onRingPulse?.(edge.x, edge.y, '150,40,55');  // the bridge grinds a length longer
-    if (best.cells.some(c => this.duelAtShore(c.x, c.y))) { this.duelLose(); return; }
-    // One-time alarm once the bridge is closing on the shore.
-    const gap = (GameConfig.ROWS - 1) - this.duelBossDeepestRow();
-    if (!this.duelNearShoreWarned && gap <= 4 && this.duelWall.length === 0) {
-      this.duelNearShoreWarned = true;
-      this.cb.log('The bridge is almost across — cut them down NOW or the invasion lands!', 'log-boss', 'ui_warning');
-      this.cb.onToast?.('THE BRIDGE NEARS YOUR SHORE!', 'ui_warning');
-      this.cb.onAudio?.('bossWarn');
-    }
-  }
+  public get duelBoonTiles(): ReadonlyArray<{ x: number; y: number; kind: string; taken: boolean }> { return this.causewayDuel.boons; }
 
   /**
    * Called from {@link CombatSystem.killMonster} for every monster death so the
-   * duel ends the instant its boss falls — no matter how (melee, a ranged spell
-   * like the Spear of Lugh, thorns, or line-clear AoE). Without this, a non-melee
-   * kill would leave the duel unresolved: no stairs, and the boss's causeway would
-   * keep advancing to the shore for a false game-over.
+   * duel ends the instant its boss falls, by any death path. Delegates to {@link CausewayDuel}.
    */
-  public notifyMonsterKilled(m: Monster): void {
-    if (this.inCausewayDuel && m === this.duelBoss) this.duelWin();
-  }
+  public notifyMonsterKilled(m: Monster): void { this.causewayDuel.notifyMonsterKilled(m); }
 
-  /**
-   * Boss slain in the duel — the causeway is broken. Rather than dropping a
-   * stairs tile the hero must find and step onto (fragile: a ranged/magic kill
-   * from the shore left the "stairs" underfoot or off the built path), the duel
-   * ends outright and the usual delve-or-rest choice opens automatically. If a
-   * level-up boon pick is already on screen (a boss kill almost always levels
-   * you), the choice waits for it to close — see {@link settleDuel}.
-   */
-  public duelWin(): void {
-    if (this.duelResolved) return;
-    this.duelResolved = true;
-    this.duelBoss = null;
-    this.blockMatrix = [];
-    this.cb.log('The enemy causeway crumbles into the dark — the way on is open.', 'log-boss', 'item_trophy');
-    this.cb.onToast?.('The bridge is broken! The way on opens…', 'special_sacred');
-    // A victory flourish over the hero.
-    this.cb.onParticleBurst?.(this.player.x, this.player.y, 18, '#d9a441', 'item_trophy');
-    this.cb.onRingPulse?.(this.player.x, this.player.y, '217,164,65');
-    this.cb.onImpactGlow?.(this.player.x, this.player.y, '217,164,65', 24);
-    this.cb.onAudio?.('bountyFulfilled');
-    this.storyBeats.push('broke a Fomorian causeway in single combat');
-    this.duelDescentPending = true;
-    this.pushUI();
-    this.tryFinishDuelDescent();
-  }
+  /** Opens the delve-or-rest choice for a won duel once nothing else is modal. Delegates to {@link CausewayDuel}. */
+  private tryFinishDuelDescent(): void { this.causewayDuel.tryFinishDescent(); }
 
-  /**
-   * Opens the delve-or-rest choice for a won duel, but only once nothing else is
-   * modal (a boss kill usually pops a level-up boon pick first, which pauses).
-   * Retried every tick/turn by {@link settleDuel} until it can fire.
-   */
-  private tryFinishDuelDescent(): void {
-    if (!this.duelDescentPending || this.paused) return;
-    this.duelDescentPending = false;
-    this.inCausewayDuel = false;
-    this.openStairsChoice();
-  }
+  /** Per-tick safety net: ends a won duel and opens its descent choice. Delegates to {@link CausewayDuel}. */
+  private settleDuel(): void { this.causewayDuel.settle(); }
 
-  /**
-   * Per-tick safety net for the Causeway Duel: ends the duel the instant its
-   * boss is gone by ANY death path (melee, a ranged spell, poison, thorns) —
-   * not just the melee branch that used to own the win — and then opens the
-   * descent choice as soon as no other modal is in the way. Cheap and idempotent.
-   */
-  private settleDuel(): void {
-    if (this.inCausewayDuel && !this.duelResolved && this.duelBoss
-        && (this.duelBoss.hp <= 0 || !this.monsters.includes(this.duelBoss))) {
-      this.duelWin();
-    }
-    if (this.duelDescentPending) this.tryFinishDuelDescent();
-  }
-
-  /** The boss's causeway reached the home row — the bridge is complete and the run ends. */
-  private duelLose(): void {
-    if (this.duelResolved) return;
-    this.duelResolved = true;
-    this.cb.log('The bridge lands. The invasion crosses over you — the causeway to Ériu is complete.', 'log-boss', 'ui_warning');
-    // A grim flourish at the shore before the run ends.
-    this.cb.onRingPulse?.(this.duelHome.x, this.duelHome.y, '150,40,55');
-    this.cb.onParticleBurst?.(this.duelHome.x, this.duelHome.y, 14, '#c1443c', 'ui_warning');
-    this.cb.onAudio?.('bossWarn');
-    this.player.hp = 0;
-    this.cb.onDeath('THE BRIDGE LANDS', 'the Fomorian causeway reached the shore', this.dungeonLevel, this.player.totalXpEarned, this.getRunStats(), this.buildRunStory('death'));
-  }
-
-  // ── Fidchell ("the wooden wisdom") implementation ─────────────────────────
-
-  private static readonly FID_DIRS: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-
-  /** Local (lx,ly) → grid coords. */
-  private fidToGrid(lx: number, ly: number): { x: number; y: number } { return { x: lx + this.fidOrigin.x, y: ly + this.fidOrigin.y }; }
-  private fidInBounds(lx: number, ly: number): boolean { return lx >= 0 && lx < Game.FID_N && ly >= 0 && ly < Game.FID_N; }
-  /** A board corner — the escape dún (King-only). */
-  private fidIsCorner(lx: number, ly: number): boolean { const n = Game.FID_N - 1; return (lx === 0 || lx === n) && (ly === 0 || ly === n); }
-  /** The central throne (King-only). */
-  private fidIsThrone(lx: number, ly: number): boolean { const c = (Game.FID_N - 1) / 2; return lx === c && ly === c; }
-  /** The side a piece code belongs to. */
-  private fidSideOf(piece: number): 'king' | 'raider' | null {
-    if (piece === Game.FID_KING || piece === Game.FID_DEFENDER) return 'king';
-    if (piece === Game.FID_RAIDER) return 'raider';
-    return null;
-  }
-
-  /** Read-only board view for the renderer. */
-  public get fidchellBoard(): ReadonlyArray<ReadonlyArray<number>> { return this.fidBoard; }
-  public get fidchellOrigin(): { x: number; y: number } { return this.fidOrigin; }
-  public get fidchellSelected(): { x: number; y: number } | null { return this.fidSelected; }
-  public get fidchellLegal(): ReadonlyArray<{ x: number; y: number }> { return this.fidLegal; }
-  public get fidchellPlayerSide(): 'king' | 'raider' { return this.fidPlayerSide; }
-
-  /**
-   * Starts a Fidchell match on entering a 7th floor. The player is dealt a side
-   * at random: the King's escape or the Raiders' hunt. Brandub opening on a
-   * centred 7×7 — King on the throne, four defenders in the cross, eight raiders
-   * on the arms. Raiders move first (tafl tradition).
-   */
-  public startFidchell(): void {
-    this.inFidchell = true;
-    this.fidResolved = false;
-    this.fidPlies = 0;
-    this.fidSelected = null;
-    this.fidLegal = [];
-    this.fidPlayerSide = Math.random() < 0.5 ? 'king' : 'raider';
-    this.fidTurn = 'raider';
-    this.map = this.emptyMap();
-    this.colors = this.emptyColors();
-    this.monsters = [];
-    this.hazards = [];
-    this.specialTiles = [];
-    this.npcTiles = [];
-    this.altarTiles = [];
-    this.tattooTiles = [];
-    this.blockMatrix = [];
-    const n = Game.FID_N;
-    this.fidOrigin = { x: Math.floor((GameConfig.COLS - n) / 2), y: Math.floor((GameConfig.ROWS - n) / 2) };
-    this.fidBoard = Array.from({ length: n }, () => Array<number>(n).fill(Game.FID_EMPTY));
-    const c = (n - 1) / 2;
-    this.fidBoard[c]![c] = Game.FID_KING;
-    for (const [dx, dy] of Game.FID_DIRS) this.fidBoard[c + dx]![c + dy] = Game.FID_DEFENDER;
-    for (const [dx, dy] of Game.FID_DIRS) {
-      this.fidBoard[c + dx * 2]![c + dy * 2] = Game.FID_RAIDER;
-      this.fidBoard[c + dx * 3]![c + dy * 3] = Game.FID_RAIDER;
-    }
-    // No fog — the whole board is in view. The hero isn't a piece; you command
-    // from outside, so it's parked off-board and hidden by the renderer.
-    for (let x = 0; x < GameConfig.COLS; x++) for (let y = 0; y < GameConfig.ROWS; y++) { this.visibility[x]![y] = true; this.explored[x]![y] = true; }
-    const asKing = this.fidPlayerSide === 'king';
-    this.cb.log(`Fidchell! A Fomorian gambler bars the crossing and sets the wooden wisdom. ${asKing ? 'You hold the High King — slip him to a corner dún to win free.' : 'You command the Fomorian raiders — surround the High King before he escapes.'}`, 'log-boss', 'ui_warning');
-    this.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'ui_warning');
-    this.cb.onAudio?.('bossWarn');
-    if (this.fidTurn !== this.fidPlayerSide) this.fidAiMove();
-    this.pushUI();
-  }
-
-  /** Legal rook-slide destinations for the piece at local (lx,ly) on the given board. */
-  private fidLegalMovesOn(board: number[][], lx: number, ly: number): Array<{ x: number; y: number }> {
-    const piece = board[lx]?.[ly] ?? Game.FID_EMPTY;
-    if (piece === Game.FID_EMPTY) return [];
-    const isKing = piece === Game.FID_KING;
-    // Every piece slides like a rook. The King is "weak" (capturable by ordinary
-    // custodial flanking), which balances its speed against the raiders' numbers.
-    const maxRange = Game.FID_N;
-    const out: Array<{ x: number; y: number }> = [];
-    for (const [dx, dy] of Game.FID_DIRS) {
-      let nx = lx + dx, ny = ly + dy, steps = 0;
-      while (steps < maxRange && this.fidInBounds(nx, ny) && board[nx]![ny] === Game.FID_EMPTY) {
-        const corner = this.fidIsCorner(nx, ny), throne = this.fidIsThrone(nx, ny);
-        if (corner && !isKing) break;                            // corners bar all but the King
-        if (throne && !isKing) { nx += dx; ny += dy; steps++; continue; } // pass over the empty throne, never stop
-        out.push({ x: nx, y: ny });
-        nx += dx; ny += dy; steps++;
-      }
-    }
-    return out;
-  }
-
-  /** Every legal move for a side on the given board. */
-  private fidAllMoves(board: number[][], side: 'king' | 'raider'): Array<{ fx: number; fy: number; tx: number; ty: number }> {
-    const moves: Array<{ fx: number; fy: number; tx: number; ty: number }> = [];
-    for (let x = 0; x < Game.FID_N; x++) for (let y = 0; y < Game.FID_N; y++) {
-      if (this.fidSideOf(board[x]![y]!) !== side) continue;
-      for (const d of this.fidLegalMovesOn(board, x, y)) moves.push({ fx: x, fy: y, tx: d.x, ty: d.y });
-    }
-    return moves;
-  }
-
-  /** Custodial captures triggered by the piece that just moved to (mx,my). Mutates `board`, returns removed cells. */
-  private fidCapturesOn(board: number[][], mx: number, my: number): Array<{ x: number; y: number }> {
-    const side = this.fidSideOf(board[mx]![my]!);
-    const removed: Array<{ x: number; y: number }> = [];
-    for (const [dx, dy] of Game.FID_DIRS) {
-      const ax = mx + dx, ay = my + dy, bx = mx + 2 * dx, by = my + 2 * dy;
-      if (!this.fidInBounds(ax, ay)) continue;
-      const adj = board[ax]![ay]!;
-      if (adj === Game.FID_EMPTY || this.fidSideOf(adj) === side) continue;  // a "weak" King is flanked like any soldier
-      let anvil = false;
-      if (this.fidInBounds(bx, by)) {
-        const beyond = board[bx]![by]!;
-        if (this.fidSideOf(beyond) === side) anvil = true;
-        else if (beyond === Game.FID_EMPTY && (this.fidIsCorner(bx, by) || this.fidIsThrone(bx, by))) anvil = true;  // a hostile square is an anvil
-      }
-      if (anvil) { board[ax]![ay] = Game.FID_EMPTY; removed.push({ x: ax, y: ay }); }
-    }
-    return removed;
-  }
-
-  /** The King's location on a board, or null. */
-  private fidKingAt(board: number[][]): { x: number; y: number } | null {
-    for (let x = 0; x < Game.FID_N; x++) for (let y = 0; y < Game.FID_N; y++) if (board[x]![y] === Game.FID_KING) return { x, y };
-    return null;
-  }
-
-  /** Whether the King has been taken — with the weak-King rule, capture removes it from the board during the move, so "captured" simply means the King is gone. */
-  private fidKingCaptured(board: number[][]): boolean {
-    return this.fidKingAt(board) === null;
-  }
-
-  /**
-   * Handles a tap at grid (gx,gy): selects one of your pieces, or moves the
-   * selected piece to a highlighted square. Only responds on your turn.
-   */
-  public handleFidchellTap(gx: number, gy: number): void {
-    if (!this.inFidchell || this.fidResolved || this.paused || this.fidTurn !== this.fidPlayerSide) return;
-    const lx = gx - this.fidOrigin.x, ly = gy - this.fidOrigin.y;
-    if (!this.fidInBounds(lx, ly)) { this.fidSelected = null; this.fidLegal = []; this.pushUI(); return; }
-    if (this.fidSelected && this.fidLegal.some(d => d.x === lx && d.y === ly)) {
-      this.fidApplyMove(this.fidSelected.x, this.fidSelected.y, lx, ly);
-      return;
-    }
-    if (this.fidSideOf(this.fidBoard[lx]![ly]!) === this.fidPlayerSide) {
-      this.fidSelected = { x: lx, y: ly };
-      this.fidLegal = this.fidLegalMovesOn(this.fidBoard, lx, ly);
-      this.cb.onAudio?.('blockMove');
-    } else {
-      this.fidSelected = null; this.fidLegal = [];
-    }
-    this.pushUI();
-  }
-
-  /** Applies a move on the live board, resolves captures, checks the result, then hands the turn on (to the AI or back to you). */
-  private fidApplyMove(fx: number, fy: number, tx: number, ty: number): void {
-    if (this.fidResolved) return;
-    const piece = this.fidBoard[fx]![fy]!;
-    const side = this.fidSideOf(piece)!;
-    this.fidBoard[fx]![fy] = Game.FID_EMPTY;
-    this.fidBoard[tx]![ty] = piece;
-    this.fidSelected = null; this.fidLegal = [];
-    this.fidPlies++;
-    this.cb.onAudio?.('blockLand');
-    const removed = this.fidCapturesOn(this.fidBoard, tx, ty);
-    for (const r of removed) { const g = this.fidToGrid(r.x, r.y); this.cb.onParticleBurst?.(g.x, g.y, 8, side === 'king' ? '#69f0ae' : '#c1443c', 'fx_impact'); }
-    if (removed.length > 0) this.cb.onAudio?.('hit');
-    const dst = this.fidToGrid(tx, ty);
-    this.cb.onRingPulse?.(dst.x, dst.y, side === 'king' ? '105,240,174' : '193,68,59');
-    // Resolve the match.
-    if (piece === Game.FID_KING && this.fidIsCorner(tx, ty)) { this.fidFinish('king'); return; }
-    if (side === 'raider' && this.fidKingCaptured(this.fidBoard)) { this.fidFinish('raider'); return; }
-    this.fidTurn = side === 'king' ? 'raider' : 'king';
-    if (this.fidPlies > 120) { this.fidFinish(this.fidPlayerSide === 'king' ? 'raider' : 'king'); return; }  // anti-shuffle cap → player loses the stall
-    this.pushUI();
-    if (this.fidTurn !== this.fidPlayerSide) this.fidAiMove();
-    else if (this.fidAllMoves(this.fidBoard, this.fidPlayerSide).length === 0) this.fidFinish(this.fidPlayerSide === 'king' ? 'raider' : 'king');  // stalemated → you lose
-  }
-
-  private static readonly FID_WIN = 1e6;
-  private static readonly FID_SEARCH_DEPTH = 3;
-
-  /** Applies a move to a cloned board (with captures) and returns the new board — for search. */
-  private fidBoardAfter(board: number[][], m: { fx: number; fy: number; tx: number; ty: number }): number[][] {
-    const nb = board.map(col => col.slice());
-    nb[m.tx]![m.ty] = nb[m.fx]![m.fy]!;
-    nb[m.fx]![m.fy] = Game.FID_EMPTY;
-    this.fidCapturesOn(nb, m.tx, m.ty);
-    return nb;
-  }
-
-  /** Negamax with alpha-beta. Returns the value of `board` for `side` to move, `depth` plies deep. */
-  private fidSearch(board: number[][], side: 'king' | 'raider', depth: number, alpha: number, beta: number): number {
-    const k = this.fidKingAt(board);
-    if (!k || this.fidKingCaptured(board)) return (side === 'raider' ? Game.FID_WIN : -Game.FID_WIN) - depth;  // sooner is better
-    if (this.fidIsCorner(k.x, k.y)) return (side === 'king' ? Game.FID_WIN : -Game.FID_WIN) - depth;
-    if (depth === 0) return this.fidEvaluate(board, side);
-    const moves = this.fidAllMoves(board, side);
-    if (moves.length === 0) return -Game.FID_WIN + depth;  // no move = you lose
-    let best = -Infinity;
-    for (const m of moves) {
-      const score = -this.fidSearch(this.fidBoardAfter(board, m), side === 'king' ? 'raider' : 'king', depth - 1, -beta, -alpha);
-      if (score > best) best = score;
-      if (best > alpha) alpha = best;
-      if (alpha >= beta) break;  // cutoff
-    }
-    return best;
-  }
-
-  /** The AI takes one move for whichever side it controls, choosing by a shallow alpha-beta search so it plays both roles competently. */
-  private fidAiMove(): void {
-    if (this.fidResolved) return;
-    const side = this.fidTurn;
-    const moves = this.fidAllMoves(this.fidBoard, side);
-    if (moves.length === 0) { this.fidFinish(side === 'king' ? 'raider' : 'king'); return; }
-    let best = moves[0]!, bestScore = -Infinity;
-    for (const m of moves) {
-      const score = -this.fidSearch(this.fidBoardAfter(this.fidBoard, m), side === 'king' ? 'raider' : 'king', Game.FID_SEARCH_DEPTH - 1, -Infinity, Infinity) + Math.random() * 0.25;
-      if (score > bestScore) { bestScore = score; best = m; }
-    }
-    this.fidApplyMove(best.fx, best.fy, best.tx, best.ty);
-  }
-
-  /** Positional score of `board` from `side`'s perspective (higher = better). Symmetric: raider score is the negation of the King-side score. */
-  private fidEvaluate(board: number[][], side: 'king' | 'raider'): number {
-    const k = this.fidKingAt(board);
-    if (!k) return side === 'raider' ? 100000 : -100000;
-    if (this.fidIsCorner(k.x, k.y)) return side === 'king' ? 100000 : -100000;
-    if (this.fidKingCaptured(board)) return side === 'raider' ? 100000 : -100000;
-    let defenders = 0, raiders = 0;
-    for (let x = 0; x < Game.FID_N; x++) for (let y = 0; y < Game.FID_N; y++) {
-      if (board[x]![y] === Game.FID_DEFENDER) defenders++;
-      else if (board[x]![y] === Game.FID_RAIDER) raiders++;
-    }
-    const n = Game.FID_N - 1;
-    const distToCorner = Math.min(k.x + k.y, (n - k.x) + k.y, k.x + (n - k.y), (n - k.x) + (n - k.y));
-    const kingMobility = this.fidLegalMovesOn(board, k.x, k.y).length;
-    let raiderAdj = 0;
-    for (const [dx, dy] of Game.FID_DIRS) { const nx = k.x + dx, ny = k.y + dy; if (this.fidInBounds(nx, ny) && board[nx]![ny] === Game.FID_RAIDER) raiderAdj++; }
-    // Good-for-King: closer to a corner, more escape mobility, more defenders, fewer raiders pressing the King.
-    const kingScore = defenders * 9 - raiders * 4 + (2 * n - distToCorner) * 5 + kingMobility * 3 - raiderAdj * 8;
-    return side === 'king' ? kingScore : -kingScore;
-  }
-
-  /** Ends the match: whichever side met its goal. The player winning takes the shortcut + prize; losing means fighting the floor. */
-  private fidFinish(winnerSide: 'king' | 'raider'): void {
-    if (this.fidResolved) return;
-    this.fidResolved = true;
-    this.fidSelected = null; this.fidLegal = [];
-    this.pushUI();
-    if (winnerSide === this.fidPlayerSide) this.fidWin(); else this.fidLose();
-  }
-
-  /** Player won the board: a prize and a shortcut straight past this floor. */
-  private fidWin(): void {
-    const gold = 150 + this.dungeonLevel * 30;
-    this.gold += gold;
-    const pool = Boon.BY_TIER[this.dungeonLevel >= 14 ? 3 : 2];
-    const boon = pool[Math.floor(Math.random() * pool.length)]!;
-    this.player.addBoon(boon);
-    this.cb.log(`You take the wooden wisdom! The gambler yields the crossing — ${gold} gold and a boon: ${boon.name}. The way on opens.`, 'log-perk', boon.char);
-    this.cb.onToast?.('You win at fidchell — passage granted!', 'special_sacred');
-    const mid = this.fidToGrid(3, 3);
-    this.cb.onParticleBurst?.(mid.x, mid.y, 18, '#d9a441', 'item_trophy');
-    this.cb.onImpactGlow?.(mid.x, mid.y, '217,164,65', 24);
-    this.cb.onAudio?.('bountyFulfilled');
-    this.storyBeats.push('bested a Fomorian at fidchell');
-    this.inFidchell = false;
-    this.descendFloor();  // skip this floor's grind — the reward for winning
-  }
-
-  /** Player lost the board: no shortcut. The floor is rebuilt and the gambler drops onto it as an elite to fight through. */
-  private fidLose(): void {
-    this.cb.log('The gambler sweeps the pieces aside with a laugh — no free passage. Take the crossing the hard way.', 'log-boss', 'ui_warning');
-    this.cb.onToast?.('You lost at fidchell — fight through!', 'ui_warning');
-    this.cb.onAudio?.('bossWarn');
-    this.inFidchell = false;
-    this.resetDungeonState();  // build the real floor underneath
-    this.spawnMonster('berserker_orc', 4, 2, true, 'Fomorian Gambler');
-    this.pushUI();
-  }
 
   // ── Lookups ──────────────────────────────────────────────────────────────
 
@@ -4332,355 +2099,40 @@ export class Game {
 
   // ── Tap-to-inspect ───────────────────────────────────────────────────────
 
-  /**
-   * Builds the inspect-tooltip content for whatever occupies `(x, y)` —
-   * the hero, a monster, a hazard, or a floor feature.
-   * @throws {TypeError} If `x` or `y` is not a finite number.
-   */
-  public getInspectInfo(x: number, y: number): InspectInfo | null {
-    if (typeof x !== 'number' || !Number.isFinite(x)) throw new TypeError('Game.getInspectInfo: "x" must be a finite number');
-    if (typeof y !== 'number' || !Number.isFinite(y)) throw new TypeError('Game.getInspectInfo: "y" must be a finite number');
-    if (x < 0 || x >= GameConfig.COLS || y < 0 || y >= GameConfig.ROWS) return null;
-
-    if (this.player.x === x && this.player.y === y) {
-      const lines = [
-        `HP ${Math.round(this.player.hp)}/${Math.round(this.player.maxHp)}`,
-        `ATK ${Math.round(this.player.totalAtk)}  DEF ${this.player.totalDef}`,
-        `Lv.${this.player.playerLevel}`,
-      ];
-      if (this.player.boons.length > 0) lines.push(`Geasa: ${this.player.boons.map(b => `${SpriteService.iconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
-      return { icon: this.player.char, title: 'You', lines };
-    }
-
-    const monster = this.getMonsterAt(x, y);
-    if (monster) {
-      const hitPct = Math.round(CombatSystem.estimateHitChance(this.player.combatLevel, monster.combatLevel) * 100);
-      const lines = [
-        `HP ${Math.max(0, monster.hp)}/${monster.maxHp}`,
-        `ATK ${monster.atk}`,
-        `Your hit chance: ${hitPct}%`,
-        `Type: ${monster.behaviorType}`,
-      ];
-      if (monster.statuses.length > 0) lines.push(`Status: ${monster.statuses.map(s => s.type).join(', ')}`);
-      return { icon: monster.char, title: monster.name, lines };
-    }
-
-    const hazard = this.getHazardAt(x, y);
-    if (hazard) {
-      if (hazard.type === 'spike') {
-        const line = hazard.warning ? `Firing in ${hazard.timer}!` : `Arms in ${hazard.timer} turns`;
-        return { icon: 'trap_spike', title: 'Spike Trap', lines: [line] };
-      }
-      if (hazard.type === 'smoke') {
-        return { icon: 'trap_smoke', title: 'Smoke Cloud', lines: ['Limits vision while standing inside'] };
-      }
-      if (hazard.type === 'teleport') {
-        return { icon: 'trap_teleport', title: 'Teleport Rune', lines: ['Warps whoever steps on it to a random floor tile'] };
-      }
-    }
-
-    if (this.map[x]![y] === Tile.STAIRS) {
-      return { icon: 'tile_stairs', title: 'Stairs', lines: ['Descend to the next floor'] };
-    }
-
-    if (this.isTattooTile(x, y)) {
-      return this.player.brandsCapped
-        ? { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['No room left — you already bear 5 Ogham Marks'] }
-        : { icon: 'tile_merchant', title: 'Occult Tattoo Artist', lines: ['Receive a permanent Ogham Mark'] };
-    }
-
-    const altarInfo = this.altarTiles.find(a => a.x === x && a.y === y);
-    if (altarInfo) {
-      const tierName = altarInfo.tier === 3 ? 'Grand Altar (Tier III)' : altarInfo.tier === 2 ? 'Ruined Altar (Tier II)' : 'Minor Altar (Tier I)';
-      return { icon: 'tile_altar', title: tierName, lines: ['Step on to choose a stackable geis'] };
-    }
-
-    const npcInfo = this.npcTiles.find(n => n.x === x && n.y === y);
-    if (npcInfo) {
-      return npcInfo.npcId === '__ghost__'
-        ? { icon: 'sprite_boss_wraith', title: 'A Restless Ghost', lines: ['A fallen wanderer... something about them is familiar'] }
-        : { icon: 'npc_sidhe', title: 'A Wandering Stranger', lines: ['Step closer to speak with them'] };
-    }
-
-    const special = this.specialTiles.find(t => t.x === x && t.y === y);
-    if (special) {
-      if (special.type === 'swamp')  return { icon: 'special_swamp',  title: 'Swamp',         lines: ['Deals 1 dmg/turn to monsters'] };
-      if (special.type === 'sacred') return { icon: 'special_sacred', title: 'Sacred Ground', lines: ['Wait here for +2 bonus HP per rest'] };
-      if (special.type === 'ice')    return { icon: 'special_ice',    title: 'Ice',           lines: ['Slide uncontrollably in direction of travel'] };
-    }
-
-    return null;
-  }
-
-  // ── Character sheet ─────────────────────────────────────────────────────
-  // Aggregates every effective stat currently on the player — base numbers
-  // plus whatever boons/brands/shop purchases have folded into them — into a
-  // display-ready snapshot. Boons/brands/shop purchases all mutate the same
-  // Player fields directly, so reading Player state IS reading the totals.
-
-  /** Aggregates every effective player stat into a display-ready character-sheet snapshot. */
-  private buildCharacterSheet(): CharacterSheetSection[] {
-    const p = this.player;
-    const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
-    return [
-      {
-        title: 'Offense', icon: 'sprite_equip_iron_sword',
-        stats: [
-          { label: 'Attack', value: String(Math.round(p.atk)) },
-          { label: 'Combat Dice', value: `D${CombatSystem.dieSides(p.combatLevel)}` },
-          { label: 'Line-Clear Damage', value: p.lineClearDamage > 0 ? `+${pct(p.lineClearDamage)} ATK` : '—' },
-          { label: 'Line-Clear AoE', value: p.lineClearAoeDmgMult > 0 ? `${p.lineClearAoeDmgMult}× floor dmg, all enemies` : '—' },
-          { label: 'Kill ATK Bonus', value: p.killAtkBonus > 0 ? `+${pct(p.killAtkBonus)} ATK/kill (this floor)` : '—' },
-          { label: 'Thorn Reflect', value: p.thornDamage > 0 ? pct(p.thornDamage) : '—' },
-          { label: 'Poison on Hit', value: p.poisonAttackChance > 0 ? pct(p.poisonAttackChance) : '—' },
-          { label: 'Stun on Hit', value: p.stunAttackChance > 0 ? pct(p.stunAttackChance) : '—' },
-          { label: 'Guaranteed Crit', value: p.critEvery > 0 ? `every ${p.critEvery}${p.critEvery === 1 ? 'st' : 'th'} hit` : '—' },
-        ],
-      },
-      {
-        title: 'Defense', icon: 'sprite_equip_buckler',
-        stats: [
-          { label: 'Max HP', value: String(Math.round(p.maxHp)) },
-          { label: 'Damage Reduction', value: p.damageReduction > 0 ? `${pct(p.damageReduction)} (−${p.totalDef} dmg/hit)` : '—' },
-          { label: 'Dodge Chance', value: p.dodgeChance > 0 ? pct(p.dodgeChance) : '—' },
-          { label: 'Dodge Heal', value: p.dodgeHeal > 0 ? `${pct(p.dodgeHeal)} Max HP` : '—' },
-          { label: 'Poison Immune', value: p.poisonImmune ? 'Yes' : '—' },
-          { label: 'Deathward Charges', value: p.deathwardCharges > 0 ? String(p.deathwardCharges) : '—' },
-          { label: 'Ghost Dodge Charges', value: p.ghostDodgeCharges > 0 ? String(p.ghostDodgeCharges) : '—' },
-          { label: 'Life Brand Revive', value: p.lifeBrandRevive ? 'Armed' : '—' },
-        ],
-      },
-      {
-        title: 'Sustain', icon: 'item_droplet',
-        stats: [
-          { label: 'Regen / Tick', value: p.regenPerTick > 0 ? `${pct(p.regenPerTick)} Max HP` : '—' },
-          { label: 'Heal on Kill', value: p.killHeal > 0 ? `${pct(p.killHeal)} Max HP` : '—' },
-        ],
-      },
-      {
-        title: 'Utility', icon: 'fx_arcane',
-        stats: [
-          { label: 'Vision Radius', value: String(p.visionRadius) },
-          { label: 'Gravity Slow', value: p.tickSlowPercent !== 0 ? `${p.tickSlowPercent > 0 ? '+' : ''}${p.tickSlowPercent}%` : '—' },
-          { label: 'Status Fades Faster', value: p.statusDurationBonus > 0 ? `−${p.statusDurationBonus} turn(s)` : '—' },
-          { label: 'Aura Stun Radius', value: p.auraStunRadius > 0 ? `${p.auraStunRadius} tile(s)` : '—' },
-          { label: 'Bonus Hero Moves', value: p.bonusHeroMoves > 0 ? `+${p.bonusHeroMoves}/turn` : '—' },
-          { label: 'Line-Clear XP', value: p.lineClearXpMult !== 1 ? `×${p.lineClearXpMult}` : '—' },
-          { label: 'Sworn Patron', value: PATRONS.find(pt => pt.id === this.activePatronId)?.deity ?? '—' },
-          {
-            label: 'Spells Known',
-            value: p.spellbook.length > 0 ? p.spellbook.map(s => s.name).join(', ') : '—',
-          },
-          {
-            label: 'Active Spell Cost',
-            value: typeof p.rangedAbility?.params?.['hpCostPct'] === 'number'
-              ? `${Math.round((p.rangedAbility.params['hpCostPct'] as number) * 100)}% Max HP (${StatMath.pctOf(p.maxHp, p.rangedAbility.params['hpCostPct'] as number)} HP)`
-              : '—',
-          },
-        ],
-      },
-    ];
-  }
+  /** Builds the inspect-tooltip content for whatever occupies `(x, y)` (delegates to {@link InspectView}). */
+  public getInspectInfo(x: number, y: number): InspectInfo | null { return this.inspectView.build(x, y); }
 
   // ── Mid-run save/resume ──────────────────────────────────────────────────
 
-  /**
-   * Fields excluded from the generic scalar sweep in {@link serialize}:
-   * the host callbacks, live entity/content-instance references (serialized
-   * in re-resolvable forms instead), function-valued boss hooks (reattached
-   * by id/name on restore), Sets (stored as arrays), session-relative
-   * timestamps, and tutorial state (owned by the live TutorialController —
-   * a save is never taken mid-tutorial). Everything else — grids, counters,
-   * tile lists, flags — round-trips verbatim, so newly added plain fields
-   * are persisted without touching the save code.
-   */
-  private static readonly SAVE_SKIP = new Set([
-    'cb', 'player', 'monsters', 'rescueGuards',
-    'activeOmen', 'pendingFloorEvent',
-    'activeBossOnHalfHp', 'activeBossOnDeath',
-    'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
-    'activeGhost', 'availableGhosts',
-    'lastLineClearMs', 'tutorialSafety',
-    'duelBoss',  // a live Monster ref — re-linked to the restored boss in applySave
-  ]);
-
-  /** Snapshots the complete run state for the mid-run save (see {@link applySave}). */
+  /** Snapshots the complete run state for the mid-run save. Delegates to {@link SaveGame}. */
   public serialize(): SavedRun {
-    const scalars: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(this)) {
-      if (!Game.SAVE_SKIP.has(k)) scalars[k] = v;
-    }
-    return {
-      version: SAVE_VERSION,
-      savedAt: Date.now(),
-      scalars,
-      player: this.player.serialize(),
-      monsters: this.monsters.map(m => m.serialize()),
-      rescueGuardIdx: this.rescueGuards.map(g => this.monsters.indexOf(g)).filter(i => i >= 0),
-      omenId: this.activeOmen?.id ?? null,
-      pendingFloorEventId: this.pendingFloorEvent?.id ?? null,
-      rescuedIds: [...this.rescuedIds],
-      spearPartsHeld: [...this.spearPartsHeld],
-      metFlavorNpcIds: [...this.metFlavorNpcIds],
-      activeGhost: this.activeGhost,
-    };
+    return this.saveGame.serialize();
   }
 
   /**
    * Restores a {@link serialize} snapshot onto a shell built with
-   * `new Game(cb, { forRestore: true })`. Content references (omen, pending
-   * floor event, boons/brands, boss mechanics) are re-resolved against the
-   * currently loaded data; a reference whose id no longer exists degrades to
-   * "absent" rather than crashing — except the falling piece's shape, without
-   * which the run can't continue.
+   * `new Game(cb, { forRestore: true })`. Delegates to {@link SaveGame}.
    * @throws {Error} If the save's version doesn't match, or its piece shapes no longer exist.
    */
   public applySave(save: SavedRun): void {
-    if (save.version !== SAVE_VERSION) {
-      throw new Error(`Game.applySave: save version ${save.version} is not ${SAVE_VERSION}`);
-    }
-    Object.assign(this, save.scalars);
-    if (!SHAPES[this.currentType] || !SHAPES[this.nextType] || (this.heldType !== null && !SHAPES[this.heldType])) {
-      throw new Error('Game.applySave: a saved piece shape no longer exists in shapes.json');
-    }
-    this.player.applySave(save.player, {
-      boon:  id => Boon.ALL.find(b => b.id === id),
-      brand: id => Brand.ALL.find(b => b.id === id),
-    });
-    this.monsters = save.monsters.map(m => Monster.fromSave(m));
-    this.rescueGuards = save.rescueGuardIdx
-      .map(i => this.monsters[i])
-      .filter((m): m is Monster => m !== undefined);
-    this.activeOmen = save.omenId === null ? null : Omen.ALL.find(o => o.id === save.omenId) ?? null;
-    this.pendingFloorEvent = save.pendingFloorEventId === null
-      ? null
-      : FloorEvent.ALL.find(f => f.id === save.pendingFloorEventId) ?? null;
-    this.rescuedIds = new Set(save.rescuedIds);
-    this.spearPartsHeld = new Set(save.spearPartsHeld as Array<'shaft' | 'bolts' | 'head'>);
-    this.metFlavorNpcIds = new Set(save.metFlavorNpcIds);
-    this.activeGhost = save.activeGhost;
-    // Boss mechanics are functions — reattach them from the live content
-    // definitions around the restored boss instance.
-    const boss = this.monsters.find(m => m.isBoss);
-    if (this.inCausewayDuel) {
-      // The duel owns its boss outright (no biome hooks) — just re-link the
-      // reference to the restored boss instance so the win path still fires.
-      this.duelBoss = boss ?? null;
-      this.activeBossOnHalfHp = null;
-      this.activeBossOnDeath = null;
-      this.bossHalfHpTriggered = true;
-    } else if (boss?.isGorgoth) {
-      this.activeBossOnHalfHp = this.makeGorgothOnHalfHp(boss);
-      this.activeBossOnDeath = null;
-    } else if (boss) {
-      const def = BOSSES.find(b => b.name === boss.name);
-      this.activeBossOnHalfHp = def?.onHalfHp ?? null;
-      this.activeBossOnDeath  = def?.onDeath  ?? null;
-    }
-    // Session-relative state restarts clean: the combo window is long gone,
-    // and a snapshot is only ever taken of a live, unblocked, post-tutorial game.
-    this.lastLineClearMs = 0;
-    this.comboCount = 0;
-    this.active = true;
-    this.paused = false;
-    this.tutorialSafety = false;
-    this.pushUI();
+    this.saveGame.restore(save);
   }
 
   // ── UI push ──────────────────────────────────────────────────────────────
 
-  /** Pushes a fresh {@link UIState} snapshot to the host UI via `cb.updateUI`. */
-  private pushUI(): void {
-    const activeMod = MODIFIERS.find(m => m.id === this.activeModifierId);
-    const activeCls = CLASSES.find(c => c.id === this.activeClassId);
-    const activePatron = PATRONS.find(p => p.id === this.activePatronId);
-    const biome = Biome.forFloor(this.dungeonLevel);
-    this.cb.updateUI({
-      // atk/maxHp/hp can carry fractional precision internally (percentage
-      // boons compound on them) — round only here, at the display boundary.
-      hp: Math.round(this.player.hp),
-      maxHp: Math.round(this.player.maxHp),
-      floor: this.dungeonLevel,
-      totalXpEarned: this.player.totalXpEarned,
-      gold: this.gold,
-      gravityRate: GameMath.tickMsForLevel(this.dungeonLevel, this.player.tickSlowPercent + this.biomeGravityPct + this.omenGravityPct + this.difficultyGravityPct + this.heatGravityPct),
-      nextType: this.nextType,
-      heldType: this.heldType,
-      canHold: this.canHold,
-      pieceState: this.currentCursed ? 'cursed' : this.currentBlessed ? 'blessed' : 'normal',
-      xp: this.player.xp,
-      xpToNext: this.player.xpToNext,
-      playerLevel: this.player.playerLevel,
-      boons: this.player.boons.map(b => ({ char: b.def.char, name: b.def.name, stacks: b.stacks, desc: b.def.desc })),
-      brands: this.player.brands.map(b => {
-        const count = this.player.brands.filter(x => x.brand.id === b.brand.id).length;
-        return {
-          slot: b.slot, char: b.brand.char, name: b.brand.name,
-          setActive: count >= b.brand.setSize,
-          desc: b.brand.desc, setDesc: b.brand.setDesc, setSize: b.brand.setSize,
-        };
-      }),
-      brandsAcquiredTotal: this.player.brandsAcquiredTotal,
-      brandsMaxLifetime: Balance.CONFIG.brands.maxLifetime,
-      statuses: this.player.statuses,
-      activeModifier: activeMod ? { emoji: activeMod.emoji, name: activeMod.name } : null,
-      activeClass: activeCls
-        ? {
-            emoji: activePatron?.char ?? activeCls.emoji,
-            name: activePatron ? `${activeCls.name} — ${activePatron.name}` : activeCls.name,
-          }
-        : null,
-      // During a duel the boss's own causeway is the focus — the duel card names
-      // the boss, so the generic biome badge ("Bres's Causeway") is suppressed to
-      // avoid attributing the enemy bridge to the wrong name.
-      biomeName: this.inCausewayDuel ? '' : biome.name,
-      activeOmen: this.activeOmen ? { icon: this.activeOmen.icon, name: this.activeOmen.name } : null,
-      activeDifficulty: this.activeDifficultyId !== 'standard' && this.difficultyTuning().name !== ''
-        ? { icon: this.difficultyTuning().icon, name: this.difficultyTuning().name.split(' — ')[0]! }
-        : null,
-      heatLevel: this.heatLevel > 0 ? this.heatLevel : null,
-      duel: this.inCausewayDuel && this.duelBoss
-        ? {
-            bossName: this.duelBoss.name,
-            bossHp: Math.max(0, Math.round(this.duelBoss.hp)),
-            bossMaxHp: this.duelBoss.maxHp,
-            bridgeGap: Math.max(0, (GameConfig.ROWS - 1) - this.duelBossDeepestRow()),
-            bridgeSpan: GameConfig.ROWS - 1,
-            switchesLeft: this.duelSwitches.filter(s => !s.lit).length,
-          }
-        : null,
-      fidchell: this.inFidchell
-        ? {
-            playerSide: this.fidPlayerSide,
-            yourTurn: this.fidTurn === this.fidPlayerSide && !this.fidResolved,
-            defenders: this.fidBoard.flat().filter(p => p === Game.FID_DEFENDER).length,
-            raiders: this.fidBoard.flat().filter(p => p === Game.FID_RAIDER).length,
-          }
-        : null,
-      rangedAbility: this.player.rangedAbility
-        ? {
-            name:        this.player.rangedAbility.name,
-            emoji:       this.player.rangedAbility.emoji,
-            cooldown:    this.player.rangedCooldown,
-            cooldownMax: this.player.rangedAbility.cooldownMax,
-            ammo:        this.player.rangedAmmo >= 0 ? this.player.rangedAmmo : null,
-            hpCostPct:   typeof this.player.rangedAbility.params?.['hpCostPct'] === 'number'
-              ? this.player.rangedAbility.params['hpCostPct'] as number
-              : null,
-            spellIndex:  this.player.activeSpellIndex,
-            spellCount:  this.player.spellbook.length,
-          }
-        : null,
-      characterSheet: this.buildCharacterSheet(),
-      floorProgress: {
-        pieces: this.blocksSpawnedThisFloor,
-        smithTarget: this.pendingSmithFloor ? Balance.CONFIG.smiths.pieceThreshold : null,
-        fillPct: Math.round(this.filledFraction() * 100),
-        bossFillTarget: this.pendingBossFloor ? Math.round(Game.BOSS_FILL_FRACTION * 100) : null,
-        stairsPity: this.stairsOnBoard()
-          ? null
-          : { placed: this.blocksPlacedSinceStairs, target: Balance.CONFIG.spawnRates.stairsForcedAfterBlocks },
-      },
-    });
+  /** Pushes a fresh {@link UIState} snapshot to the host UI via `cb.updateUI` (assembled by {@link UiStateBuilder}). */
+  public pushUI(): void { this.cb.updateUI(this.uiStateBuilder.build()); }
+
+  /** The floor-progress dial payload (smith/boss/stairs thresholds). Encapsulates the private per-floor counters for {@link UiStateBuilder}. */
+  public floorProgressState(): UIState['floorProgress'] {
+    return {
+      pieces: this.blocksSpawnedThisFloor,
+      smithTarget: this.pendingSmithFloor ? Balance.CONFIG.smiths.pieceThreshold : null,
+      fillPct: Math.round(this.filledFraction() * 100),
+      bossFillTarget: this.pendingBossFloor ? Math.round(Game.BOSS_FILL_FRACTION * 100) : null,
+      stairsPity: this.stairsOnBoard()
+        ? null
+        : { placed: this.blocksPlacedSinceStairs, target: Balance.CONFIG.spawnRates.stairsForcedAfterBlocks },
+    };
   }
 }
