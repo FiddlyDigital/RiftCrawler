@@ -196,6 +196,20 @@ export class UIManager {
     const fp = state.floorProgress;
     const fpSegments: string[] = [];
     const fpSidebar: string[] = [];
+    // Readiness leads the dial — it's the "how much Tetris?" answer.
+    if (fp.readiness) {
+      const r = fp.readiness;
+      if (r.state === 'ripe') {
+        fpSegments.push(`<span class="fp-ripe">${SpriteService.iconHTML('tile_stairs_up', 10)}ripe</span>`);
+        fpSidebar.push(`Floor ripe — descend when ready (${r.pieces}/${r.target} blocks)`);
+      } else if (r.state === 'lingering') {
+        fpSegments.push(`<span class="fp-linger">${SpriteService.iconHTML('ui_warning', 10)}linger</span>`);
+        fpSidebar.push(`Lingering — ${r.pieces} blocks (ripe at ${r.target})`);
+      } else {
+        fpSegments.push(`<span class="fp-build">${SpriteService.iconHTML('tile_stone_a', 10)}${r.pieces}/${r.target}</span>`);
+        fpSidebar.push(`Build the floor — ${r.pieces}/${r.target} blocks to ripe`);
+      }
+    }
     if (fp.smithTarget !== null) {
       fpSegments.push(`<span class="fp-smith">${SpriteService.iconHTML('smith_goibniu', 10)}${Math.min(fp.pieces, fp.smithTarget)}/${fp.smithTarget}</span>`);
       fpSidebar.push(`Smith at ${fp.smithTarget} blocks (${Math.min(fp.pieces, fp.smithTarget)})`);

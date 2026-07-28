@@ -168,6 +168,11 @@ body {
 .hud-floor-progress .fp-smith { color: #d9a441; }
 .hud-floor-progress .fp-boss  { color: #e57373; }
 .hud-floor-progress .fp-stairs { color: #9fa8da; }
+/* Floor readiness: neutral while building, gold+glow when ripe (leave now),
+   amber when lingering (over-mined). */
+.hud-floor-progress .fp-build { color: #9a9482; }
+.hud-floor-progress .fp-ripe  { color: #ffd257; text-shadow: 0 0 6px rgba(255, 210, 87, 0.7); }
+.hud-floor-progress .fp-linger { color: #e8a13c; }
 .hud-next-preview { display: flex; align-items: center; justify-content: center; }
 
 /* ── Input-mode visibility helpers ──────────────────────────────────────────

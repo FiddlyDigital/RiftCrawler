@@ -89,7 +89,9 @@ export class NpcEncounters {
       ? `already you ${beats[0]!}`
       : `already you ${beats.slice(0, -1).join(', ')}, and ${beats[beats.length - 1]!}`;
     const more = g.storyBeats.length > 5 ? ' …and more besides — the verse grows long.' : '';
-    return `He closes his eyes and speaks it like an old poem: "${cls}, ${g.dungeonLevel} floor${g.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}" He opens one eye. "The ending, now. That part is still yours."`;
+    const pacing = g.pacingAdvice();
+    const pacingLine = pacing ? ` He weighs you a moment. "${pacing}"` : '';
+    return `He closes his eyes and speaks it like an old poem: "${cls}, ${g.dungeonLevel} floor${g.dungeonLevel === 1 ? '' : 's'} into the dark — ${joined}.${more}"${pacingLine} He opens one eye. "The ending, now. That part is still yours."`;
   }
 
   /**
