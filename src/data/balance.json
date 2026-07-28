@@ -165,9 +165,8 @@
     "rollChance": 0.3,
     "pieceThreshold": 6,
     "portionAtk": 2,
-    "healerBaseCost": 40,
-    "healerCostPerFloor": 6,
-    "healerHpGain": 5
+    "herbSpawnChance": 0.00274,
+    "herbHpPct": 0.2
   },
   "spearOfLugh": {
     "dmgMult": 3,

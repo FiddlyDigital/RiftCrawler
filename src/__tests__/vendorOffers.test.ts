@@ -125,19 +125,22 @@ describe('VendorOffers', () => {
       expect(game.paused).toBe(false);
     });
 
-    it('Airmed (healer) sells permanent Max HP when you can pay', () => {
-      game.gold = 100000;
+    it('Airmed (healer) turns carried herbs into permanent Max HP and empties the satchel', () => {
+      game.herbsCarried = 1;
       const before = game.player.maxHp;
       game.vendorOffers.rescueService(rescue('airmed'));
-      cb.ev()!.onChoice(0);   // buy the herbs
+      cb.ev()!.onChoice(0);   // give her the herbs
       expect(game.player.maxHp).toBeGreaterThan(before);
+      expect(game.herbsCarried).toBe(0);
     });
 
-    it('Airmed refuses without the gold and leaves Max HP unchanged', () => {
-      game.gold = 0;
+    it('Airmed with no herbs offers only a dismissable line and leaves Max HP unchanged', () => {
+      game.herbsCarried = 0;
       const before = game.player.maxHp;
       game.vendorOffers.rescueService(rescue('airmed'));
-      cb.ev()!.onChoice(0);
+      const ev = cb.ev()!;
+      expect(ev.event.options).toHaveLength(1);
+      ev.onChoice(0);
       expect(game.player.maxHp).toBe(before);
     });
 

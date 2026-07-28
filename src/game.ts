@@ -205,6 +205,12 @@ export class Game {
   /** Set once the ritual reward has been granted, stopping further brazier riders. */
   public ritualComplete = false;  // public: reset by Waystation.enter
 
+  // Airmed's herb quest (unlocked once Airmed is rescued)
+  /** Herbs of Miach's grave standing on this floor — walk onto one to gather it. Cleared each floor. */
+  public herbTiles: { x: number; y: number }[] = [];
+  /** Herbs gathered and not yet delivered to Airmed. Persists across floors (it's the run inventory). */
+  public herbsCarried = 0;
+
   // Run stats
   public monstersKilled = 0;
   public bossesKilled = 0;
@@ -512,6 +518,11 @@ export class Game {
       && this.blocksSpawnedThisFloor >= Balance.CONFIG.rescues.pieceThreshold;
     let rescueInjected = false;
     let guardsInjected = 0;
+    // A herb of Miach's grave: vanishingly rare (~1/365 per piece), and only
+    // once Airmed has been freed to make use of it. Not during the tutorial.
+    const herbDue = this.rescuedIds.has('airmed') && !this.tutorialSafety
+      && Math.random() < Balance.CONFIG.rescues.herbSpawnChance;
+    let herbInjected = false;
 
     this.blockMatrix = shape.matrix.map(row =>
       row.map((cell): CellValue => {
@@ -547,6 +558,12 @@ export class Game {
         if (brazierDue && !brazierInjected) {
           brazierInjected = true;
           return Cell.BRAZIER;
+        }
+
+        // Herb of Miach's grave — one per due piece, gathered for Airmed
+        if (herbDue && !herbInjected) {
+          herbInjected = true;
+          return Cell.HERB;
         }
 
         // Stairs
@@ -780,6 +797,13 @@ export class Game {
           this.colors[tx]![ty] = '#2a1a10';
           this.brazierTiles.push({ x: tx, y: ty, lit: false });
           this.cb.log('A cold need-fire settles into the stone. Walk to it to light it.', 'log-blockbuilding', 'tile_brazier');
+          lockedFloorCells.push({ x: tx, y: ty });
+        } else if (cell === Cell.HERB) {
+          this.map[tx]![ty] = Tile.FLOOR;
+          this.colors[tx]![ty] = '#1c3a1e';
+          this.herbTiles.push({ x: tx, y: ty });
+          this.cb.log("A herb of Miach's grave has taken root in the fallen stone. Gather it for Airmed.", 'log-perk', 'sprite_salve');
+          this.cb.onToast?.("A rare herb of Miach's grave — gather it and bring it to Airmed.", 'sprite_salve');
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -1187,6 +1211,13 @@ export class Game {
       this.brazierTiles = this.brazierTiles
         .filter(b => b.y !== y)
         .map(b => b.y < y ? { ...b, y: b.y + 1 } : b);
+      // A herb crushed in a cleared row is lost — they're rare, so protect them.
+      if (this.herbTiles.some(h => h.y === y)) {
+        this.cb.log("A herb of Miach's grave is crushed under the settling stone.", 'log-neutral', 'sprite_salve');
+      }
+      this.herbTiles = this.herbTiles
+        .filter(h => h.y !== y)
+        .map(h => h.y < y ? { x: h.x, y: h.y + 1 } : h);
       this.hazards = this.hazards
         .filter(h => h.y !== y)
         .map(h => h.y < y ? { ...h, y: h.y + 1 } : h);
@@ -1380,6 +1411,9 @@ export class Game {
     this.brazierTiles = [];
     this.brazierLitCount = 0;
     this.ritualComplete = false;
+    // Ungathered herbs are left behind on the floor; the ones already carried
+    // (herbsCarried) travel with you down to Airmed.
+    this.herbTiles = [];
     // Ghost haunting roll — a fallen character close to your current level
     // may drift up from a previous run's save.
     this.activeGhost = null;
@@ -1733,6 +1767,19 @@ export class Game {
         return;
       }
       this.cb.log(`Need-fire lit! (${this.brazierLitCount}/${needed})`, 'log-perk', 'tile_brazier');
+      this.advanceTurn();
+      return;
+    }
+
+    // Herb of Miach's grave — walk onto one to gather it for Airmed.
+    const herb = this.herbTiles.find(h => h.x === nx && h.y === ny);
+    if (herb) {
+      this.player.x = nx; this.player.y = ny;
+      this.herbTiles = this.herbTiles.filter(h => h !== herb);
+      this.herbsCarried++;
+      this.cb.onParticleBurst?.(nx, ny, 8, '#7bd86a', 'sprite_salve');
+      this.cb.onAudio?.('npcEncounter');
+      this.cb.log(`You gather a herb of Miach's grave. (${this.herbsCarried} carried — bring them to Airmed.)`, 'log-perk', 'sprite_salve');
       this.advanceTurn();
       return;
     }

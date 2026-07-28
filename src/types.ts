@@ -103,6 +103,7 @@ export const Cell = {
   BRAZIER: 23,
   RESCUE: 24,
   ELITE_GUARD: 25,
+  HERB: 26,
 } as const;
 /** Value type of {@link Cell}. */
 export type CellValue = (typeof Cell)[keyof typeof Cell];

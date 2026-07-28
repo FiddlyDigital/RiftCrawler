@@ -547,9 +547,8 @@
         "rollChance",
         "pieceThreshold",
         "portionAtk",
-        "healerBaseCost",
-        "healerCostPerFloor",
-        "healerHpGain"
+        "herbSpawnChance",
+        "herbHpPct"
       ],
       "properties": {
         "rollChance": {
@@ -563,14 +562,14 @@
         "portionAtk": {
           "type": "number"
         },
-        "healerBaseCost": {
-          "type": "number"
+        "herbSpawnChance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         },
-        "healerCostPerFloor": {
-          "type": "number"
-        },
-        "healerHpGain": {
-          "type": "number"
+        "herbHpPct": {
+          "type": "number",
+          "minimum": 0
         }
       }
     },

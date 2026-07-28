@@ -151,27 +151,40 @@ export class VendorOffers {
         options: [{ label: 'Thank her', desc: '', apply: (): string => 'The flame gutters out. Fedelm is already looking at something else — something further down.' }],
       };
     } else if (rescue.service === 'healer') {
-      const cost = Balance.CONFIG.rescues.healerBaseCost + g.dungeonLevel * Balance.CONFIG.rescues.healerCostPerFloor;
-      const hpGain = Balance.CONFIG.rescues.healerHpGain;
+      const herbs = g.herbsCarried;
+      const pct = Balance.CONFIG.rescues.herbHpPct;
+      const pctLabel = `${Math.round(pct * 100)}%`;
       event = {
         id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
-        flavor: rescue.serviceFlavor,
-        options: [
-          {
-            label: `Buy her herbs (${cost} gold)`,
-            desc: `+${hpGain} Max HP, permanently.`,
-            apply: (game: Game): string => {
-              if (game.gold < cost) return 'Airmed folds the herbs away. "Healing is costly. Dying is costlier — come back with gold."';
-              game.gold -= cost;
-              game.player.maxHp += hpGain;
-              game.player.hp += hpGain;
-              game.storyBeats.push("ate of the herbs of Miach's grave");
-              game.pushUI();
-              return `The herbs are bitter as grief and warm as a hearth. +${hpGain} Max HP, forever.`;
-            },
-          },
-          { label: 'Not today', desc: '', apply: (): string => '"Then don\'t come crying to me with your ribs showing," she says, not unkindly.' },
-        ],
+        flavor: herbs > 0
+          ? `${rescue.serviceFlavor} Her eyes go straight to what you carry. "You found some. Give them here — I'll work them into you, not sell them to you."`
+          : `${rescue.serviceFlavor} "But you come empty-handed. The herbs of my brother's grave grow in the deep, one in three hundred and sixty-five stones. Find them and bring them to me — then we'll make you harder to kill."`,
+        options: herbs > 0
+          ? [
+              {
+                label: `Give her your herbs (${herbs})`,
+                desc: `+${pctLabel} Max HP per herb, permanently.`,
+                apply: (game: Game): string => {
+                  const n = game.herbsCarried;
+                  if (n <= 0) return 'Airmed checks your hands and finds them empty. "Come back when you\'ve found some."';
+                  const before = game.player.maxHp;
+                  for (let i = 0; i < n; i++) {
+                    const inc = Math.max(1, Math.round(game.player.maxHp * pct));
+                    game.player.maxHp += inc;
+                    game.player.hp += inc;
+                  }
+                  const gained = Math.round(game.player.maxHp - before);
+                  game.herbsCarried = 0;
+                  game.storyBeats.push("ate of the herbs of Miach's grave");
+                  game.pushUI();
+                  return `Airmed grinds ${n === 1 ? 'the herb' : `all ${n} herbs`} into a bitter salve and works ${n === 1 ? 'it' : 'them'} into you. +${gained} Max HP, forever.`;
+                },
+              },
+              { label: 'Keep them for now', desc: '', apply: (): string => '"Suit yourself," Airmed says. "They keep. So does the offer."' },
+            ]
+          : [
+              { label: 'You will look for them', desc: '', apply: (): string => '"Good," she says. "Three hundred and sixty-five of them. You only need find a few."' },
+            ],
       };
     } else if (rescue.service === 'harper') {
       const played = g.harperLullFloor === g.dungeonLevel + 1;

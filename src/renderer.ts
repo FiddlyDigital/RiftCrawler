@@ -672,7 +672,8 @@ export class Renderer {
         const altar = this.getAltarAt(game, x, y);
         const npcHere = game.npcTiles.find(n => n.x === x && n.y === y);
         const brazier = game.brazierTiles.find(b => b.x === x && b.y === y);
-        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere && !brazier) continue;
+        const herb = game.herbTiles.find(h => h.x === x && h.y === y);
+        if (type !== Tile.STAIRS && !isMerchant && !altar && !npcHere && !brazier && !herb) continue;
 
         ctx.globalAlpha = visible ? 1.0 : 0.5;
         if (type === Tile.STAIRS) {
@@ -684,6 +685,11 @@ export class Renderer {
           const inset = TS * 0.12;
           if (!brazier.lit) ctx.globalAlpha *= 0.8;
           this.drawSprite('tile_brazier', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
+        } else if (herb) {
+          // A rare herb of Miach's grave — a soft green pulse to draw the eye.
+          if (visible) this.drawPulseGlow(x, y, '123,216,106');
+          const inset = TS * 0.14;
+          this.drawSprite('sprite_salve', x * TS + inset, y * TS + inset, TS - 2 * inset, TS - 2 * inset);
         } else if (isMerchant) {
           if (visible) this.drawLivingSprite('tile_merchant', x, y, '217,164,65', x * 7 + y * 13);
           else this.drawSprite('tile_merchant', x * TS, y * TS, TS, TS);
@@ -1049,6 +1055,7 @@ const CELL_SPRITE: Partial<Record<number, string>> = {
   [Cell.RESCUE]:         'npc_sidhe',
   [Cell.ELITE_GUARD]:    'sprite_skel_01',
   [Cell.BRAZIER]:        'tile_brazier',
+  [Cell.HERB]:           'sprite_salve',
   [Cell.TRAP_SPIKE]:     'trap_spike',
   [Cell.TRAP_SMOKE]:     'trap_smoke',
   [Cell.TRAP_TELEPORT]:  'trap_teleport',
