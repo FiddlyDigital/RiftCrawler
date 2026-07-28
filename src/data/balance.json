@@ -148,6 +148,13 @@
     "pieceThreshold": 20,
     "warningThreshold": 10
   },
+  "floorReadiness": {
+    "baseTarget": 12,
+    "perLevel": 3,
+    "lingerMult": 2,
+    "seanchaiEarlyRatio": 0.7,
+    "seanchaiLateRatio": 1.6
+  },
   "omens": {
     "rollChance": 0.6
   },

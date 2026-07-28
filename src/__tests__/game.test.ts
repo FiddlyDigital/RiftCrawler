@@ -1571,6 +1571,91 @@ describe('Biome-signature terrain (per-biome density)', () => {
   });
 });
 
+describe('Floor readiness (soft "how much Tetris?" guidance)', () => {
+  type Priv = { blocksSpawnedThisFloor: number; spawnBlock(): void };
+  const priv = (g: Game): Priv => g as unknown as Priv;
+
+  it('the readiness target scales with depth: base at floor 1, +perLevel per floor', () => {
+    const c = Balance.CONFIG.floorReadiness;
+    const game = new Game(makeCallbacks());
+    game.dungeonLevel = 1;
+    expect(game.floorReadinessTarget()).toBe(c.baseTarget);
+    game.dungeonLevel = 4;
+    expect(game.floorReadinessTarget()).toBe(c.baseTarget + 3 * c.perLevel);
+    // The lingering ceiling is target * lingerMult.
+    expect(game.floorLingerCeiling()).toBe(Math.ceil((c.baseTarget + 3 * c.perLevel) * c.lingerMult));
+  });
+
+  it('the dial reports building → ripe → lingering as blocks accumulate', () => {
+    const game = new Game(makeCallbacks());
+    game.dungeonLevel = 2;
+    const target = game.floorReadinessTarget();
+    const ceiling = game.floorLingerCeiling();
+    priv(game).blocksSpawnedThisFloor = target - 1;
+    expect(game.floorProgressState().readiness?.state).toBe('building');
+    priv(game).blocksSpawnedThisFloor = target;
+    expect(game.floorProgressState().readiness?.state).toBe('ripe');
+    priv(game).blocksSpawnedThisFloor = ceiling;
+    expect(game.floorProgressState().readiness?.state).toBe('lingering');
+  });
+
+  it('readiness is suppressed on boss floors, in the mound, and during the tutorial', () => {
+    const game = new Game(makeCallbacks());
+    game.dungeonLevel = Balance.CONFIG.floors.bossFloorInterval; // a boss floor
+    expect(game.floorProgressState().readiness).toBeNull();
+    game.dungeonLevel = 2;
+    game.inWaystation = true;
+    expect(game.floorProgressState().readiness).toBeNull();
+    game.inWaystation = false;
+    game.tutorialSafety = true;
+    expect(game.floorProgressState().readiness).toBeNull();
+  });
+
+  it('crossing the target toasts "ripe" exactly once', () => {
+    const cb = makeCallbacks();
+    const game = new Game(cb);
+    game.dungeonLevel = 2;
+    const target = game.floorReadinessTarget();
+    priv(game).blocksSpawnedThisFloor = target - 1; // next spawn crosses it
+    (cb.onToast as ReturnType<typeof vi.fn>).mockClear();
+    priv(game).spawnBlock();
+    expect(cb.onToast).toHaveBeenCalledWith(expect.stringContaining('ripe'), expect.any(String));
+    (cb.onToast as ReturnType<typeof vi.fn>).mockClear();
+    priv(game).spawnBlock(); // still past target, but already announced
+    expect(cb.onToast).not.toHaveBeenCalledWith(expect.stringContaining('ripe'), expect.any(String));
+  });
+
+  it('recordFloorPacing banks pieces/target on normal floors and skips boss floors', () => {
+    const game = new Game(makeCallbacks());
+    game.dungeonLevel = 2;
+    priv(game).blocksSpawnedThisFloor = game.floorReadinessTarget(); // ratio exactly 1
+    game.recordFloorPacing();
+    expect(game.pacingSamples).toBe(1);
+    expect(game.pacingRatioSum).toBeCloseTo(1, 5);
+    // A boss floor contributes nothing (judged by the fight, not readiness).
+    game.dungeonLevel = Balance.CONFIG.floors.bossFloorInterval;
+    priv(game).blocksSpawnedThisFloor = 99;
+    game.recordFloorPacing();
+    expect(game.pacingSamples).toBe(1);
+  });
+
+  it('the seanchai withholds a verdict until two floors, then reads the average pacing', () => {
+    const c = Balance.CONFIG.floorReadiness;
+    const game = new Game(makeCallbacks());
+    expect(game.pacingAdvice()).toBe(''); // no samples yet
+    // Two hasty descents (well under the early ratio) → "too soon".
+    game.pacingSamples = 2;
+    game.pacingRatioSum = (c.seanchaiEarlyRatio - 0.2) * 2;
+    expect(game.pacingAdvice()).toContain('too soon');
+    // Two long stays (over the late ratio) → "linger".
+    game.pacingRatioSum = (c.seanchaiLateRatio + 0.3) * 2;
+    expect(game.pacingAdvice().toLowerCase()).toContain('linger');
+    // In-band → the approving line.
+    game.pacingRatioSum = 1 * 2;
+    expect(game.pacingAdvice()).toContain('judge');
+  });
+});
+
 describe('Floor omens (per-floor modifiers)', () => {
   const asOmen = (g: Game): { maybeRollOmen(isBossFloor: boolean): void } =>
     g as unknown as { maybeRollOmen(isBossFloor: boolean): void };

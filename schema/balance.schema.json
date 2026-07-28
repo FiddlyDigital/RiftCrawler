@@ -21,6 +21,7 @@
     "ghosts",
     "narrative",
     "smiths",
+    "floorReadiness",
     "omens",
     "spearOfLugh",
     "difficulty",
@@ -480,6 +481,24 @@
         "warningThreshold": {
           "type": "number"
         }
+      }
+    },
+    "floorReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseTarget",
+        "perLevel",
+        "lingerMult",
+        "seanchaiEarlyRatio",
+        "seanchaiLateRatio"
+      ],
+      "properties": {
+        "baseTarget": { "type": "number", "minimum": 1 },
+        "perLevel": { "type": "number", "minimum": 0 },
+        "lingerMult": { "type": "number", "minimum": 1 },
+        "seanchaiEarlyRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "seanchaiLateRatio": { "type": "number", "minimum": 1 }
       }
     },
     "omens": {

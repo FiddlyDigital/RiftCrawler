@@ -492,6 +492,8 @@ export interface UIState {
     bossFillTarget: number | null;
     /** Pieces placed since the last stairs cell and the count that force-injects the next one — null while a stairs tile is already somewhere on the board (the countdown would be misleading). */
     stairsPity: { placed: number; target: number } | null;
+    /** Soft "how much Tetris?" guidance: pieces vs the floor's readiness target, and which band the floor is in (keep building / ripe to leave / lingering). Null on boss floors, in the mound, and mid-duel, where readiness doesn't apply. */
+    readiness: { pieces: number; target: number; state: 'building' | 'ripe' | 'lingering' } | null;
   };
 }
 

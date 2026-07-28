@@ -229,6 +229,17 @@ export class Game {
   private blocksSpawnedThisFloor = 0;
   /** Whether the "anvils are getting stronger" mid-floor warning has already fired this floor. */
   private smithWarningShown = false;
+
+  // Floor-readiness guidance (see Balance.CONFIG.floorReadiness). Advisory only —
+  // descent is never gated; these just tell the player when a floor is worth leaving.
+  /** Whether the one-time "this floor is ripe" toast has fired this floor. */
+  private floorRipeAnnounced = false;
+  /** Whether the one-time "you're lingering" toast has fired this floor. */
+  private floorLingerAnnounced = false;
+  /** Running sum of (pieces built / readiness target) over the non-boss floors left so far — the seanchaí reads the average to judge pacing. */
+  public pacingRatioSum = 0;
+  /** How many non-boss floors have contributed to {@link pacingRatioSum}. */
+  public pacingSamples = 0;
   /** Same rider-preview pattern as {@link pendingNpcId}, for the falling piece's `Cell.SMITH` cell. */
   public pendingSmithId: string | null = null;
   /** How many of the three legendary smiths have been met this run (capped at 3, once the spear is forged). */
@@ -483,6 +494,22 @@ export class Game {
     if (this.pendingSmithFloor && !this.smithWarningShown && this.blocksSpawnedThisFloor >= Balance.CONFIG.smiths.warningThreshold) {
       this.smithWarningShown = true;
       this.cb.onToast?.('The sound of anvils is getting stronger!', 'fx_impact');
+    }
+
+    // Floor readiness: a one-time "ripe" cue when the floor is well-built (the
+    // answer to "how much Tetris?"), then a one-time "lingering" cue past the
+    // point of good returns. Only on normal building floors — boss floors are
+    // judged by the fill dial, and the mound/duel have no Tetris to pace.
+    if (this.readinessApplies()) {
+      if (!this.floorRipeAnnounced && this.blocksSpawnedThisFloor >= this.floorReadinessTarget()) {
+        this.floorRipeAnnounced = true;
+        this.cb.log('The floor is well-built now — room made, ground laid, spoils gathered. Descend whenever you like.', 'log-success', 'tile_stairs_up');
+        this.cb.onToast?.('This floor is ripe — descend when you are ready.', 'tile_stairs_up');
+      } else if (this.floorRipeAnnounced && !this.floorLingerAnnounced && this.blocksSpawnedThisFloor >= this.floorLingerCeiling()) {
+        this.floorLingerAnnounced = true;
+        this.cb.log('You have wrung this floor near dry; the rift grows restless around you.', 'log-neutral', 'ui_warning');
+        this.cb.onToast?.('The rift grows restless — press on soon.', 'ui_warning');
+      }
     }
 
     let stairsInjected = false;
@@ -1339,6 +1366,7 @@ export class Game {
 
   /** Advances the dungeon level counter and rebuilds the floor (used when the stack's top row itself scrolls off the bottom). */
   private transitionToNextFloor(): void {
+    this.recordFloorPacing();  // a stack-collapse counts as staying to the very limit
     this.dungeonLevel++;
     this.floorsDescended++;
     const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
@@ -1390,6 +1418,8 @@ export class Game {
     this.npcTilesSpawnedThisFloor = 0;
     this.blocksSpawnedThisFloor = 0;
     this.smithWarningShown = false;
+    this.floorRipeAnnounced = false;
+    this.floorLingerAnnounced = false;
     // A rescue that never landed (or was never freed) lapses with the floor —
     // the captive may ride again later; their captors stayed behind either way.
     this.pendingRescueId = null;
@@ -1856,7 +1886,10 @@ export class Game {
       if (this.inCausewayDuel) { this.inCausewayDuel = false; this.openStairsChoice(); }
       // The mound's own exit stairs go straight down — you already rested.
       else if (this.inWaystation) this.descendFloor();
-      else this.openStairsChoice();
+      // A normal floor's stairs: bank how long this floor was worked (the
+      // player is leaving its Tetris now, whether they rest or delve) before
+      // the delve-or-rest choice.
+      else { this.recordFloorPacing(); this.openStairsChoice(); }
     } else {
       this.advanceTurn();
     }
@@ -2182,6 +2215,52 @@ export class Game {
       stairsPity: this.stairsOnBoard()
         ? null
         : { placed: this.blocksPlacedSinceStairs, target: Balance.CONFIG.spawnRates.stairsForcedAfterBlocks },
+      readiness: this.readinessApplies()
+        ? {
+            pieces: this.blocksSpawnedThisFloor,
+            target: this.floorReadinessTarget(),
+            state: this.blocksSpawnedThisFloor >= this.floorLingerCeiling()
+              ? 'lingering'
+              : this.blocksSpawnedThisFloor >= this.floorReadinessTarget()
+              ? 'ripe'
+              : 'building',
+          }
+        : null,
     };
+  }
+
+  /** Whether floor-readiness guidance is meaningful right now: a normal building floor, not a boss floor, the mound, a duel, the endgame, or the tutorial. */
+  private readinessApplies(): boolean {
+    return !this.tutorialSafety && !this.inWaystation && !this.gorgothSummoned && !this.inCausewayDuel
+      && this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval !== 0;
+  }
+
+  /** Pieces that ripen the current floor: `baseTarget + (level-1)*perLevel`, so later floors ask for more Tetris (all knobs in `balance.json`'s `floorReadiness`). */
+  public floorReadinessTarget(level = this.dungeonLevel): number {
+    const c = Balance.CONFIG.floorReadiness;
+    return Math.max(1, Math.round(c.baseTarget + Math.max(0, level - 1) * c.perLevel));
+  }
+
+  /** Piece count past which staying reads as over-mining: `target * lingerMult`. */
+  public floorLingerCeiling(level = this.dungeonLevel): number {
+    return Math.ceil(this.floorReadinessTarget(level) * Balance.CONFIG.floorReadiness.lingerMult);
+  }
+
+  /** Banks one pieces/target pacing sample for the floor being left (non-boss floors only), for the seanchaí's read on the run. */
+  public recordFloorPacing(): void {
+    if (this.tutorialSafety) return;
+    if (this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0) return;
+    this.pacingRatioSum += this.blocksSpawnedThisFloor / this.floorReadinessTarget();
+    this.pacingSamples++;
+  }
+
+  /** The seanchaí's verdict on the run's average descent pacing, or `''` before there's enough to judge. */
+  public pacingAdvice(): string {
+    if (this.pacingSamples < 2) return '';
+    const avg = this.pacingRatioSum / this.pacingSamples;
+    const c = Balance.CONFIG.floorReadiness;
+    if (avg < c.seanchaiEarlyRatio) return 'You go down too soon, I think — half a floor mined and already hunting the stair. There is more up here for the patient.';
+    if (avg > c.seanchaiLateRatio) return 'You linger long in every hall, wringing each for its last stone. Brave — but the deep rewards the bold who move, not only the thorough.';
+    return 'You judge your descents well — you take what a floor owes you, and no more. That is a rare sense down here.';
   }
 }

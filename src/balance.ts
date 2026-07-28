@@ -79,6 +79,8 @@ export interface BalanceConfig {
   ghosts: { encounterChance: number; levelTolerance: number; maxStored: number };
   narrative: { closeCallHpFraction: number };
   smiths: { floorInterval: number; pieceThreshold: number; warningThreshold: number };
+  /** Soft per-floor "how much Tetris?" guidance. `baseTarget + (level-1)*perLevel` pieces ripens a floor; `target*lingerMult` marks over-staying. The seanchai judges the run's average pieces/target ratio against the two ratio bounds. */
+  floorReadiness: { baseTarget: number; perLevel: number; lingerMult: number; seanchaiEarlyRatio: number; seanchaiLateRatio: number };
   omens: { rollChance: number };
   well: { baseCost: number; costPerFloor: number; baseXp: number; xpPerFloor: number };
   waystation: { tattooistChance: number; stashRecoveryPct: number };
