@@ -2268,15 +2268,15 @@ describe('New omens (lore expansion) and rescue services', () => {
     expect(game.harperLullFloor).toBe(0);
   });
 
-  it("Airmed's herbs trade gold for permanent Max HP", () => {
+  it('delivering gathered herbs to Airmed grants ~20% Max HP each and empties the satchel', () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
     game.rescuedIds.add('airmed');
+    game.herbsCarried = 2;
     (game as unknown as { enterWaystation(): void }).enterWaystation();
     const resident = game.npcTiles.find(n => n.npcId === '__rescue_airmed__')!;
-    const cost = Balance.CONFIG.rescues.healerBaseCost + game.dungeonLevel * Balance.CONFIG.rescues.healerCostPerFloor;
-    game.gold = cost;
+    const pct = Balance.CONFIG.rescues.herbHpPct;
     const maxBefore = game.player.maxHp;
     game.player.x = resident.x; game.player.y = resident.y + 1;
     game.map[resident.x]![resident.y + 1] = Tile.FLOOR;
@@ -2285,8 +2285,58 @@ describe('New omens (lore expansion) and rescue services', () => {
     game.handleHeroMove(0, -1);
     const [, onChoice] = onFloorEvent.mock.calls[0]!;
     onChoice(0);
-    expect(game.gold).toBe(0);
-    expect(game.player.maxHp).toBe(maxBefore + Balance.CONFIG.rescues.healerHpGain);
+    // Two herbs compound: maxHp * (1+pct)^2 (rounded per step).
+    const step1 = maxBefore + Math.max(1, Math.round(maxBefore * pct));
+    const expected = step1 + Math.max(1, Math.round(step1 * pct));
+    expect(game.player.maxHp).toBe(expected);
+    expect(game.herbsCarried).toBe(0);
+  });
+
+  it('a herb-bearing piece only spawns once Airmed is freed', () => {
+    const sawHerb = (rescued: boolean): boolean => {
+      const game = new Game(makeCallbacks());
+      game.dungeonLevel = 4;
+      if (rescued) game.rescuedIds.add('airmed');
+      let seen = false;
+      for (let i = 0; i < 10 && !seen; i++) {
+        (game as unknown as { spawnBlock(): void }).spawnBlock();
+        if (game.blockMatrix.flat().includes(Cell.HERB)) seen = true;
+      }
+      return seen;
+    };
+    const original = Balance.CONFIG.rescues.herbSpawnChance;
+    Balance.CONFIG.rescues.herbSpawnChance = 1; // certain roll isolates the gate
+    try {
+      expect(sawHerb(false)).toBe(false); // not rescued → never a herb
+      expect(sawHerb(true)).toBe(true);   // rescued → herb rides the next piece
+    } finally {
+      Balance.CONFIG.rescues.herbSpawnChance = original;
+    }
+  });
+
+  it('locking a herb cell plants a herb tile; walking onto it gathers it', () => {
+    const game = new Game(makeCallbacks());
+    const g = game as unknown as { blockMatrix: number[][]; blockX: number; blockY: number; currentType: string; currentBlessed: boolean; currentCursed: boolean; lockBlock(): void };
+    g.blockMatrix = [[Cell.HERB]] as number[][];
+    g.blockX = 4; g.blockY = 20; g.currentType = 'O';
+    g.currentBlessed = false; g.currentCursed = false;
+    g.lockBlock();
+    expect(game.herbTiles.some(h => h.x === 4 && h.y === 20)).toBe(true);
+    // Stand next to it and step on.
+    game.player.x = 3; game.player.y = 20;
+    game.map[3]![20] = Tile.FLOOR;
+    game.handleHeroMove(1, 0);
+    expect(game.herbsCarried).toBe(1);
+    expect(game.herbTiles).toHaveLength(0);
+  });
+
+  it('carried herbs survive a floor change; ungathered floor herbs do not', () => {
+    const game = new Game(makeCallbacks());
+    game.herbsCarried = 3;
+    game.herbTiles = [{ x: 1, y: 1 }];
+    (game as unknown as { resetDungeonState(): void }).resetDungeonState();
+    expect(game.herbsCarried).toBe(3);
+    expect(game.herbTiles).toHaveLength(0);
   });
 
   it('all five rescued residents fit inside the mound chamber', () => {
