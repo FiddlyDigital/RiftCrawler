@@ -9,7 +9,7 @@
  *
  * If this script starts failing, the simulation has grown a browser dependency.
  *
- *   npm run headless            # 400 turns, quiet
+ *   npm run headless            # 1500 turns, quiet
  *   npm run headless -- 2000 -v # more turns, print the log
  */
 
