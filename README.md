@@ -208,6 +208,28 @@ public/
   sprites/         The 32rogues tile/monster/item/rogues spritesheets
 ```
 
+### The simulation / host boundary
+
+The game splits cleanly in two, and **the split is enforced, not just intended** — so the renderer can be swapped or the mechanics reused in another shell (a server, a native app, a different render stack).
+
+| Layer | Files | Rule |
+|---|---|---|
+| **Simulation** | `game.ts`, `entities.ts`, `systems/**`, `views/**`, `dataLoader.ts`, `content.ts`, `balance.ts`, `stash.ts`, the composed subsystems | No DOM, no canvas, no `localStorage`, no ambient globals. Runs in plain Node. |
+| **Host** | `main.ts`, `renderer.ts`, `ui.ts`, `input.ts`, `audio.ts`, `sprites.ts`, `particles.ts`, `tutorial.ts`, `haptics.ts`, `keybinds.ts`, `components/**`, `storage.ts` | Owns every browser API. |
+
+The simulation talks to the host through three narrow seams, and nothing else:
+
+- **`GameCallbacks`** — events out (log lines, particles, toasts, modal requests). Plain function props; no DOM types.
+- **`UIState`** — the per-turn view model pushed to the HUD. Plain data.
+- **Injected ports** — `StashPort` (cross-run gold) and an optional `now()` clock, both passed via `new Game(cb, { stash, now })`. Defaults (`MemoryStash`, a guarded `performance.now()`) mean the sim runs with **zero host wiring**.
+
+Sprite keys (`'sprite_salve'`) are opaque strings the host resolves — the sim never emits markup. Where an inspect line needs an inline icon it emits a `[[icon:<key>]]` token the host expands.
+
+**Two guards keep it that way:**
+
+1. **`no-restricted-imports`** in `.oxlintrc.json` — default-deny across all of `src`, switched off only for the host-layer files. Any new simulation file is protected automatically, and a stray `import` from the host layer fails `npm run lint`.
+2. **`npm run headless`** (`scripts/headless.mjs`) — boots a real `Game` in Node with `document`/`window`/`localStorage`/`navigator` booby-trapped to throw, plays 1500 turns of weighted random input, then round-trips `serialize()` → `applySave()`. Part of `npm run verify`, so CI catches a browser dependency the moment one appears.
+
 ---
 
 ## Data files

@@ -23,6 +23,42 @@
           "__APP_VERSION__"
         ]
       }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": [
+              "./renderer",
+              "../renderer",
+              "./ui",
+              "../ui",
+              "./main",
+              "../main",
+              "./input",
+              "../input",
+              "./audio",
+              "../audio",
+              "./sprites",
+              "../sprites",
+              "./particles",
+              "../particles",
+              "./tutorial",
+              "../tutorial",
+              "./haptics",
+              "../haptics",
+              "./keybinds",
+              "../keybinds",
+              "./components",
+              "../components",
+              "./components/*",
+              "../components/*"
+            ],
+            "message": "Simulation code must not import the host/DOM layer. Reach the host through GameCallbacks, UIState, or an injected port (see StashPort). If this file IS host layer, add it to the \"host layer\" override in .oxlintrc.json."
+          }
+        ]
+      }
     ]
   },
   "overrides": [
@@ -49,6 +85,25 @@
       "rules": {
         "no-underscore-dangle": "off",
         "no-await-in-loop": "off"
+      }
+    },
+    {
+      "files": [
+        "src/renderer.ts",
+        "src/ui.ts",
+        "src/main.ts",
+        "src/input.ts",
+        "src/audio.ts",
+        "src/sprites.ts",
+        "src/particles.ts",
+        "src/tutorial.ts",
+        "src/haptics.ts",
+        "src/keybinds.ts",
+        "src/components/**",
+        "src/__tests__/**"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
       }
     }
   ],

@@ -1,7 +1,6 @@
 import { Tile, type InspectInfo } from '../types';
 import { GameConfig } from '../config';
 import { CombatSystem } from '../systems/combat';
-import { SpriteService } from '../sprites';
 import type { Game } from '../game';
 
 /**
@@ -28,7 +27,7 @@ export class InspectView {
         `ATK ${Math.round(g.player.totalAtk)}  DEF ${g.player.totalDef}`,
         `Lv.${g.player.playerLevel}`,
       ];
-      if (g.player.boons.length > 0) lines.push(`Geasa: ${g.player.boons.map(b => `${SpriteService.iconHTML(b.def.char, 12)}×${b.stacks}`).join(' ')}`);
+      if (g.player.boons.length > 0) lines.push(`Geasa: ${g.player.boons.map(b => `[[icon:${b.def.char}]]×${b.stacks}`).join(' ')}`);
       return { icon: g.player.char, title: 'You', lines };
     }
 

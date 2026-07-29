@@ -358,8 +358,14 @@ export interface ModifierDef {
 
 /** Rendered content for the board-inspect tooltip. */
 export interface InspectInfo {
+  /** Sprite-map key; the host renders it. */
   icon: string;
   title: string;
+  /**
+   * Detail lines. May embed `[[icon:<spriteKey>]]` tokens, which the host
+   * expands into sprite markup — the sim emits keys, never HTML, so view-model
+   * builders stay independent of any renderer.
+   */
   lines: string[];
 }
 
@@ -590,6 +596,24 @@ export interface CodexState {
   npcs: string[];
   biomes: string[];
   patrons: string[];
+}
+
+/**
+ * The cross-run gold stash — the simulation's entire persistence surface.
+ * Supplied by the host so `Game` never reaches for `localStorage` (or any
+ * other browser API) directly: a Node, server, or native host implements this
+ * over a file, a database, or nothing at all.
+ *
+ * Deliberately a dumb store. How much of the stash a new character inherits is
+ * game balance and stays in `Game`.
+ */
+export interface StashPort {
+  /** Gold currently banked across runs. */
+  load(): number;
+  /** Adds gold to the stash; returns the new total. */
+  add(amount: number): number;
+  /** Empties the stash. */
+  clear(): void;
 }
 
 /** The full set of host-provided hooks a `Game` instance uses to reach the UI/renderer/audio layers. */

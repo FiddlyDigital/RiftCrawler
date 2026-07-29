@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState, type StashPort } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef } from './content';
 import { Fidchell } from './fidchell';
@@ -24,7 +24,7 @@ import { CombatSystem } from './systems/combat';
 import { MonsterAiSystem } from './systems/monsterAI';
 import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
-import { StorageService } from './storage';
+import { MemoryStash } from './stash';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -309,6 +309,18 @@ export class Game {
   public gorgothHalfTriggered = false;
 
   public readonly cb: GameCallbacks;
+  /** Cross-run gold coffer, host-supplied (see {@link StashPort}) so the sim owns no storage API. Defaults to an in-memory stash. */
+  public readonly stash: StashPort;  // public: read/written by Waystation (the Sídhe coffer)
+  /**
+   * Monotonic millisecond clock, host-supplied so the sim depends on no
+   * ambient global. Only the line-clear combo window reads it. Injecting a
+   * fake makes combo timing deterministic in tests.
+   */
+  private readonly now: () => number;
+  /** Fallback clock: `performance.now()` where available (browsers, Node 16+), else wall time. */
+  private static defaultNow(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
 
   /**
    * Starts a fresh run: builds an empty floor, places the hero on the
@@ -319,11 +331,13 @@ export class Game {
    * leaving a blank shell for {@link applySave} to fill in.
    * @throws {TypeError} If `callbacks` is null/undefined.
    */
-  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean }) {
+  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean; stash?: StashPort; now?: () => number }) {
     if (callbacks === null || callbacks === undefined) {
       throw new TypeError('Game: "callbacks" must not be null/undefined');
     }
     this.cb = callbacks;
+    this.stash = opts?.stash ?? new MemoryStash();
+    this.now = opts?.now ?? Game.defaultNow;
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
     this.visibility = this.emptyBoolGrid(false);
@@ -346,11 +360,16 @@ export class Game {
     this.cb.onToast?.(`Entering ${startBiome.name}...`, startIcon);
     this.cb.onCodexDiscover?.('biome', this.biomeId);
     // The Sídhe keep what past characters left with them — minus their tithe.
-    const inherited = StorageService.claimStash();
-    if (inherited > 0) {
-      this.gold += inherited;
-      this.cb.log(`The Sídhe kept faith: ${inherited} gold, left for you by one who came before.`, 'log-perk', 'item_gold_pouch');
-      this.storyBeats.push('inherited gold the Sídhe kept');
+    // The tithe is balance, so it lives here; the port is a dumb store.
+    const banked = this.stash.load();
+    if (banked > 0) {
+      this.stash.clear();
+      const inherited = Math.floor(banked * Balance.CONFIG.waystation.stashRecoveryPct);
+      if (inherited > 0) {
+        this.gold += inherited;
+        this.cb.log(`The Sídhe kept faith: ${inherited} gold, left for you by one who came before.`, 'log-perk', 'item_gold_pouch');
+        this.storyBeats.push('inherited gold the Sídhe kept');
+      }
     }
   }
 
@@ -1258,7 +1277,7 @@ export class Game {
       this.linesCleared += rowsCleared;
       this.cb.onRowClear?.(clearedRows);
       this.cb.onAudio?.('lineClear', rowsCleared);
-      const now = performance.now();
+      const now = this.now();
       const isCombo = now - this.lastLineClearMs < 2000;
       this.comboCount = isCombo ? this.comboCount + 1 : 0;
       this.lastLineClearMs = now;

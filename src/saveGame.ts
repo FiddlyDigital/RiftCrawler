@@ -28,7 +28,9 @@ export class SaveGame {
    * plain fields are persisted without touching the save code.
    */
   private static readonly SAVE_SKIP = new Set([
-    'cb', 'player', 'monsters', 'rescueGuards',
+    // `stash` and `now` are host-supplied ports — persisting them would
+    // replace the live implementations with plain data on restore.
+    'cb', 'stash', 'now', 'player', 'monsters', 'rescueGuards',
     'activeOmen', 'pendingFloorEvent',
     'activeBossOnHalfHp', 'activeBossOnDeath',
     'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
