@@ -311,6 +311,16 @@ export class Game {
   public readonly cb: GameCallbacks;
   /** Cross-run gold coffer, host-supplied (see {@link StashPort}) so the sim owns no storage API. Defaults to an in-memory stash. */
   public readonly stash: StashPort;  // public: read/written by Waystation (the Sídhe coffer)
+  /**
+   * Monotonic millisecond clock, host-supplied so the sim depends on no
+   * ambient global. Only the line-clear combo window reads it. Injecting a
+   * fake makes combo timing deterministic in tests.
+   */
+  private readonly now: () => number;
+  /** Fallback clock: `performance.now()` where available (browsers, Node 16+), else wall time. */
+  private static defaultNow(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
 
   /**
    * Starts a fresh run: builds an empty floor, places the hero on the
@@ -321,12 +331,13 @@ export class Game {
    * leaving a blank shell for {@link applySave} to fill in.
    * @throws {TypeError} If `callbacks` is null/undefined.
    */
-  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean; stash?: StashPort }) {
+  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean; stash?: StashPort; now?: () => number }) {
     if (callbacks === null || callbacks === undefined) {
       throw new TypeError('Game: "callbacks" must not be null/undefined');
     }
     this.cb = callbacks;
     this.stash = opts?.stash ?? new MemoryStash();
+    this.now = opts?.now ?? Game.defaultNow;
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
     this.visibility = this.emptyBoolGrid(false);
@@ -1266,7 +1277,7 @@ export class Game {
       this.linesCleared += rowsCleared;
       this.cb.onRowClear?.(clearedRows);
       this.cb.onAudio?.('lineClear', rowsCleared);
-      const now = performance.now();
+      const now = this.now();
       const isCombo = now - this.lastLineClearMs < 2000;
       this.comboCount = isCombo ? this.comboCount + 1 : 0;
       this.lastLineClearMs = now;

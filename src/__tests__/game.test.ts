@@ -2163,6 +2163,27 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(new Game(makeCallbacks(), { stash }).gold).toBe(0);
   });
 
+  it('the injected clock drives the line-clear combo window', () => {
+    // A fake clock makes combo timing deterministic — no wall-clock racing.
+    // Starts well past 0 so the first clear isn't inside the window that
+    // `lastLineClearMs = 0` implies.
+    let clock = 10_000;
+    const game = new Game(makeCallbacks(), { now: () => clock });
+    const clearOneRow = (): void => {
+      const y = 23;
+      for (let x = 0; x < 10; x++) { game.map[x]![y] = Tile.FLOOR; game.colors[x]![y] = '#fff'; }
+      (game as unknown as { checkLineClears(): void }).checkLineClears();
+    };
+    clearOneRow();
+    expect(game.comboCount).toBe(0);   // first clear starts the chain
+    clock += 500;                      // well inside the 2s window
+    clearOneRow();
+    expect(game.comboCount).toBe(1);
+    clock += 5000;                     // window lapsed
+    clearOneRow();
+    expect(game.comboCount).toBe(0);
+  });
+
   it('a Game with no stash supplied gets its own empty in-memory coffer', () => {
     // The default keeps the sim usable with zero host wiring (headless, tests).
     const game = new Game(makeCallbacks());
