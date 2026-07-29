@@ -80,14 +80,15 @@
     "returnLine": "Still the same shape as last time, I see. A pity. You'd make a passable eagle."
   },
   {
-    "id": "scathach",
-    "char": "npc_scathach",
-    "name": "Scáthach of the Shadows",
+    "id": "ogma",
+    "char": "npc_ogma",
+    "name": "Ogma Grianainech",
     "kind": "flavor",
     "lines": [
-      "I trained the Hound of Ulster himself on the Isle of Shadows, and even he needed the salmon-leap shown twice. Keep your feet under you when the stone falls — that is the whole of war, in the end.",
+      "I cut the first ogham into birch and stood it up as a warning, and men have been reading warnings ever since. Keep your feet under you when the stone falls — that is the whole of war, in the end.",
       "You grip your weapon like a farmer. Loosen the wrist. There — now you might live past the next floor.",
-      "I gave Cú Chulainn the Gáe Bolg and half a mind to keep it. Bres's deep is full of old students of mine, wanderer. Most of them are bones. Do better."
+      "At Mag Tuired I took Orna from Tethra's own hand, and when I unsheathed it the blade recited every deed it had done. A boastful thing. But it had earned the boasting.",
+      "They call me sun-faced. It is the strain of hauling the Fomorian dead off the field, if you want the truth of it. Bres's deep is filling with fresh ones. Do better than they did."
     ],
     "returnLine": "Back again, and still breathing. My teaching sticks to you better than it did to most."
   },

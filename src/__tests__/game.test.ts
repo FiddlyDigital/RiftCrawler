@@ -2252,31 +2252,31 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
     expect(game.npcTiles.some(n => n.npcId === '__rescue_goban__')).toBe(true);
   });
 
-  it("Bricriu's Champion's Portion grants ATK until the next descent, one helping per floor", () => {
+  it("Nuada's draught grants ATK until the next descent, one cup per floor", () => {
     const onFloorEvent = vi.fn();
     const cb = { ...makeCallbacks(), onFloorEvent };
     const game = new Game(cb);
-    game.rescuedIds.add('bricriu');
+    game.rescuedIds.add('nuada');
     (game as unknown as { enterWaystation(): void }).enterWaystation();
-    const resident = game.npcTiles.find(n => n.npcId === '__rescue_bricriu__')!;
+    const resident = game.npcTiles.find(n => n.npcId === '__rescue_nuada__')!;
     const atkBefore = game.player.atk;
     const bump = (): void => {
       game.player.x = resident.x - 1; game.player.y = resident.y;
       game.map[resident.x - 1]![resident.y] = Tile.FLOOR;
-      game.npcTiles = game.npcTiles.filter(n => n.npcId === '__rescue_bricriu__');
+      game.npcTiles = game.npcTiles.filter(n => n.npcId === '__rescue_nuada__');
       onFloorEvent.mockClear();
       game.paused = false;
       game.handleHeroMove(1, 0);
     };
     bump();
     let [event, onChoice] = onFloorEvent.mock.calls[0]!;
-    expect(event.options[0].label).toContain('Portion');
+    expect(event.options[0].label).toContain('draught');
     onChoice(0);
     expect(game.player.atk).toBe(atkBefore + Balance.CONFIG.rescues.portionAtk);
-    // Second helping refused this floor.
+    // Second cup refused this floor.
     bump();
     [event, onChoice] = onFloorEvent.mock.calls[0]!;
-    expect(event.options.some((o: { label: string }) => o.label.includes('Portion'))).toBe(false);
+    expect(event.options.some((o: { label: string }) => o.label.includes('draught'))).toBe(false);
     onChoice(0);
     expect(game.player.atk).toBe(atkBefore + Balance.CONFIG.rescues.portionAtk);
     // The portion ends at the descent.

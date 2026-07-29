@@ -7,8 +7,8 @@ import type { Game } from './game';
 /**
  * The run's in-world vendors and reward stalls: the altar (boon pick), the
  * tattoo artist (Ogham brands), the Fear Dearg's shop (gold sink), and the
- * rescued-NPC services (the Gobán Saor's shaped stone, Fedelm's boss omen,
- * Airmed's herbs, Abcán's lullaby, Bricriu's Champion's Portion). Each builds a
+ * rescued-NPC services (the Gobán Saor's shaped stone, Bé Chuille's boss omen,
+ * Airmed's herbs, Abcán's lullaby, Nuada's draught). Each builds a
  * modal payload and hands it to the host via `cb`. Composed onto {@link Game};
  * holds no state of its own — gold, boons, brands and the run flags it touches
  * all live on Game.
@@ -148,7 +148,7 @@ export class VendorOffers {
       event = {
         id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
         flavor: `${rescue.serviceFlavor} "I see crimson at floor ${nextBossFloor} — ${boss.name} waits there, and knows you are coming.${smithLine}"`,
-        options: [{ label: 'Thank her', desc: '', apply: (): string => 'The flame gutters out. Fedelm is already looking at something else — something further down.' }],
+        options: [{ label: 'Thank her', desc: '', apply: (): string => 'The pebble drops into her palm and lies still. Bé Chuille is already listening to something else — something further down.' }],
       };
     } else if (rescue.service === 'healer') {
       const herbs = g.herbsCarried;
@@ -214,22 +214,22 @@ export class VendorOffers {
       event = {
         id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
         flavor: fed
-          ? 'Bricriu spreads his hands over an empty table. "The Champion\'s Portion is one portion. That is the entire point of it, hero."'
+          ? 'Nuada turns the empty cup over with his silver hand. "Goibniu\'s ale answers once between descents. Drink it twice and it is only ale."'
           : rescue.serviceFlavor,
         options: fed
-          ? [{ label: 'Leave the table', desc: '', apply: (): string => 'You leave the table before he starts a feud about it.' }]
+          ? [{ label: 'Leave the table', desc: '', apply: (): string => 'You leave the king to his fire and his silver hand.' }]
           : [
               {
-                label: "Eat the Champion's Portion",
+                label: "Drink the king's draught",
                 desc: `+${atk} ATK until your next descent.`,
                 apply: (game: Game): string => {
                   game.portionAtkBonus = atk;
                   game.player.atk += atk;
                   game.pushUI();
-                  return `You eat the hero's cut while Bricriu watches everyone else not eating it. +${atk} ATK until the next descent.`;
+                  return `The ale of Goibniu's feast goes down like a forge-wind, and Nuada pours for you the way a king ought to. +${atk} ATK until the next descent.`;
                 },
               },
-              { label: 'Decline politely', desc: '', apply: (): string => '"Extraordinary," Bricriu says, delighted. "A hero with manners. The portion keeps."' },
+              { label: 'Decline politely', desc: '', apply: (): string => '"A guest who refuses is still a guest," Nuada says. "The cup keeps."' },
             ],
       };
     }

@@ -9,22 +9,22 @@
     "serviceFlavor": "The Gobán Saor sizes up the rift's falling stone with a builder's contempt. \"Bres sends rubble. Tell me what you need and I'll send you something with a shape to it.\""
   },
   {
-    "id": "fedelm",
-    "char": "npc_fedelm",
-    "name": "Fedelm the Seeress",
+    "id": "bechuille",
+    "char": "npc_bechuille",
+    "name": "Bé Chuille the Enchantress",
     "service": "seer",
-    "captiveLine": "A woman sits perfectly still among her captors, eyes closed, a cold blue flame guttering at her fingertips. \"I saw you coming,\" she murmurs. \"I saw them falling. Get on with it.\"",
-    "thanksLine": "Fedelm opens her eyes at last. \"I see crimson on them, and none on you. Well cut. Look for me by the hearth — the future is easier to read out of the wind.\"",
-    "serviceFlavor": "Fedelm turns her cold flame over in her hands, and shapes appear in it."
+    "captiveLine": "A woman sits perfectly still among her captors, eyes closed, turning a small grey pebble over and over in her bound hands. \"I asked the stones who was coming,\" she murmurs. \"They said you. Get on with it.\"",
+    "thanksLine": "Bé Chuille opens her eyes at last. \"At Mag Tuired I swore to Lugh that I would wake the trees and the stones and the very sods of the earth into a host under arms. I keep my oaths. Look for me by the hearth — falling stone has a great deal to say, and I have the ear for it.\"",
+    "serviceFlavor": "Bé Chuille sets a pebble spinning on her palm. It does not stop, and where it points the dark thins."
   },
   {
-    "id": "bricriu",
-    "char": "npc_bricriu",
-    "name": "Bricriu of the Feast",
+    "id": "nuada",
+    "char": "npc_nuada",
+    "name": "Nuada Airgetlám",
     "service": "cook",
-    "captiveLine": "A man in a gold chain manages, somehow, to look put-upon rather than terrified. \"These gentlemen have no appreciation for hospitality. Remove them and my table is yours.\"",
-    "thanksLine": "Bricriu straightens his chain and bows just slightly too deep to be sincere. \"My savior. Come to my table in the mounds — the Champion's Portion is yours by right, and I never poison the guest of honor.\"",
-    "serviceFlavor": "Bricriu sweeps a hand over a table that wasn't there a moment ago — steam, fat, honey, and a cut of meat that is unmistakably the hero's."
+    "captiveLine": "A tall man stands bound among his captors, unbowed, one hand catching the light wrongly — silver, jointed, finer than any hand of flesh. \"They took my kingdom with this arm,\" he says evenly. \"They will not take the arm. Cut them down.\"",
+    "thanksLine": "Nuada flexes the silver hand and looks at it without fondness. \"Bres held my throne while I healed, and gave the Tuatha Dé nothing but hunger for it — no ale, no fire, no grease on any knife at his table. Come to the mound and I will show you how a king is supposed to feed his people.\"",
+    "serviceFlavor": "Nuada sets out the ale of Goibniu's feast — the draught that kept the Tuatha Dé from age and from wounds through the long day at Mag Tuired."
   },
   {
     "id": "airmed",

@@ -117,8 +117,8 @@ describe('VendorOffers', () => {
       expect(game.nextType).toBe('I');
     });
 
-    it("Fedelm (seer) only reads the floors ahead — a single dismissable line", () => {
-      game.vendorOffers.rescueService(rescue('fedelm'));
+    it("Bé Chuille (seer) only reads the floors ahead — a single dismissable line", () => {
+      game.vendorOffers.rescueService(rescue('bechuille'));
       const ev = cb.ev()!;
       expect(ev.event.options).toHaveLength(1);
       ev.onChoice(0);
@@ -150,23 +150,23 @@ describe('VendorOffers', () => {
       expect(game.harperLullFloor).toBe(game.dungeonLevel + 1);
     });
 
-    it("Bricriu (cook) serves the Champion's Portion — +ATK until next descent", () => {
+    it("Nuada (cook) pours the king's draught — +ATK until next descent", () => {
       const before = game.player.atk;
-      game.vendorOffers.rescueService(rescue('bricriu'));
-      cb.ev()!.onChoice(0);   // eat the portion
+      game.vendorOffers.rescueService(rescue('nuada'));
+      cb.ev()!.onChoice(0);   // drink the draught
       expect(game.portionAtkBonus).toBeGreaterThan(0);
       expect(game.player.atk).toBe(before + game.portionAtkBonus);
     });
 
-    it("Bricriu offers nothing a second time (the portion is one helping)", () => {
-      game.vendorOffers.rescueService(rescue('bricriu'));
+    it("Nuada offers nothing a second time (the cup answers once per descent)", () => {
+      game.vendorOffers.rescueService(rescue('nuada'));
       cb.ev()!.onChoice(0);
       const atkAfterFirst = game.player.atk;
-      game.vendorOffers.rescueService(rescue('bricriu'));
+      game.vendorOffers.rescueService(rescue('nuada'));
       const ev = cb.ev()!;
-      expect(ev.event.flavor).toMatch(/one portion|entire point/i);
+      expect(ev.event.flavor).toMatch(/answers once|only ale/i);
       ev.onChoice(0);
-      expect(game.player.atk).toBe(atkAfterFirst);   // no second helping
+      expect(game.player.atk).toBe(atkAfterFirst);   // no second cup
     });
   });
 });
