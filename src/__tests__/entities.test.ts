@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Game } from '../game';
-import { Player, Monster, StatMath, Particle, ParticlePool } from '../entities';
+import { Player, Monster, StatMath } from '../entities';
+import { Particle, ParticlePool } from '../particles';
 import { MonsterAiSystem } from '../systems/monsterAI';
 import { Balance } from '../balance';
 import { BOONS, BRANDS } from '../content';

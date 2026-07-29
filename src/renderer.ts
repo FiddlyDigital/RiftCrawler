@@ -1,7 +1,7 @@
 import { GameConfig } from './config';
 import { Colors } from './colors';
 import { Tile, Cell } from './types';
-import { ParticlePool } from './entities';
+import { ParticlePool } from './particles';
 import { Biome, NPCS, SMITHS, RESCUES, MONSTERS } from './content';
 import { SpriteService } from './sprites';
 import type { Game } from './game';
