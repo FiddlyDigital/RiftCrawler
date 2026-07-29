@@ -5,7 +5,7 @@ import { Game, GameMath } from './game';
 import { Renderer } from './renderer';
 import { UIManager } from './ui';
 import { InputBinder } from './input';
-import { StorageService } from './storage';
+import { StorageService, BrowserStash } from './storage';
 import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
 import { HapticsController } from './haptics';
@@ -13,6 +13,9 @@ import { TutorialController, FIGHT_STEP_INDEX, type TutorialEvent } from './tuto
 import { CLASSES } from './content';
 import { Balance } from './balance';
 import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef, SavedRun } from './types';
+
+/** The one cross-run gold coffer for the page, handed to every Game as its StashPort. */
+const STASH = new BrowserStash();
 
 const DRAWER_EDGE_ZONE       = 24; // px from the right screen edge that starts an "open" gesture
 const DRAWER_SWIPE_THRESHOLD = 50; // px of horizontal movement to count as a swipe
@@ -830,7 +833,7 @@ class GameApp {
           this.startTick();
         }, undefined, reroll);
       },
-    }, { forRestore });
+    }, { forRestore, stash: STASH });
 
     // Fallen characters from previous runs — the first floor never rolls a
     // ghost (this loads just after the constructor's initial floor setup), but

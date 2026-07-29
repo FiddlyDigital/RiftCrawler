@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState, type StashPort } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef } from './content';
 import { Fidchell } from './fidchell';
@@ -24,7 +24,7 @@ import { CombatSystem } from './systems/combat';
 import { MonsterAiSystem } from './systems/monsterAI';
 import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
-import { StorageService } from './storage';
+import { MemoryStash } from './stash';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -309,6 +309,8 @@ export class Game {
   public gorgothHalfTriggered = false;
 
   public readonly cb: GameCallbacks;
+  /** Cross-run gold coffer, host-supplied (see {@link StashPort}) so the sim owns no storage API. Defaults to an in-memory stash. */
+  public readonly stash: StashPort;  // public: read/written by Waystation (the Sídhe coffer)
 
   /**
    * Starts a fresh run: builds an empty floor, places the hero on the
@@ -319,11 +321,12 @@ export class Game {
    * leaving a blank shell for {@link applySave} to fill in.
    * @throws {TypeError} If `callbacks` is null/undefined.
    */
-  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean }) {
+  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean; stash?: StashPort }) {
     if (callbacks === null || callbacks === undefined) {
       throw new TypeError('Game: "callbacks" must not be null/undefined');
     }
     this.cb = callbacks;
+    this.stash = opts?.stash ?? new MemoryStash();
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
     this.visibility = this.emptyBoolGrid(false);
@@ -346,11 +349,16 @@ export class Game {
     this.cb.onToast?.(`Entering ${startBiome.name}...`, startIcon);
     this.cb.onCodexDiscover?.('biome', this.biomeId);
     // The Sídhe keep what past characters left with them — minus their tithe.
-    const inherited = StorageService.claimStash();
-    if (inherited > 0) {
-      this.gold += inherited;
-      this.cb.log(`The Sídhe kept faith: ${inherited} gold, left for you by one who came before.`, 'log-perk', 'item_gold_pouch');
-      this.storyBeats.push('inherited gold the Sídhe kept');
+    // The tithe is balance, so it lives here; the port is a dumb store.
+    const banked = this.stash.load();
+    if (banked > 0) {
+      this.stash.clear();
+      const inherited = Math.floor(banked * Balance.CONFIG.waystation.stashRecoveryPct);
+      if (inherited > 0) {
+        this.gold += inherited;
+        this.cb.log(`The Sídhe kept faith: ${inherited} gold, left for you by one who came before.`, 'log-perk', 'item_gold_pouch');
+        this.storyBeats.push('inherited gold the Sídhe kept');
+      }
     }
   }
 

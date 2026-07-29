@@ -1,7 +1,6 @@
 import { Tile, type FloorEventDef, type NpcTile } from './types';
 import { Boon, RESCUES, NPCS, SMITHS } from './content';
 import { Balance } from './balance';
-import { StorageService } from './storage';
 import type { Game } from './game';
 
 /**
@@ -214,7 +213,7 @@ export class Waystation {
       return;
     }
     if (npcTile.npcId === '__stash__') {
-      const stashed = StorageService.loadStash();
+      const stashed = g.stash.load();
       const pct = Math.round(Balance.CONFIG.waystation.stashRecoveryPct * 100);
       const stashEvent: FloorEventDef = {
         id: '__stash__', emoji: 'item_gold_pouch', title: 'The Sídhe Coffer',
@@ -226,7 +225,7 @@ export class Waystation {
             apply: (game: Game): string => {
               if (game.gold <= 0) return 'Your purse is empty. The coffer keeps its silence.';
               const left = game.gold;
-              const total = StorageService.addToStash(left);
+              const total = g.stash.add(left);
               game.gold = 0;
               game.storyBeats.push('left gold in the keeping of the Sídhe');
               return `You pour ${left} gold into the coffer — ${total} now waits in the Sídhe's keeping.`;

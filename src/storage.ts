@@ -1,4 +1,4 @@
-import { SAVE_VERSION, type RunRecord, type RunStats, type GhostRecord, type CodexKind, type CodexState, type SavedRun } from './types';
+import { SAVE_VERSION, type RunRecord, type RunStats, type GhostRecord, type CodexKind, type CodexState, type SavedRun, type StashPort } from './types';
 import type { Game } from './game';
 import { Balance } from './balance';
 
@@ -184,40 +184,6 @@ export class StorageService {
     try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch { /* quota */ }
   }
 
-  /** Gold left with the Sídhe by past characters, not yet claimed (0 if none). */
-  static loadStash(): number {
-    try {
-      const v = Number(localStorage.getItem(STASH_KEY) ?? 0);
-      return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
-    } catch { return 0; }
-  }
-
-  /**
-   * Adds gold to the cross-run stash.
-   * @param amount - Gold to deposit; must be a non-negative finite number.
-   * @returns The new stash total.
-   * @throws {TypeError} If `amount` is not a non-negative finite number.
-   */
-  static addToStash(amount: number): number {
-    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
-      throw new TypeError('StorageService.addToStash: "amount" must be a non-negative finite number');
-    }
-    const total = StorageService.loadStash() + Math.floor(amount);
-    try { localStorage.setItem(STASH_KEY, String(total)); } catch { /* quota */ }
-    return total;
-  }
-
-  /**
-   * Empties the stash and returns the inheritance: the stored gold scaled by
-   * `waystation.stashRecoveryPct` (the Sídhe keep their tithe). Called once
-   * per new run; a second call returns 0 until something is deposited again.
-   */
-  static claimStash(): number {
-    const total = StorageService.loadStash();
-    if (total <= 0) return 0;
-    try { localStorage.removeItem(STASH_KEY); } catch { /* quota */ }
-    return Math.floor(total * Balance.CONFIG.waystation.stashRecoveryPct);
-  }
 
   /**
    * Persists the mid-run snapshot (see `Game.serialize`). Overwrites any
@@ -346,5 +312,33 @@ export class StorageService {
       try { localStorage.setItem(CODEX_KEY, JSON.stringify(state)); } catch { /* quota */ }
     }
     return state;
+  }
+}
+
+/**
+ * Browser {@link StashPort}: the cross-run gold stash backed by `localStorage`.
+ * Wired in by `main.ts`; the simulation only ever sees the interface, so a
+ * different host can swap this for a file, a database, or {@link MemoryStash}.
+ */
+export class BrowserStash implements StashPort {
+  load(): number {
+    try {
+      const v = Number(localStorage.getItem(STASH_KEY) ?? 0);
+      return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    } catch { return 0; }
+  }
+
+  /** @throws {TypeError} If `amount` is not a non-negative finite number. */
+  add(amount: number): number {
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
+      throw new TypeError('BrowserStash.add: "amount" must be a non-negative finite number');
+    }
+    const total = this.load() + Math.floor(amount);
+    try { localStorage.setItem(STASH_KEY, String(total)); } catch { /* quota */ }
+    return total;
+  }
+
+  clear(): void {
+    try { localStorage.removeItem(STASH_KEY); } catch { /* quota */ }
   }
 }

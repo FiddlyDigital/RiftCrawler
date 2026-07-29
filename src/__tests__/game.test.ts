@@ -13,6 +13,7 @@ import { Colors } from '../colors';
 import { SpriteService } from '../sprites';
 import { CrashReporter } from '../errorReporting';
 import { StorageService } from '../storage';
+import { MemoryStash } from '../stash';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -2134,34 +2135,41 @@ describe('Waystations (the sídhe mound offered at every staircase)', () => {
   });
 
   it('the Sídhe coffer banks gold across runs; a new character inherits the tithed remainder', () => {
-    vi.stubGlobal('localStorage', new MemoryStorage());
-    try {
-      const onFloorEvent = vi.fn();
-      const cb = { ...makeCallbacks(), onFloorEvent };
-      const game = new Game(cb);
-      enterMound(game, onFloorEvent);
-      game.gold = 100;
-      // The hero enters right beside the coffer — bump it and deposit.
-      game.player.x = Game.MOUND.stash.x + 1; game.player.y = Game.MOUND.stash.y;
-      game.npcTiles = game.npcTiles.filter(n => n.npcId === '__stash__');
-      onFloorEvent.mockClear();
-      game.paused = false;
-      game.handleHeroMove(-1, 0);
-      const [event, onChoice] = onFloorEvent.mock.calls[0]!;
-      expect(event.id).toBe('__stash__');
-      onChoice(0);  // leave your gold
-      expect(game.gold).toBe(0);
-      expect(StorageService.loadStash()).toBe(100);
-      expect(game.npcTiles.some(n => n.npcId === '__stash__')).toBe(true);  // fixture persists
-      // The next character inherits the stash, less the Sídhe's tithe.
-      const heir = new Game(makeCallbacks());
-      expect(heir.gold).toBe(Math.floor(100 * Balance.CONFIG.waystation.stashRecoveryPct));
-      expect(StorageService.loadStash()).toBe(0);
-      // And the one after that inherits nothing.
-      expect(new Game(makeCallbacks()).gold).toBe(0);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    // One shared stash models successive characters — no storage API needed
+    // now that the coffer is an injected port.
+    const stash = new MemoryStash();
+    const onFloorEvent = vi.fn();
+    const cb = { ...makeCallbacks(), onFloorEvent };
+    const game = new Game(cb, { stash });
+    enterMound(game, onFloorEvent);
+    game.gold = 100;
+    // The hero enters right beside the coffer — bump it and deposit.
+    game.player.x = Game.MOUND.stash.x + 1; game.player.y = Game.MOUND.stash.y;
+    game.npcTiles = game.npcTiles.filter(n => n.npcId === '__stash__');
+    onFloorEvent.mockClear();
+    game.paused = false;
+    game.handleHeroMove(-1, 0);
+    const [event, onChoice] = onFloorEvent.mock.calls[0]!;
+    expect(event.id).toBe('__stash__');
+    onChoice(0);  // leave your gold
+    expect(game.gold).toBe(0);
+    expect(stash.load()).toBe(100);
+    expect(game.npcTiles.some(n => n.npcId === '__stash__')).toBe(true);  // fixture persists
+    // The next character inherits the stash, less the Sídhe's tithe.
+    const heir = new Game(makeCallbacks(), { stash });
+    expect(heir.gold).toBe(Math.floor(100 * Balance.CONFIG.waystation.stashRecoveryPct));
+    expect(stash.load()).toBe(0);
+    // And the one after that inherits nothing.
+    expect(new Game(makeCallbacks(), { stash }).gold).toBe(0);
+  });
+
+  it('a Game with no stash supplied gets its own empty in-memory coffer', () => {
+    // The default keeps the sim usable with zero host wiring (headless, tests).
+    const game = new Game(makeCallbacks());
+    expect(game.stash.load()).toBe(0);
+    game.stash.add(50);
+    expect(game.stash.load()).toBe(50);
+    expect(new Game(makeCallbacks()).stash.load()).toBe(0);  // not shared
   });
 
   it('the Ogham-mark tattooist visits the mound when the dice favor it — never once all marks are spent', () => {
