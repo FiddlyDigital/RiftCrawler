@@ -46,8 +46,8 @@
   {
     "id": "fallen_champion",
     "emoji": "sprite_equip_iron_sword",
-    "title": "The Fallen Fian",
-    "flavor": "A warrior of the Fianna lies here, spear still in hand, felled far from Tara.",
+    "title": "The Fallen of Mag Tuired",
+    "flavor": "A warrior of the Tuatha Dé lies here, spear still in hand, carried down into the deep long after the great battle ended.",
     "options": [
       {
         "label": "Take their boon",
@@ -214,8 +214,8 @@
   {
     "id": "salmon_of_knowledge",
     "emoji": "sprite_crystal",
-    "title": "The Bradán Feasa",
-    "flavor": "A salmon glimmers beneath black water, said to hold all the world's wisdom in its flesh — whoever tastes it first will know all things.",
+    "title": "The Salmon of Segais",
+    "flavor": "A salmon glimmers beneath black water. Nine hazels overhang the Well of Segais and drop their nuts into it, and the salmon that eat them take up all the wisdom of the world — every drop of which runs down here eventually.",
     "options": [
       {
         "label": "Taste the salmon",
@@ -235,13 +235,13 @@
     ]
   },
   {
-    "id": "warp_spasm_echo",
+    "id": "neit_fury",
     "emoji": "sprite_equip_war_axe",
-    "title": "The Ríastrad's Echo",
-    "flavor": "The echo of the Hound of Ulster's battle-frenzy lingers here — the warp-spasm that turned Cú Chulainn monstrous in war, one eye swallowed and the other bulging forth.",
+    "title": "Neit's Fury",
+    "flavor": "Old war hangs in this stone like smoke. Neit, god of battle, was grandfather to Balor and husband to Nemain, and the rage he lent the Tuatha Dé at Mag Tuired never entirely left the ground it was spent on.",
     "options": [
       {
-        "label": "Embrace the ríastrad",
+        "label": "Take up Neit's rage",
         "desc": "+14 ATK, −20 Max HP.",
         "handler": "bargain_accept",
         "params": {
@@ -253,7 +253,7 @@
         "label": "Master your fury",
         "desc": "Nothing happens.",
         "handler": "static_message",
-        "resultMsg": "You steady your breath. The warp-spasm passes you by, this time."
+        "resultMsg": "You steady your breath. The war-god's rage passes you by, this time."
       }
     ]
   },

@@ -139,8 +139,8 @@ export class Game {
   public pendingGuardKey: string | null = null;
   /** The live captor monsters — the captive can't be freed until every one is dead. */
   public rescueGuards: Monster[] = [];  // public: read/written by SaveGame
-  /** ATK granted by Bricriu's Champion's Portion, reverted on the next descent. */
-  public portionAtkBonus = 0;  // public: read/written by VendorOffers (Bricriu) and descent revert
+  /** ATK granted by Nuada's draught from Goibniu's feast, reverted on the next descent. */
+  public portionAtkBonus = 0;  // public: read/written by VendorOffers (Nuada) and descent revert
 
   /** While the first-run tutorial is teaching, natural enemy spawns are suppressed — the tutorial introduces its own single practice foe (see spawnTutorialFoe). */
   public tutorialSafety = false;
@@ -1425,7 +1425,7 @@ export class Game {
     this.pendingRescueId = null;
     this.pendingGuardKey = null;
     this.rescueGuards = [];
-    // Bricriu's Champion's Portion is a single meal — it ends at the descent.
+    // Nuada's draught is a single cup — it ends at the descent.
     if (this.portionAtkBonus > 0) {
       this.player.atk -= this.portionAtkBonus;
       this.portionAtkBonus = 0;
