@@ -358,8 +358,14 @@ export interface ModifierDef {
 
 /** Rendered content for the board-inspect tooltip. */
 export interface InspectInfo {
+  /** Sprite-map key; the host renders it. */
   icon: string;
   title: string;
+  /**
+   * Detail lines. May embed `[[icon:<spriteKey>]]` tokens, which the host
+   * expands into sprite markup — the sim emits keys, never HTML, so view-model
+   * builders stay independent of any renderer.
+   */
   lines: string[];
 }
 

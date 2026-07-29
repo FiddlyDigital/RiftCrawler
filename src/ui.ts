@@ -582,12 +582,23 @@ export class UIManager {
     this.pauseModal.hidePauseMenu();
   }
 
+  /**
+   * Expands `[[icon:<spriteKey>]]` tokens into sprite markup.
+   *
+   * The simulation emits sprite *keys*, never HTML — the same contract as
+   * `InspectInfo.icon` — so view-model builders stay free of any renderer
+   * dependency. This is where those keys become pixels.
+   */
+  private static expandIconTokens(text: string): string {
+    return text.replace(/\[\[icon:([A-Za-z0-9_]+)\]\]/g, (_m, key: string) => SpriteService.iconHTML(key, 12));
+  }
+
   /** Shows the tap/click-to-inspect tooltip near `(clientX, clientY)`, clamped to stay on-screen. Auto-dismisses after 3s. */
   public showInspectTooltip(info: InspectInfo, clientX: number, clientY: number): void {
     const el = this.inspectTooltip;
     el.innerHTML = `
       <div class="inspect-header"><span class="inspect-icon">${SpriteService.iconHTML(info.icon, 20)}</span><span class="inspect-title">${info.title}</span></div>
-      <div class="inspect-lines">${info.lines.map(l => `<div>${l}</div>`).join('')}</div>
+      <div class="inspect-lines">${info.lines.map(l => `<div>${UIManager.expandIconTokens(l)}</div>`).join('')}</div>
     `;
     el.hidden = false;
     el.classList.remove('inspect-show');
