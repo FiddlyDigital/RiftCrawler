@@ -55,7 +55,7 @@ export class PactCeremony {
     if (g.dungeonLevel < 2 || !g.cb.onFloorEvent) return false;
 
     // Only 2 of the 3 deities call on any given run — which two is the rift's whim.
-    const offered = [...PATRONS].sort(() => Math.random() - 0.5).slice(0, 2);
+    const offered = [...PATRONS].sort(() => this.game.rng() - 0.5).slice(0, 2);
     const event: FloorEventDef = {
       id: '__pact__', emoji: 'fx_arcane', title: 'The Deities Call',
       flavor: 'Two voices rise through the stone, each offering power for a price paid in blood. A draoi without a pact is a door without a house. Choose.',

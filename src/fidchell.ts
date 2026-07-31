@@ -79,7 +79,7 @@ export class Fidchell {
     this.plies = 0;
     this.selected = null;
     this.legal = [];
-    this.playerSide = Math.random() < 0.5 ? 'king' : 'raider';
+    this.playerSide = this.game.rng() < 0.5 ? 'king' : 'raider';
     this.turn = 'raider';
     g.clearBoardEntities();
     g.blockMatrix = [];
@@ -279,7 +279,7 @@ export class Fidchell {
     if (moves.length === 0) { this.finish(side === 'king' ? 'raider' : 'king'); return; }
     let best = moves[0]!, bestScore = -Infinity;
     for (const m of moves) {
-      const score = -this.search(this.boardAfter(this.board, m), side === 'king' ? 'raider' : 'king', Fidchell.SEARCH_DEPTH - 1, -Infinity, Infinity) + Math.random() * 0.25;
+      const score = -this.search(this.boardAfter(this.board, m), side === 'king' ? 'raider' : 'king', Fidchell.SEARCH_DEPTH - 1, -Infinity, Infinity) + this.game.rng() * 0.25;
       if (score > bestScore) { bestScore = score; best = m; }
     }
     this.applyMove(best.fx, best.fy, best.tx, best.ty);
@@ -322,7 +322,7 @@ export class Fidchell {
     const gold = 150 + g.dungeonLevel * 30;
     g.gold += gold;
     const pool = Boon.BY_TIER[g.dungeonLevel >= 14 ? 3 : 2];
-    const boon = pool[Math.floor(Math.random() * pool.length)]!;
+    const boon = pool[Math.floor(this.game.rng() * pool.length)]!;
     g.player.addBoon(boon);
     g.cb.log(`You take the wooden wisdom! The gambler yields the crossing — ${gold} gold and a boon: ${boon.name}. The way on opens.`, 'log-perk', boon.char);
     g.cb.onToast?.('You win at fidchell — passage granted!', 'special_sacred');

@@ -14,6 +14,7 @@ import { SpriteService } from '../sprites';
 import { CrashReporter } from '../errorReporting';
 import { StorageService } from '../storage';
 import { MemoryStash } from '../stash';
+import { makeRng, hashSeed, dailySeedString } from '../rng';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -1569,6 +1570,97 @@ describe('Biome-signature terrain (per-biome density)', () => {
   it('the deep Causeway lays swamp on O-pieces, which the Cairn Halls do not', () => {
     expect(lockOne(10, 'O').some(t => t.type === 'swamp')).toBe(true);
     expect(lockOne(1, 'O').length).toBe(0);
+  });
+});
+
+describe('Seeded runs (the basis of the Daily Rift)', () => {
+  // Plays a fixed script of inputs and fingerprints the resulting run.
+  const fingerprint = (seed: number | null): string => {
+    const game = new Game(makeCallbacks(), { seed, now: () => 10_000 });
+    const g = game as unknown as {
+      handleBlockLeft(): void; handleBlockRight(): void; handleBlockRotate(): void; handleBlockDrop(): void;
+    };
+    const script = [g.handleBlockLeft, g.handleBlockRotate, g.handleBlockDrop, g.handleBlockRight, g.handleBlockDrop];
+    for (let i = 0; i < 40; i++) script[i % script.length]!.call(g);
+    return [
+      game.dungeonLevel, game.gold, Math.round(game.player.hp), game.monstersKilled,
+      game.linesCleared, game.currentType, game.nextType,
+      game.map.flat().join(''),
+    ].join('|');
+  };
+
+  it('the same seed always produces the identical run', () => {
+    expect(fingerprint(4242)).toBe(fingerprint(4242));
+  });
+
+  it('different seeds produce different runs', () => {
+    expect(fingerprint(4242)).not.toBe(fingerprint(9001));
+  });
+
+  it('an unseeded run reports no seed and still yields valid randomness', () => {
+    const game = new Game(makeCallbacks());
+    expect(game.seed).toBeNull();
+    const v = game.rng();
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThan(1);
+    // Two unseeded runs are (essentially certainly) not identical.
+    expect(fingerprint(null)).not.toBe(fingerprint(null));
+  });
+
+  it('a seeded run exposes its seed and a generator that is not Math.random', () => {
+    const game = new Game(makeCallbacks(), { seed: 7 });
+    expect(game.seed).toBe(7);
+    expect(game.rng).not.toBe(Math.random);
+    const v = game.rng();
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThan(1);
+  });
+
+  it('restoreRngPosition replays a seeded stream so a resumed run does not diverge', () => {
+    // Mirrors the real save/restore flow: a live run consumes RNG while
+    // building its world, the snapshot records how many draws that took, and
+    // the restore shell fast-forwards by exactly that count.
+    const a = new Game(makeCallbacks(), { seed: 55 });
+    for (let i = 0; i < 20; i++) a.rng();
+    const consumed = (a as unknown as { rngCalls: number }).rngCalls;
+    expect(consumed).toBeGreaterThan(20);  // construction drew some too
+
+    const b = new Game(makeCallbacks(), { seed: 55, forRestore: true });
+    b.restoreRngPosition(consumed);
+    expect(b.rng()).toBe(a.rng());
+    expect(b.rng()).toBe(a.rng());  // and stays in lockstep
+  });
+
+  it('restoreRngPosition is a no-op for an unseeded run', () => {
+    const g = new Game(makeCallbacks());
+    expect(() => g.restoreRngPosition(20)).not.toThrow();
+  });
+});
+
+describe('rng helpers', () => {
+  it('makeRng is deterministic per seed and yields [0, 1)', () => {
+    const a = makeRng(123), b = makeRng(123), c = makeRng(124);
+    const seqA = Array.from({ length: 50 }, () => a());
+    const seqB = Array.from({ length: 50 }, () => b());
+    const seqC = Array.from({ length: 50 }, () => c());
+    expect(seqA).toEqual(seqB);
+    expect(seqA).not.toEqual(seqC);
+    for (const v of seqA) { expect(v).toBeGreaterThanOrEqual(0); expect(v).toBeLessThan(1); }
+  });
+
+  it('makeRng rejects a non-finite seed', () => {
+    expect(() => makeRng(Number.NaN)).toThrow(TypeError);
+  });
+
+  it('hashSeed is stable and differs per string', () => {
+    expect(hashSeed('2026-07-31')).toBe(hashSeed('2026-07-31'));
+    expect(hashSeed('2026-07-31')).not.toBe(hashSeed('2026-08-01'));
+    expect(hashSeed('2026-07-31')).toBeGreaterThanOrEqual(0);
+  });
+
+  it('dailySeedString is the UTC calendar day', () => {
+    expect(dailySeedString(new Date('2026-07-31T23:59:00Z'))).toBe('2026-07-31');
+    expect(dailySeedString(new Date('2026-08-01T00:01:00Z'))).toBe('2026-08-01');
   });
 });
 

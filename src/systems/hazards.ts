@@ -19,7 +19,7 @@ export class HazardSystem {
       h.timer--;
       h.warning = h.timer <= Balance.HAZARD.spike.warningThreshold;
       if (h.timer <= 0) {
-        h.timer = Balance.HAZARD.spike.rearmMinTurns + Math.floor(Math.random() * Balance.HAZARD.spike.rearmRandomTurns);
+        h.timer = Balance.HAZARD.spike.rearmMinTurns + Math.floor(game.rng() * Balance.HAZARD.spike.rearmRandomTurns);
         h.warning = false;
         spikeFirePositions.push(h);
       }
@@ -79,7 +79,7 @@ export class HazardSystem {
       }
     }
     if (floorTiles.length === 0) return;
-    const dest = floorTiles[Math.floor(Math.random() * floorTiles.length)]!;
+    const dest = floorTiles[Math.floor(game.rng() * floorTiles.length)]!;
     entity.x = dest.x;
     entity.y = dest.y;
   }

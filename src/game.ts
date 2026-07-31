@@ -25,6 +25,7 @@ import { MonsterAiSystem } from './systems/monsterAI';
 import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
 import { MemoryStash } from './stash';
+import { makeRng } from './rng';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -317,10 +318,37 @@ export class Game {
    * fake makes combo timing deterministic in tests.
    */
   private readonly now: () => number;
+  /**
+   * Fast-forwards a restored seeded run to the stream position the snapshot was
+   * taken at, so resuming a Daily Rift continues the *same* dungeon. A no-op
+   * for unseeded runs, where `Math.random` has no position to restore.
+   */
+  public restoreRngPosition(calls: number): void {
+    if (this.seed === null || !Number.isFinite(calls) || calls <= 0) return;
+    for (let i = 0; i < calls; i++) this.rngBase();
+    this.rngCalls = calls;
+  }
+
   /** Fallback clock: `performance.now()` where available (browsers, Node 16+), else wall time. */
   private static defaultNow(): number {
     return typeof performance !== 'undefined' ? performance.now() : Date.now();
   }
+  /**
+   * Random source, host-supplied so a run can be made reproducible. Defaults
+   * to `Math.random`; the Daily Rift passes a seeded generator (see rng.ts).
+   * Every gameplay roll goes through this — cosmetic renderer randomness does not.
+   */
+  public readonly rng: () => number;  // public: read by the systems and content pickers
+  /** The seed this run was started from, or null for an unseeded (normal) run. */
+  public readonly seed: number | null;
+  /** The raw generator behind {@link rng}, kept so a resumed run can be fast-forwarded to the same stream position. */
+  private readonly rngBase: () => number;
+  /**
+   * How many numbers {@link rng} has produced. Serialized so resuming a seeded
+   * run replays the identical stream — without it a backgrounded Daily Rift
+   * would silently become a different dungeon on resume.
+   */
+  private rngCalls = 0;
 
   /**
    * Starts a fresh run: builds an empty floor, places the hero on the
@@ -331,13 +359,19 @@ export class Game {
    * leaving a blank shell for {@link applySave} to fill in.
    * @throws {TypeError} If `callbacks` is null/undefined.
    */
-  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean; stash?: StashPort; now?: () => number }) {
+  constructor(callbacks: GameCallbacks, opts?: { forRestore?: boolean; stash?: StashPort; now?: () => number; seed?: number | null }) {
     if (callbacks === null || callbacks === undefined) {
       throw new TypeError('Game: "callbacks" must not be null/undefined');
     }
     this.cb = callbacks;
     this.stash = opts?.stash ?? new MemoryStash();
     this.now = opts?.now ?? Game.defaultNow;
+    this.seed = opts?.seed ?? null;
+    // Unseeded runs read `Math.random` lazily at call time rather than
+    // capturing the reference, so a test (or a host) that stubs the global
+    // still takes effect on an already-constructed Game.
+    this.rngBase = this.seed === null ? (): number => Math.random() : makeRng(this.seed);
+    this.rng = (): number => { this.rngCalls++; return this.rngBase(); };
     this.map = this.emptyMap();
     this.colors = this.emptyColors();
     this.visibility = this.emptyBoolGrid(false);
@@ -449,7 +483,7 @@ export class Game {
     Object.values(Game.SHAPE_WEIGHTS).reduce((a, b) => a + b, 0);
 
   public randomShapeKey(): ShapeKey {
-    return Balance.weightedPick(Game.SHAPE_WEIGHTS, Math.random() * Game.SHAPE_WEIGHT_TOTAL) ?? 'I';
+    return Balance.weightedPick(Game.SHAPE_WEIGHTS, this.rng() * Game.SHAPE_WEIGHT_TOTAL) ?? 'I';
   }
 
   // ── Fog of war ───────────────────────────────────────────────────────────
@@ -504,7 +538,7 @@ export class Game {
     this.blocksPlacedSinceStairs++;
     this.blocksSpawnedThisFloor++;
 
-    const { cursed, blessed } = this.rollPieceCurseState(Math.random());
+    const { cursed, blessed } = this.rollPieceCurseState(this.rng());
     this.currentCursed  = cursed;
     this.currentBlessed = blessed;
     this.pendingNpcId = null;
@@ -567,7 +601,7 @@ export class Game {
     // A herb of Miach's grave: vanishingly rare (~1/365 per piece), and only
     // once Airmed has been freed to make use of it. Not during the tutorial.
     const herbDue = this.rescuedIds.has('airmed') && !this.tutorialSafety
-      && Math.random() < Balance.CONFIG.rescues.herbSpawnChance;
+      && this.rng() < Balance.CONFIG.rescues.herbSpawnChance;
     let herbInjected = false;
 
     this.blockMatrix = shape.matrix.map(row =>
@@ -613,7 +647,7 @@ export class Game {
         }
 
         // Stairs
-        if (!stairsInjected && (this.blocksPlacedSinceStairs >= Balance.CONFIG.spawnRates.stairsForcedAfterBlocks || Math.random() < Balance.CONFIG.spawnRates.stairsRandomChance)) {
+        if (!stairsInjected && (this.blocksPlacedSinceStairs >= Balance.CONFIG.spawnRates.stairsForcedAfterBlocks || this.rng() < Balance.CONFIG.spawnRates.stairsRandomChance)) {
           stairsInjected = true;
           this.blocksPlacedSinceStairs = 0;
           return Cell.STAIRS;
@@ -623,12 +657,12 @@ export class Game {
         // of the brands-lifetime cap, so they don't all cluster early.
         if (!merchantInjected && !this.player.brandsCapped
             && this.tattooTilesSpawnedThisFloor < Balance.CONFIG.spawnRates.maxTattooTilesPerFloor
-            && Math.random() < Balance.CONFIG.spawnRates.merchantChance) {
+            && this.rng() < Balance.CONFIG.spawnRates.merchantChance) {
           merchantInjected = true;
           this.tattooTilesSpawnedThisFloor++;
           return Cell.MERCHANT;
         }
-        if (!altarInjected && Math.random() < Balance.CONFIG.spawnRates.altarChance) {
+        if (!altarInjected && this.rng() < Balance.CONFIG.spawnRates.altarChance) {
           altarInjected = true;
           return Cell.ALTAR;
         }
@@ -636,21 +670,21 @@ export class Game {
         // resource to farm.
         if (!npcInjected
             && this.npcTilesSpawnedThisFloor < Balance.CONFIG.spawnRates.maxNpcTilesPerFloor
-            && Math.random() < Balance.CONFIG.spawnRates.npcChance) {
+            && this.rng() < Balance.CONFIG.spawnRates.npcChance) {
           npcInjected = true;
           this.npcTilesSpawnedThisFloor++;
-          this.pendingNpcId = Npc.random().id;
+          this.pendingNpcId = Npc.random(this.rng).id;
           return Cell.NPC;
         }
         // This floor's ghost haunting (rolled at floor start) — a modest
         // per-cell chance so it drifts in within the first few blocks.
-        if (this.activeGhost && !this.ghostPlaced && Math.random() < 0.08) {
+        if (this.activeGhost && !this.ghostPlaced && this.rng() < 0.08) {
           this.ghostPlaced = true;
           return Cell.GHOST;
         }
         // Hazard traps — one type per block
         if (!trapInjected) {
-          const trapKey = Balance.weightedPick(Balance.CONFIG.spawnRates.trapWeights, Math.random());
+          const trapKey = Balance.weightedPick(Balance.CONFIG.spawnRates.trapWeights, this.rng());
           if (trapKey) {
             trapInjected = true;
             return TRAP_CELL[trapKey];
@@ -665,12 +699,12 @@ export class Game {
         );
         const hauntedChance = this.haunted ? baseMonsterChance * Balance.CONFIG.spawnRates.hauntedMonsterChanceMult : baseMonsterChance;
         const monsterChance = this.tutorialSafety ? 0 : hauntedChance * (this.activeOmen?.num('monsterChanceMult', 1) ?? 1) * this.heatMult('monsterChanceMult');
-        if (Math.random() < monsterChance) {
+        if (this.rng() < monsterChance) {
           if (monsterInjected) return Cell.FLOOR;  // cap: one monster per block
           monsterInjected = true;
-          let key = Balance.weightedPick(Balance.CONFIG.spawnRates.monsterWeights, Math.random()) ?? 'plague_bat';
+          let key = Balance.weightedPick(Balance.CONFIG.spawnRates.monsterWeights, this.rng()) ?? 'plague_bat';
           // Unquiet Cairn omen: the dead crowd out the living spawn table.
-          if (Math.random() < (this.activeOmen?.num('skeletonBias', 0) ?? 0)) key = 'skeleton';
+          if (this.rng() < (this.activeOmen?.num('skeletonBias', 0) ?? 0)) key = 'skeleton';
           return MONSTERS[key]!.cellState;
         }
         return Cell.FLOOR;
@@ -699,13 +733,13 @@ export class Game {
       }
     }
     const take = (): { r: number; c: number } | null =>
-      plain.length ? plain.splice(Math.floor(Math.random() * plain.length), 1)[0]! : null;
+      plain.length ? plain.splice(Math.floor(this.rng() * plain.length), 1)[0]! : null;
 
     // O-piece: a chance to carry an altar (Architect class rolls it more often).
     const oAltarChance = this.activeClassId === 'architect'
       ? Balance.CONFIG.spawnRates.oPieceAltarChanceArchitect
       : Balance.CONFIG.spawnRates.oPieceAltarChance;
-    if (this.currentType === 'O' && Math.random() < oAltarChance) {
+    if (this.currentType === 'O' && this.rng() < oAltarChance) {
       const p = take();
       if (p) this.blockMatrix[p.r]![p.c] = Cell.ALTAR;
     }
@@ -790,7 +824,7 @@ export class Game {
           this.tattooTiles.push({ x: tx, y: ty });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.ALTAR) {
-          const tier = Boon.tierForFloor(this.dungeonLevel);
+          const tier = Boon.tierForFloor(this.dungeonLevel, this.rng);
           const altarColor = Colors.forTier(tier).bg;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = altarColor;
@@ -799,7 +833,7 @@ export class Game {
         } else if (cell === Cell.NPC) {
           // Reuse the archetype rolled at spawn so the locked NPC matches the
           // portrait already shown in the falling-piece preview.
-          const npc = (this.pendingNpcId && NPCS.find(n => n.id === this.pendingNpcId)) || Npc.random();
+          const npc = (this.pendingNpcId && NPCS.find(n => n.id === this.pendingNpcId)) || Npc.random(this.rng);
           this.pendingNpcId = null;
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = '#1c2418';
@@ -854,7 +888,7 @@ export class Game {
         } else if (cell === Cell.TRAP_SPIKE) {
           this.map[tx]![ty] = Tile.FLOOR;
           this.colors[tx]![ty] = this.blockColor;
-          this.hazards.push({ x: tx, y: ty, type: 'spike', timer: Balance.HAZARD.spike.rearmMinTurns + Math.floor(Math.random() * Balance.HAZARD.spike.rearmRandomTurns), warning: false });
+          this.hazards.push({ x: tx, y: ty, type: 'spike', timer: Balance.HAZARD.spike.rearmMinTurns + Math.floor(this.rng() * Balance.HAZARD.spike.rearmRandomTurns), warning: false });
           lockedFloorCells.push({ x: tx, y: ty });
         } else if (cell === Cell.TRAP_SMOKE) {
           this.map[tx]![ty] = Tile.FLOOR;
@@ -916,7 +950,7 @@ export class Game {
         !this.specialTiles.some(t => t.x === fc.x && t.y === fc.y)
       );
       if (eligible.length > 0) {
-        const fc = eligible[Math.floor(Math.random() * eligible.length)]!;
+        const fc = eligible[Math.floor(this.rng() * eligible.length)]!;
         this.specialTiles.push({ x: fc.x, y: fc.y, type: 'sacred' });
         this.cb.log('A blessed rift — holy ground consecrated!', 'log-perk', 'special_sacred');
         this.cb.onParticle(fc.x, fc.y, 'BLESSED!', '#ffb74d', undefined, 'special_sacred');
@@ -1061,8 +1095,8 @@ export class Game {
   /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
   private maybeRollOmen(isBossFloor: boolean): void {
     if (isBossFloor || this.dungeonLevel <= 1) return;
-    if (Math.random() >= Balance.CONFIG.omens.rollChance) return;
-    const omen = Omen.random();
+    if (this.rng() >= Balance.CONFIG.omens.rollChance) return;
+    const omen = Omen.random(this.rng);
     this.activeOmen = omen;
     this.omenGravityPct = omen.num('gravityPct', 0);
     // Samhain: the veil is thin — a ghost of a past run WILL find you, if any
@@ -1072,7 +1106,7 @@ export class Game {
       const eligible = this.availableGhosts.filter(
         g => Math.abs(g.playerLevel - this.player.playerLevel) <= Balance.CONFIG.ghosts.levelTolerance,
       );
-      if (eligible.length > 0) this.activeGhost = eligible[Math.floor(Math.random() * eligible.length)]!;
+      if (eligible.length > 0) this.activeGhost = eligible[Math.floor(this.rng() * eligible.length)]!;
     }
     this.cb.log(omen.logText, 'log-blockbuilding', omen.icon);
     this.cb.onToast?.(omen.toastText, omen.icon);
@@ -1109,7 +1143,7 @@ export class Game {
   /** The captors' monster archetype for a rescue piece — nastier stock the deeper you are. */
   private rollGuardKey(): string {
     const pool = this.dungeonLevel >= 6 ? ['berserker_orc', 'skeleton'] : ['skeleton', 'goblin_archer'];
-    return pool[Math.floor(Math.random() * pool.length)]!;
+    return pool[Math.floor(this.rng() * pool.length)]!;
   }
 
 
@@ -1163,7 +1197,7 @@ export class Game {
     }
     const cls = CLASSES.find(c => c.id === this.activeClassId)?.name ?? 'wanderer';
     const openers = Game.STORY_OPENERS[outcome];
-    const opener = openers[Math.floor(Math.random() * openers.length)]!
+    const opener = openers[Math.floor(this.rng() * openers.length)]!
       .replace('{cls}', cls).replace('{floor}', String(this.dungeonLevel));
     const beats = this.storyBeats.slice(0, 5);
     if (beats.length === 0) return opener;
@@ -1470,8 +1504,8 @@ export class Game {
     const eligibleGhosts = this.availableGhosts.filter(
       g => Math.abs(g.playerLevel - this.player.playerLevel) <= Balance.CONFIG.ghosts.levelTolerance,
     );
-    if (eligibleGhosts.length > 0 && Math.random() < Balance.CONFIG.ghosts.encounterChance) {
-      this.activeGhost = eligibleGhosts[Math.floor(Math.random() * eligibleGhosts.length)]!;
+    if (eligibleGhosts.length > 0 && this.rng() < Balance.CONFIG.ghosts.encounterChance) {
+      this.activeGhost = eligibleGhosts[Math.floor(this.rng() * eligibleGhosts.length)]!;
     }
     this.hazards = [];
     this.specialTiles = [];
@@ -1616,9 +1650,9 @@ export class Game {
     this.paused = true;
     this.syncSpellUnlocks();  // patron spells gated on the level just reached
     this.cb.onBeam?.(this.player.x);
-    const tier = Boon.tierForFloor(this.dungeonLevel);
+    const tier = Boon.tierForFloor(this.dungeonLevel, this.rng);
     const pool = Boon.BY_TIER[tier];
-    const choices = Boon.pickThree(pool, this.player.boons.map(b => b.id));
+    const choices = Boon.pickThree(pool, this.player.boons.map(b => b.id), this.rng);
     this.cb.onLevelUp?.(choices, (index) => {
       this.player.addBoon(choices[index]!);
       this.cb.onParticleBurst?.(this.player.x, this.player.y, 8, '#8d6fd4');
@@ -1997,15 +2031,15 @@ export class Game {
     // likewise live in the mound. Nothing modal fires on the descent itself.
     const isBossFloor = this.dungeonLevel % Balance.CONFIG.floors.bossFloorInterval === 0;
     if (!isBossFloor && this.floorsDescended % Balance.CONFIG.floors.floorEventInterval === 0 && !this.pendingFloorEvent) {
-      this.pendingFloorEvent = FloorEvent.random();
+      this.pendingFloorEvent = FloorEvent.random(this.rng);
       this.cb.log('Someone has taken shelter in the sídhe mounds nearby, waiting to be found...', 'log-perk', 'npc_stranger');
       this.cb.onToast?.('A stranger shelters in the sídhe mounds, waiting...', 'npc_stranger');
     }
     // A captive may ride down this floor under Fomorian guard — free them and
     // they join the mound as a resident (once per figure per run).
     const rescuePool = RESCUES.filter(r => !this.rescuedIds.has(r.id));
-    if (!isBossFloor && !this.tutorialSafety && rescuePool.length > 0 && Math.random() < Balance.CONFIG.rescues.rollChance) {
-      this.pendingRescueId = rescuePool[Math.floor(Math.random() * rescuePool.length)]!.id;
+    if (!isBossFloor && !this.tutorialSafety && rescuePool.length > 0 && this.rng() < Balance.CONFIG.rescues.rollChance) {
+      this.pendingRescueId = rescuePool[Math.floor(this.rng() * rescuePool.length)]!.id;
       this.cb.log('Muffled cries carry up through the stone — someone is being dragged down in the rubble.', 'log-neutral', 'sprite_boss_wraith');
       this.cb.onToast?.('Cries for help echo in the falling stone...', 'fx_impact');
     }
@@ -2066,7 +2100,7 @@ export class Game {
     this.currentType = type;
     const shape = SHAPES[type];
     this.blockColor = shape.color;
-    const { cursed, blessed } = this.rollPieceCurseState(Math.random());
+    const { cursed, blessed } = this.rollPieceCurseState(this.rng());
     this.currentCursed  = cursed;
     this.currentBlessed = blessed;
     this.blockMatrix = shape.matrix.map(row =>
