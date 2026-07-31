@@ -67,6 +67,8 @@ export class StartModal extends BaseModal {
       <button class="restart-btn" id="start-resume-btn" style="font-size:14px;letter-spacing:2px;display:none;margin-bottom:8px;background:#1d2a1d;border-color:#4a6b4a;">⟲ CONTINUE RUN</button>
       <div id="start-resume-info" style="display:none;color:#7a9a7a;font-size:9px;margin:-4px 0 10px 0;"></div>
       <button class="restart-btn" id="start-btn" style="font-size:15px;letter-spacing:2px;">▶ BEGIN DESCENT</button>
+      <button class="restart-btn" id="start-daily-btn" style="font-size:13px;letter-spacing:2px;margin-top:8px;background:#231a2e;border-color:#6d5a86;color:#c9b6de;">☀ THE DAILY RIFT</button>
+      <div id="start-daily-info" style="color:#8a7aa0;font-size:9px;margin-top:4px;min-height:12px;"></div>
       <button id="start-tutorial-btn" style="background:none;border:none;color:#8a7a4d;font-size:11px;margin-top:8px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">❓ New here? Play the guided tutorial</button>
       <p class="kbd-only" style="color:#333;font-size:8px;margin-top:8px;">Press <b style="color:#444;">M</b> during play to toggle sound</p>
       <p style="color:#333;font-size:8px;margin-top:4px;">Art: <span style="color:#444;">32rogues</span> tileset by Seth Boyles · <span style="color:#444;">v${__APP_VERSION__}</span></p>
@@ -83,6 +85,7 @@ export class StartModal extends BaseModal {
     onBegin: () => void,
     onBeginTutorial?: () => void,
     resume?: { floor: number; classLabel: string; onResume: () => void },
+    daily?: { date: string; played: boolean; streak: number; bestStreak: number; onBegin: () => void },
   ): void {
     if (typeof highScore !== 'number') throw new TypeError('StartModal.showStart: "highScore" must be a number');
     if (typeof onBegin !== 'function') throw new TypeError('StartModal.showStart: "onBegin" must be a function');
@@ -105,6 +108,24 @@ export class StartModal extends BaseModal {
     if (tutBtn) {
       tutBtn.style.display = onBeginTutorial ? '' : 'none';
       tutBtn.onclick = () => { this.hide(); onBeginTutorial?.(); };
+    }
+
+    // The Daily Rift: one seeded run a day, the same dungeon for everyone.
+    const dailyBtn  = this.querySelector<HTMLButtonElement>('#start-daily-btn');
+    const dailyInfo = this.querySelector<HTMLElement>('#start-daily-info');
+    if (dailyBtn && dailyInfo) {
+      dailyBtn.style.display = daily ? '' : 'none';
+      dailyInfo.style.display = daily ? '' : 'none';
+      if (daily) {
+        const streakLabel = daily.streak > 0 ? ` · 🔥 ${daily.streak}-day streak` : '';
+        dailyBtn.disabled = daily.played;
+        dailyBtn.style.opacity = daily.played ? '0.5' : '';
+        dailyBtn.style.cursor = daily.played ? 'default' : '';
+        dailyInfo.textContent = daily.played
+          ? `Today's rift is already walked — come back tomorrow.${streakLabel}`
+          : `${daily.date} — one run, same dungeon for everyone.${streakLabel}`;
+        dailyBtn.onclick = daily.played ? null : (): void => { this.hide(); daily.onBegin(); };
+      }
     }
     this.show();
   }

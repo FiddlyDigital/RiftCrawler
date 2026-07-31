@@ -368,13 +368,13 @@ export class UIManager {
   }
 
   /** Shows the death screen with the run's final stats and history. */
-  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string): void {
-    this.modal.showDeath(title, reason, floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story);
+  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean }): void {
+    this.modal.showDeath(title, reason, floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story, daily);
   }
 
   /** Shows the victory screen (Bres defeated) with the run's final stats and history. */
-  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string): void {
-    this.modal.showVictory(floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story);
+  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean }): void {
+    this.modal.showVictory(floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story, daily);
   }
 
   /** Hides the death/victory modal. */
@@ -563,8 +563,9 @@ export class UIManager {
     onBegin: () => void,
     onBeginTutorial?: () => void,
     resume?: { floor: number; classLabel: string; onResume: () => void },
+    daily?: { date: string; played: boolean; streak: number; bestStreak: number; onBegin: () => void },
   ): void {
-    this.startModal.showStart(highScore, onBegin, onBeginTutorial, resume);
+    this.startModal.showStart(highScore, onBegin, onBeginTutorial, resume, daily);
   }
 
   /** Hides the start-screen modal. */

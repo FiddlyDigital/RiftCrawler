@@ -54,20 +54,21 @@ export class CombatSystem {
     return Balance.numOr(Balance.COMBAT.diceSidesByLevel[Math.max(1, Math.min(6, level))], 4);
   }
 
-  private static rollDie(level: number): number {
-    return Math.floor(Math.random() * CombatSystem.dieSides(level)) + 1;
+  private static rollDie(level: number, rng: () => number): number {
+    return Math.floor(rng() * CombatSystem.dieSides(level)) + 1;
   }
 
   private static resolveCombatRoll(
     attackerLevel: number,
     defenderLevel: number,
+    rng: () => number,
     forceCrit = false,
   ): { outcome: CombatOutcome; aRoll: number; dRoll: number } {
     if (forceCrit) {
       return { outcome: 'critical', aRoll: CombatSystem.dieSides(attackerLevel), dRoll: 0 };
     }
-    const aRoll = CombatSystem.rollDie(attackerLevel);
-    const dRoll = CombatSystem.rollDie(defenderLevel);
+    const aRoll = CombatSystem.rollDie(attackerLevel, rng);
+    const dRoll = CombatSystem.rollDie(defenderLevel, rng);
     if (aRoll === CombatSystem.dieSides(attackerLevel)) return { outcome: 'critical', aRoll, dRoll };
     if (aRoll <= dRoll) return { outcome: 'miss', aRoll, dRoll };
     const margin = aRoll - dRoll;
@@ -97,7 +98,7 @@ export class CombatSystem {
 
   /** Resolves one player attack against `monster`; returns the damage dealt. */
   static playerAttackMonster(monster: Monster, game: Game, forceCrit = false, damageMult = 1.0): number {
-    const roll = CombatSystem.resolveCombatRoll(game.player.combatLevel, monster.combatLevel, forceCrit);
+    const roll = CombatSystem.resolveCombatRoll(game.player.combatLevel, monster.combatLevel, game.rng, forceCrit);
     let { outcome } = roll;
     const { aRoll, dRoll } = roll;
 
@@ -157,7 +158,7 @@ export class CombatSystem {
     }
 
     // Sick Mark: chance to inflict poison on hit
-    if (dmg > 0 && game.player.poisonAttackChance > 0 && Math.random() < game.player.poisonAttackChance) {
+    if (dmg > 0 && game.player.poisonAttackChance > 0 && game.rng() < game.player.poisonAttackChance) {
       if (!monster.statuses.some(s => s.type === 'poison')) {
         monster.statuses.push({ type: 'poison', duration: 3, power: 3 });
         game.cb.log(`Poisoned ${monster.name}!`, 'log-success', 'status_poison');
@@ -165,7 +166,7 @@ export class CombatSystem {
     }
 
     // Cryo Mark: chance to freeze the target on hit
-    if (dmg > 0 && game.player.stunAttackChance > 0 && Math.random() < game.player.stunAttackChance) {
+    if (dmg > 0 && game.player.stunAttackChance > 0 && game.rng() < game.player.stunAttackChance) {
       if (!monster.isStunned) {
         monster.statuses.push({ type: 'stun', duration: 1, power: 0 });
         game.cb.log(`${monster.name} is frozen solid!`, 'log-success', 'special_ice');
@@ -187,7 +188,7 @@ export class CombatSystem {
       game.cb.onParticle(game.player.x, game.player.y, 'PHASE!', '#b39ddb');
       return;
     }
-    if (game.player.dodgeChance > 0 && Math.random() < game.player.dodgeChance) {
+    if (game.player.dodgeChance > 0 && game.rng() < game.player.dodgeChance) {
       game.cb.log(`${m.name} attacks — you dodge!`, 'log-success');
       game.cb.onParticle(game.player.x, game.player.y, 'DODGE!', '#29b6f6');
       // Mist Cloak: dodgeHeal is a fraction of maxHp, like the other sustain stats
@@ -198,7 +199,7 @@ export class CombatSystem {
       return;
     }
 
-    const { outcome, aRoll, dRoll } = CombatSystem.resolveCombatRoll(m.combatLevel, game.player.combatLevel);
+    const { outcome, aRoll, dRoll } = CombatSystem.resolveCombatRoll(m.combatLevel, game.player.combatLevel, game.rng);
 
     if (outcome === 'miss') {
       game.cb.log(`${m.name} attacks — you block! (${aRoll} vs ${dRoll})`, 'log-success');
@@ -237,7 +238,7 @@ export class CombatSystem {
     }
 
     // Criticals always inflict status; others use normal chance
-    const inflictStatus = outcome === 'critical' || (m.statusInflict !== undefined && m.statusInflict !== null && Math.random() < m.statusInflict.chance);
+    const inflictStatus = outcome === 'critical' || (m.statusInflict !== undefined && m.statusInflict !== null && game.rng() < m.statusInflict.chance);
     if (inflictStatus && m.statusInflict && !game.player.statuses.some(s => s.type === m.statusInflict!.type)) {
       game.player.statuses.push({
         type:     m.statusInflict.type,
@@ -301,7 +302,7 @@ export class CombatSystem {
       if (bounty && bounty.bossName === m.name && game.dungeonLevel >= bounty.floor) {
         game.activeBountyQuest = null;
         const rewardPool = Boon.BY_TIER[3];
-        const reward = rewardPool[Math.floor(Math.random() * rewardPool.length)]!;
+        const reward = rewardPool[Math.floor(game.rng() * rewardPool.length)]!;
         game.player.addBoon(reward);
         game.cb.log(`An oath fulfilled — Otherworld power settles over you. Gained ${reward.name}!`, 'log-perk', reward.char);
         game.cb.onParticleBurst?.(m.x, m.y, 10, '#8d6fd4');

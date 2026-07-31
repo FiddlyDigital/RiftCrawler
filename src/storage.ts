@@ -1,4 +1,4 @@
-import { SAVE_VERSION, type RunRecord, type RunStats, type GhostRecord, type CodexKind, type CodexState, type SavedRun, type StashPort } from './types';
+import { SAVE_VERSION, type RunRecord, type RunStats, type GhostRecord, type CodexKind, type CodexState, type SavedRun, type StashPort, type DailyResult, type DailyState } from './types';
 import type { Game } from './game';
 import { Balance } from './balance';
 
@@ -17,6 +17,7 @@ const DIFFICULTY_KEY = 'riftcrawler_difficulty_v1';
 const SCREEN_FX_KEY = 'riftcrawler_screen_fx';
 const COLORBLIND_KEY = 'riftcrawler_colorblind';
 const HEAT_KEY = 'riftcrawler_max_heat_v1';
+const DAILY_KEY = 'riftcrawler_daily_v1';
 
 /** Maps a {@link CodexKind} to its plural key on {@link CodexState}. */
 const CODEX_LIST_KEY: Record<CodexKind, keyof CodexState> = {
@@ -311,6 +312,48 @@ export class StorageService {
       state[listKey] = [...state[listKey], id];
       try { localStorage.setItem(CODEX_KEY, JSON.stringify(state)); } catch { /* quota */ }
     }
+    return state;
+  }
+
+  /** The Daily Rift record: the last day played, its result, and the streak. */
+  static loadDaily(): DailyState {
+    try {
+      const raw = localStorage.getItem(DAILY_KEY);
+      if (!raw) return { last: null, streak: 0, bestStreak: 0 };
+      const parsed = JSON.parse(raw) as DailyState;
+      return {
+        last: parsed.last ?? null,
+        streak: Number(parsed.streak) || 0,
+        bestStreak: Number(parsed.bestStreak) || 0,
+      };
+    } catch { return { last: null, streak: 0, bestStreak: 0 }; }
+  }
+
+  /** Whether today's rift has already been attempted (one run per day). */
+  static dailyPlayed(today: string): boolean {
+    return StorageService.loadDaily().last?.date === today;
+  }
+
+  /**
+   * Records the outcome of a Daily Rift and advances the streak: consecutive
+   * calendar days extend it, a gap resets it to 1, and replaying the same day
+   * leaves it untouched (the result is not overwritten either — the first
+   * attempt is the one that counts).
+   * @throws {TypeError} If `result` is null/undefined or has no date.
+   */
+  static recordDaily(result: DailyResult): DailyState {
+    if (result === null || result === undefined || typeof result.date !== 'string') {
+      throw new TypeError('StorageService.recordDaily: "result" must have a date');
+    }
+    const prev = StorageService.loadDaily();
+    if (prev.last?.date === result.date) return prev;  // already banked today
+
+    const yesterday = new Date(`${result.date}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const continued = prev.last?.date === yesterday.toISOString().slice(0, 10);
+    const streak = continued ? prev.streak + 1 : 1;
+    const state: DailyState = { last: result, streak, bestStreak: Math.max(prev.bestStreak, streak) };
+    try { localStorage.setItem(DAILY_KEY, JSON.stringify(state)); } catch { /* quota */ }
     return state;
   }
 }

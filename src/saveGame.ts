@@ -28,9 +28,11 @@ export class SaveGame {
    * plain fields are persisted without touching the save code.
    */
   private static readonly SAVE_SKIP = new Set([
-    // `stash` and `now` are host-supplied ports — persisting them would
-    // replace the live implementations with plain data on restore.
-    'cb', 'stash', 'now', 'player', 'monsters', 'rescueGuards',
+    // `stash`, `now` and the rng functions are host-supplied ports / live
+    // closures — persisting them would replace the implementations with plain
+    // data on restore. `seed` and `rngCalls` ARE saved: they're run data, and
+    // together they let a seeded run resume on the identical stream.
+    'cb', 'stash', 'now', 'rng', 'rngBase', 'player', 'monsters', 'rescueGuards',
     'activeOmen', 'pendingFloorEvent',
     'activeBossOnHalfHp', 'activeBossOnDeath',
     'rescuedIds', 'spearPartsHeld', 'metFlavorNpcIds',
@@ -83,6 +85,9 @@ export class SaveGame {
       throw new Error(`SaveGame.restore: save version ${save.version} is not ${SAVE_VERSION}`);
     }
     Object.assign(g, save.scalars);
+    // Replay the seeded generator up to where the snapshot was taken, so a
+    // resumed Daily Rift is the same dungeon it was before the app closed.
+    g.restoreRngPosition(Number(save.scalars['rngCalls'] ?? 0));
     g.fidchell.restore(save.fidchell);
     g.causewayDuel.restore(save.causewayDuel);
     if (!SHAPES[g.currentType] || !SHAPES[g.nextType] || (g.heldType !== null && !SHAPES[g.heldType])) {

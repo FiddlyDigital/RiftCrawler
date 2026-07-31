@@ -104,7 +104,7 @@ export class RunSetup {
     if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
       throw new TypeError('RunSetup.getRandomModifiers: "count" must be a positive finite number');
     }
-    const shuffled = [...MODIFIERS].sort(() => Math.random() - 0.5);
+    const shuffled = [...MODIFIERS].sort(() => this.game.rng() - 0.5);
     return shuffled.slice(0, count);
   }
 

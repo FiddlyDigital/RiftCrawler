@@ -12,6 +12,7 @@ import { HapticsController } from './haptics';
 import { TutorialController, FIGHT_STEP_INDEX, type TutorialEvent } from './tutorial';
 import { CLASSES } from './content';
 import { Balance } from './balance';
+import { hashSeed, dailySeedString } from './rng';
 import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef, SavedRun } from './types';
 
 /** The one cross-run gold coffer for the page, handed to every Game as its StashPort. */
@@ -66,6 +67,10 @@ class GameApp {
   private tutorial: TutorialController | null = null;
   /** Set by the start screen's "How to Play" button — forces the tutorial on the next run even if already seen. */
   private tutorialRequested = false;
+
+  // ── Daily Rift ───────────────────────────────────────────────────────────
+  /** The UTC day this run's seed came from, or null for a normal (unseeded) run. */
+  private dailyDate: string | null = null;
 
   // ── Mid-run autosave ─────────────────────────────────────────────────────
   /** Last autosave timestamp — throttles the per-turn snapshot writes. */
@@ -255,6 +260,7 @@ class GameApp {
     const beginRun = (): void => {
       audio.init(); // unlock AudioContext on first user gesture
       if (StorageService.loadMute()) audio.toggle();
+      this.dailyDate = null;   // a normal run is never banked as the daily
       this.launchWithModifier(() => {
         this.game.paused = false;
         this.startTick();
@@ -264,6 +270,24 @@ class GameApp {
         this.maybeStartTutorial();
       });
     };
+    // The Daily Rift: one seeded run a day, identical for every player. Rebuilt
+    // from scratch (the page-load Game was generated unseeded) and locked to
+    // the default difficulty with no NG+ heat, so scores are comparable.
+    const beginDaily = (): void => {
+      audio.init();
+      if (StorageService.loadMute()) audio.toggle();
+      this.dailyDate = dailySeedString();
+      this.startGame(true, false, hashSeed(this.dailyDate));
+      this.launchWithModifier(() => {
+        this.game.paused = false;
+        this.startTick();
+        audio.startAmbient();
+        audio.playDescend();
+        this.ui.log(`The Daily Rift of ${this.dailyDate} opens — the same dark for everyone today.`, 'log-success', 'fx_arcane');
+        this.ui.showToast('The Daily Rift — one run, one chance.', 'fx_arcane');
+      }, { fixedDifficulty: 'standard', skipHeat: true });
+    };
+
     const savedRun = StorageService.loadRun();
     const saveInfo = savedRun ? GameApp.describeSave(savedRun) : null;
     this.ui.showStart(
@@ -274,6 +298,7 @@ class GameApp {
         beginRun();
       },
       savedRun && saveInfo ? { ...saveInfo, onResume: () => this.resumeRun(savedRun) } : undefined,
+      GameApp.dailyStartInfo(beginDaily),
     );
 
     document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePauseMenu());
@@ -719,7 +744,7 @@ class GameApp {
 
   // ── Game factory ─────────────────────────────────────────────────────────
 
-  private startGame(startPaused = false, forRestore = false): void {
+  private startGame(startPaused = false, forRestore = false, seed: number | null = null): void {
     this.stopTick();
     this.game = new Game({
       log:      (text, cls, icon)    => this.ui.log(text, cls, icon),
@@ -760,7 +785,8 @@ class GameApp {
         });
 
         // The Try Again button itself is wired inside <game-over-modal>.
-        this.ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story);
+        const daily = this.finishDaily(false, floor, totalXpEarned);
+        this.ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story, daily);
         this.ui.updateBestScore(highXp);
       },
 
@@ -773,7 +799,8 @@ class GameApp {
         audio.playLevelUp();
         const { highXp, history } = StorageService.recordRunEnd(this.game, 'Defeated Bres the Beautiful', stats);
 
-        this.ui.showVictory(floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story);
+        const daily = this.finishDaily(true, floor, totalXpEarned);
+        this.ui.showVictory(floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story, daily);
         this.ui.updateBestScore(highXp);
       },
 
@@ -833,7 +860,7 @@ class GameApp {
           this.startTick();
         }, undefined, reroll);
       },
-    }, { forRestore, stash: STASH });
+    }, { forRestore, stash: STASH, seed });
 
     // Fallen characters from previous runs — the first floor never rolls a
     // ghost (this loads just after the constructor's initial floor setup), but
@@ -847,10 +874,40 @@ class GameApp {
 
   // ── Class + Modifier picker then launch ───────────────────────────────────
 
-  private launchWithModifier(onReady: () => void): void {
+  /**
+   * @param opts.fixedDifficulty - Skips the difficulty picker and forces this preset (the Daily Rift, so every player's score is comparable).
+   * @param opts.skipHeat - Skips the NG+ heat ladder for the same reason.
+   */
+  /** Start-screen payload for the Daily Rift card: today's date, whether it's spent, and the streak. */
+  private static dailyStartInfo(onBegin: () => void): { date: string; played: boolean; streak: number; bestStreak: number; onBegin: () => void } {
+    const date = dailySeedString();
+    const state = StorageService.loadDaily();
+    return { date, played: StorageService.dailyPlayed(date), streak: state.streak, bestStreak: state.bestStreak, onBegin };
+  }
+
+  /**
+   * Banks a finished Daily Rift and returns the share payload for the death /
+   * victory screen. A no-op for normal runs (returns undefined), and the first
+   * attempt of a day is the one that counts.
+   */
+  private finishDaily(won: boolean, floor: number, totalXpEarned: number): { date: string; streak: number; bestStreak: number; won: boolean } | undefined {
+    const date = this.dailyDate;
+    if (date === null) return undefined;
+    this.dailyDate = null;
+    const state = StorageService.recordDaily({
+      date, floor, totalXpEarned, playerLevel: this.game.player.playerLevel, won,
+    });
+    return { date, streak: state.streak, bestStreak: state.bestStreak, won };
+  }
+
+  private launchWithModifier(onReady: () => void, opts?: { fixedDifficulty?: string; skipHeat?: boolean }): void {
     // 1) Difficulty → 2) (if unlocked) New Game+ heat → 3) class → 4) curse.
-    this.ui.showDifficultyPick(Balance.CONFIG.difficulty.presets, StorageService.loadDifficulty(), (diffId) => {
-      StorageService.saveDifficulty(diffId);
+    const pickDifficulty = (chosen: (diffId: string) => void): void => {
+      if (opts?.fixedDifficulty) { chosen(opts.fixedDifficulty); return; }
+      this.ui.showDifficultyPick(Balance.CONFIG.difficulty.presets, StorageService.loadDifficulty(), chosen);
+    };
+    pickDifficulty((diffId) => {
+      if (!opts?.fixedDifficulty) StorageService.saveDifficulty(diffId);
       const afterHeat = (heatLevel: number): void => {
         const classes: ClassDef[] = this.game.getRandomClasses(3);
         this.ui.showClassSelection(classes, (classId) => {
@@ -867,7 +924,7 @@ class GameApp {
           });
         });
       };
-      const maxHeat = StorageService.loadMaxHeat();
+      const maxHeat = opts?.skipHeat ? 0 : StorageService.loadMaxHeat();
       if (maxHeat > 0) {
         this.ui.showHeatPick(Balance.CONFIG.ngplus.tiers, maxHeat, Balance.CONFIG.ngplus.xpBonusPerHeat, afterHeat);
       } else {

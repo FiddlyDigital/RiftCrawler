@@ -94,9 +94,9 @@ interface OfferItem { id: string; role: OfferRole; }
 
 /** Shared "3-choice offer" selection logic used by both {@link Boon} and {@link Brand}. */
 export class ContentOffers {
-  private static shuffleInPlace<T>(arr: T[]): T[] {
+  private static shuffleInPlace<T>(arr: T[], rng: () => number): T[] {
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rng() * (i + 1));
       [arr[i], arr[j]] = [arr[j]!, arr[i]!];
     }
     return arr;
@@ -110,16 +110,16 @@ export class ContentOffers {
    * coherence is enforced.
    * @throws {TypeError} If `pool` is null/undefined.
    */
-  static buildOffer<T extends OfferItem>(pool: T[], ownedIds: string[]): T[] {
+  static buildOffer<T extends OfferItem>(pool: T[], ownedIds: string[], rng: () => number = Math.random): T[] {
     if (pool === null || pool === undefined) {
       throw new TypeError('ContentOffers.buildOffer: "pool" must not be null/undefined');
     }
-    const shuffled = ContentOffers.shuffleInPlace([...pool]);
+    const shuffled = ContentOffers.shuffleInPlace([...pool], rng);
     if (shuffled.length <= 3) return shuffled;
 
     const chosen: T[] = [];
     // Synergy nudge: ~55% of the time seed one owned type when it's in the pool.
-    if (ownedIds.length && Math.random() < 0.55) {
+    if (ownedIds.length && rng() < 0.55) {
       const owned = shuffled.find(x => ownedIds.includes(x.id));
       if (owned) chosen.push(owned);
     }
@@ -199,11 +199,11 @@ export class Boon implements BoonDef {
    * floors skew toward rarer tiers).
    * @throws {TypeError} If `floor` is not a finite number.
    */
-  static tierForFloor(floor: number): 1 | 2 | 3 {
+  static tierForFloor(floor: number, rng: () => number = Math.random): 1 | 2 | 3 {
     if (typeof floor !== 'number' || !Number.isFinite(floor)) {
       throw new TypeError('Boon.tierForFloor: "floor" must be a finite number');
     }
-    const r = Math.random();
+    const r = rng();
     if (floor <= 3) {
       if (r < 0.82) return 1;
       if (r < 0.98) return 2;
@@ -223,9 +223,9 @@ export class Boon implements BoonDef {
    * Picks a 3-choice boon offer from `pool` (see {@link ContentOffers.buildOffer}).
    * @throws {TypeError} If `pool` is null/undefined.
    */
-  static pickThree(pool: Boon[], ownedIds: string[] = []): Boon[] {
+  static pickThree(pool: Boon[], ownedIds: string[] = [], rng: () => number = Math.random): Boon[] {
     if (pool === null || pool === undefined) throw new TypeError('Boon.pickThree: "pool" must not be null/undefined');
-    return ContentOffers.buildOffer(pool, ownedIds);
+    return ContentOffers.buildOffer(pool, ownedIds, rng);
   }
 }
 
@@ -273,8 +273,8 @@ export class Brand implements BrandDef {
   static readonly ALL: Brand[] = (brandsData as RawBrand[]).map(raw => new Brand(raw));
 
   /** Picks a 3-choice brand offer (see {@link ContentOffers.buildOffer}). */
-  static pickThree(ownedIds: string[] = []): Brand[] {
-    return ContentOffers.buildOffer([...Brand.ALL], ownedIds);
+  static pickThree(ownedIds: string[] = [], rng: () => number = Math.random): Brand[] {
+    return ContentOffers.buildOffer([...Brand.ALL], ownedIds, rng);
   }
 }
 
@@ -428,7 +428,7 @@ export class FloorEvent implements FloorEventDef {
       game.player.hp = Math.max(1, game.player.hp - hpCost);
       game.damageTaken += hpCost;
       const pool = [...Boon.BY_TIER[1], ...Boon.BY_TIER[2]];
-      const boon = pool[Math.floor(Math.random() * pool.length)]!;
+      const boon = pool[Math.floor(game.rng() * pool.length)]!;
       game.player.addBoon(boon);
       return `The shrine grants: ${boon.name}! (${boon.desc})`;
     },
@@ -451,7 +451,7 @@ export class FloorEvent implements FloorEventDef {
       const tierBreakFloor = Balance.numOr(opt.params?.tierBreakFloor, 5);
       const tier = game.dungeonLevel >= tierBreakFloor ? 2 : 1;
       const pool = Boon.BY_TIER[tier as 1 | 2];
-      const def = pool[Math.floor(Math.random() * pool.length)]!;
+      const def = pool[Math.floor(game.rng() * pool.length)]!;
       game.player.addBoon(def);
       return `You absorb the champion's power: ${def.name}!`;
     },
@@ -497,7 +497,7 @@ export class FloorEvent implements FloorEventDef {
       const successChance = Balance.numOr(opt.params?.successChance, 0.5);
       const jackpotGold = Balance.numOr(opt.params?.jackpotGold, 2000);
       const trapDamage = Balance.numOr(opt.params?.trapDamage, 30);
-      if (Math.random() < successChance) {
+      if (game.rng() < successChance) {
         game.gold += jackpotGold;
         return `Jackpot! +${jackpotGold} gold!`;
       }
@@ -569,8 +569,8 @@ export class FloorEvent implements FloorEventDef {
   static readonly ALL: FloorEvent[] = (floorEventsData as RawFloorEvent[]).map(raw => new FloorEvent(raw));
 
   /** Picks a uniformly random floor event. */
-  static random(): FloorEvent {
-    return FloorEvent.ALL[Math.floor(Math.random() * FloorEvent.ALL.length)]!;
+  static random(rng: () => number = Math.random): FloorEvent {
+    return FloorEvent.ALL[Math.floor(rng() * FloorEvent.ALL.length)]!;
   }
 }
 
@@ -604,9 +604,9 @@ export class Npc implements NpcDef {
   static readonly ALL: Npc[] = (npcsData as NpcDef[]).map(raw => new Npc(raw));
 
   /** Picks a uniformly random wandering NPC archetype (waystation residents excluded). */
-  static random(): Npc {
+  static random(rng: () => number = Math.random): Npc {
     const pool = Npc.ALL.filter(n => !n.waystationOnly);
-    return pool[Math.floor(Math.random() * pool.length)]!;
+    return pool[Math.floor(rng() * pool.length)]!;
   }
 }
 
@@ -699,9 +699,9 @@ export class Omen implements OmenDef {
   }
 
   /** A weighted random pick across every omen. */
-  static random(): Omen {
+  static random(rng: () => number = Math.random): Omen {
     const total = Omen.ALL.reduce((sum, o) => sum + o.weight, 0);
-    let roll = Math.random() * total;
+    let roll = rng() * total;
     for (const o of Omen.ALL) {
       roll -= o.weight;
       if (roll <= 0) return o;

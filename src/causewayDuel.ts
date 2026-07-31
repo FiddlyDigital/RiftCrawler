@@ -180,7 +180,7 @@ export class CausewayDuel {
       g.cb.onParticleBurst?.(x, y, 8, '#69f0ae');
     } else {
       const pool = Boon.BY_TIER[g.dungeonLevel >= 10 ? 3 : 2];
-      const boon = pool[Math.floor(Math.random() * pool.length)]!;
+      const boon = pool[Math.floor(this.game.rng() * pool.length)]!;
       g.player.addBoon(boon);
       g.cb.log(`A Geis-stone stands on the causeway — you gain ${boon.name}!`, 'log-perk', boon.char);
       g.cb.onParticleBurst?.(x, y, 10, '#b98fc4', boon.char);
@@ -453,7 +453,7 @@ export class CausewayDuel {
             ? (fillsEdge && !deepens ? 1000 : deepens ? 200 : 0)
             : (deepens ? 1000 : (fillsEdge ? 300 : 0));
           const nearLane = -Math.min(...cells.map(c => Math.abs(c.x - laneX)));  // gentle pull toward the lane
-          const score = progress + deepest * 2 + nearLane + cells.length + Math.random() * 6;
+          const score = progress + deepest * 2 + nearLane + cells.length + this.game.rng() * 6;
           if (!best || score > best.score) best = { cells, score };
         }
       }

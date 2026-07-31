@@ -129,7 +129,7 @@ export class AbilitySystem {
         m.hp -= dmg;
         game.cb.onParticle(m.x, m.y, `-${dmg}`, '#c3272a', 16, 'fx_fire');
       }
-      if (m.hp > 0 && !m.isStunned && Math.random() < stunChance) {
+      if (m.hp > 0 && !m.isStunned && game.rng() < stunChance) {
         m.statuses.push({ type: 'stun', duration: stunDuration, power: 0 });
         game.cb.onParticle(m.x, m.y, 'TERROR', '#b98fc4', 11);
       }

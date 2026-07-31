@@ -52,7 +52,7 @@ export class NpcEncounters {
         apply: (game: Game): string => {
           game.player.removeBoon(b.id);
           const pool = Boon.BY_TIER[3].filter(x => x.id !== b.def.id);
-          const reward = (pool.length > 0 ? pool : Boon.BY_TIER[3])[Math.floor(Math.random() * (pool.length > 0 ? pool.length : Boon.BY_TIER[3].length))]!;
+          const reward = (pool.length > 0 ? pool : Boon.BY_TIER[3])[Math.floor(this.game.rng() * (pool.length > 0 ? pool.length : Boon.BY_TIER[3].length))]!;
           game.player.addBoon(reward);
           game.storyBeats.push(`traded ${b.def.name} to a Fomorian tinker for ${reward.name}`);
           return `You trade away ${b.def.name} — the tinker presses ${reward.name} into your hand.`;
@@ -65,7 +65,7 @@ export class NpcEncounters {
     } else {
       const metBefore = g.metFlavorNpcIds.has(npc.id);
       const lines = npc.lines!;
-      const flavor = metBefore && npc.returnLine ? npc.returnLine : lines[Math.floor(Math.random() * lines.length)]!;
+      const flavor = metBefore && npc.returnLine ? npc.returnLine : lines[Math.floor(this.game.rng() * lines.length)]!;
       g.metFlavorNpcIds.add(npc.id);
       event = {
         id: npc.id, emoji: npc.char, title: npc.name, flavor,
@@ -106,7 +106,7 @@ export class NpcEncounters {
     g.cb.onCodexDiscover?.('npc', npc.id);
     const metBefore = g.metFlavorNpcIds.has(npc.id);
     const lines = npc.lines ?? [];
-    const flavor = (metBefore && npc.returnLine) || lines[Math.floor(Math.random() * Math.max(1, lines.length))] || npc.name;
+    const flavor = (metBefore && npc.returnLine) || lines[Math.floor(this.game.rng() * Math.max(1, lines.length))] || npc.name;
     g.metFlavorNpcIds.add(npc.id);
     const event: FloorEventDef = {
       id: npc.id, emoji: npc.char, title: npc.name, flavor,
@@ -158,7 +158,7 @@ export class NpcEncounters {
           desc: 'Receive a fragment of their power. They will not return.',
           apply: (game: Game): string => {
             const pool = Boon.BY_TIER[2];
-            const reward = pool[Math.floor(Math.random() * pool.length)]!;
+            const reward = pool[Math.floor(this.game.rng() * pool.length)]!;
             game.player.addBoon(reward);
             game.availableGhosts = game.availableGhosts.filter(gh => gh.id !== ghost.id);
             game.cb.onGhostLaidToRest?.(ghost.id);

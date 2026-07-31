@@ -23,7 +23,7 @@ export class VendorOffers {
     const pool = Boon.BY_TIER[tier];
     const ownedIds = (): string[] => g.player.boons.map(b => b.id);
     let cost = Balance.CONFIG.economy.geasaRerollBaseCost;
-    let choices = Boon.pickThree(pool, ownedIds());
+    let choices = Boon.pickThree(pool, ownedIds(), g.rng);
     const commit = (index: number): void => {
       g.player.addBoon(choices[index]!);
       g.cb.onParticleBurst?.(g.player.x, g.player.y, 6, '#b98fc4');
@@ -39,7 +39,7 @@ export class VendorOffers {
         if (g.gold < cost) return null;
         g.gold -= cost;
         cost = Math.floor(cost * Balance.CONFIG.economy.geasaRerollCostGrowth);
-        choices = Boon.pickThree(pool, ownedIds());
+        choices = Boon.pickThree(pool, ownedIds(), g.rng);
         g.pushUI();
         return { choices, gold: g.gold, cost };
       },
@@ -52,7 +52,7 @@ export class VendorOffers {
     g.paused = true;
     const ownedIds = (): string[] => g.player.brands.map(b => b.brand.id);
     let cost = Balance.CONFIG.economy.ogmRerollBaseCost;
-    let choices = Brand.pickThree(ownedIds());
+    let choices = Brand.pickThree(ownedIds(), g.rng);
     const commit = (index: number): void => {
       const slot = BODY_PARTS[g.player.brands.length % BODY_PARTS.length]!;
       const chosen = choices[index]!;
@@ -72,7 +72,7 @@ export class VendorOffers {
         if (g.gold < cost) return null;
         g.gold -= cost;
         cost = Math.floor(cost * Balance.CONFIG.economy.ogmRerollCostGrowth);
-        choices = Brand.pickThree(ownedIds());
+        choices = Brand.pickThree(ownedIds(), g.rng);
         g.pushUI();
         return { choices, gold: g.gold, cost };
       },

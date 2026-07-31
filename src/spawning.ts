@@ -25,7 +25,7 @@ export class Spawner {
     const g = this.game;
     const def = MONSTERS[key];
     if (!def) return;
-    const isElite = elite ?? (Math.random() < Balance.CONFIG.eliteMonsters.spawnChance + g.heatAdd('eliteChanceBonus'));
+    const isElite = elite ?? (this.game.rng() < Balance.CONFIG.eliteMonsters.spawnChance + g.heatAdd('eliteChanceBonus'));
     const diff = g.difficultyTuning();
     const baseHp  = Math.floor((def.baseHp  + (g.dungeonLevel - 1) * def.hpPerLevel) * g.biomeMonsterHpMult * diff.monsterHpMult);
     const baseAtk = def.baseAtk + (g.dungeonLevel - 1) * def.atkPerLevel;
@@ -64,15 +64,15 @@ export class Spawner {
 
   /** Rolls the per-floor chance to carve a lateral vault/den room off the start platform. */
   maybeSpawnRoom(): void {
-    if (Math.random() > Balance.CONFIG.floors.dungeonRoomChance) return;
-    this.spawnRoom(Math.random() < 0.5 ? 'vault' : 'den');
+    if (this.game.rng() > Balance.CONFIG.floors.dungeonRoomChance) return;
+    this.spawnRoom(this.game.rng() < 0.5 ? 'vault' : 'den');
   }
 
   /** A monster key, weighted toward tougher species as the dungeon deepens. */
   randomMonsterKey(): string {
     const all = ['rat', 'skeleton', 'goblin_archer', 'cave_slime', 'berserker_orc', 'plague_bat'];
     const maxIdx = Math.min(all.length - 1, 1 + Math.floor(this.game.dungeonLevel / 3));
-    return all[Math.floor(Math.random() * (maxIdx + 1))]!;
+    return all[Math.floor(this.game.rng() * (maxIdx + 1))]!;
   }
 
   private spawnRoom(type: 'vault' | 'den'): void {
@@ -81,7 +81,7 @@ export class Spawner {
     // Left side: x=0..1. Right side: x=8..9. y=22..24 (one row above platform top).
     // This keeps the centre columns clear so falling blocks are never intercepted.
     const colors = { vault: '#3d2b00', den: '#2d0000' } as const;
-    const side = Math.random() < 0.5 ? 'left' : 'right';
+    const side = this.game.rng() < 0.5 ? 'left' : 'right';
     const roomX = side === 'left' ? 0 : GameConfig.COLS - 2;  // 0 or 8
     const roomY = GameConfig.ROWS - 3;                         // 22 (rows 22..24)
     const color = colors[type];

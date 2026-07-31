@@ -88,7 +88,7 @@ export class Waystation {
     g.npcTiles.push({ x: M.well.x, y: M.well.y, npcId: '__well__' });
     g.npcTiles.push({ x: M.stash.x, y: M.stash.y, npcId: '__stash__' });
     if (!g.activeBountyQuest) g.npcTiles.push({ x: M.aoife.x, y: M.aoife.y, npcId: 'aoife' });
-    if (!g.player.brandsCapped && Math.random() < Balance.CONFIG.waystation.tattooistChance) {
+    if (!g.player.brandsCapped && this.game.rng() < Balance.CONFIG.waystation.tattooistChance) {
       g.tattooTiles.push({ x: M.tattooist.x, y: M.tattooist.y });
     }
     // An Dagda takes the north-west corner while his gift goes unclaimed.
@@ -128,7 +128,7 @@ export class Waystation {
     // An Dagda: the once-per-run gift for a perfect (4-line) clear.
     if (npcTile.npcId === '__dagda__') {
       const pool = Boon.BY_TIER[3];
-      const gift = pool[Math.floor(Math.random() * pool.length)]!;
+      const gift = pool[Math.floor(this.game.rng() * pool.length)]!;
       const grant = (): void => {
         g.player.addBoon(gift);
         g.dagdaGiftClaimed = true;
