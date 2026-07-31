@@ -43,31 +43,31 @@ export class GameOverModal extends BaseModal {
   public showDeath(
     title: string, reason: string, floor: number, totalXpEarned: number, highXp: number,
     history: RunRecord[], fullLog: { text: string; cls: LogClass; icon?: string }[],
-    onRestart: () => void, stats?: RunStats, story?: string,
+    onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean },
   ): void {
     this.querySelector('#death-title')!.textContent = title;
     this.querySelector('#death-reason')!.textContent = reason;
     this.querySelector('.modal-card')?.classList.remove('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story);
+    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story, daily);
   }
 
   /** Shows the victory screen (Bres defeated) with the run's final stats and history. */
   public showVictory(
     floor: number, totalXpEarned: number, highXp: number,
     history: RunRecord[], fullLog: { text: string; cls: LogClass; icon?: string }[],
-    onRestart: () => void, stats?: RunStats, story?: string,
+    onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean },
   ): void {
     this.querySelector('#death-title')!.innerHTML = `${SpriteService.iconHTML('item_trophy', 16)}BRES VANQUISHED`;
     this.querySelector('#death-reason')!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
     this.querySelector('.modal-card')?.classList.add('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story);
+    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story, daily);
   }
 
   /** Shared body for {@link showDeath}/{@link showVictory}: fills in the stats grid, share text, run log, and history table. */
   private populateEndModal(
     floor: number, totalXpEarned: number, highXp: number, history: RunRecord[],
     fullLog: { text: string; cls: LogClass; icon?: string }[], onRestart: () => void,
-    stats?: RunStats, story?: string,
+    stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean },
   ): void {
     this.querySelector('#final-floor')!.textContent = String(floor);
     this.querySelector('#final-score')!.textContent = String(totalXpEarned);
@@ -94,7 +94,14 @@ export class GameOverModal extends BaseModal {
           <div class="stat-cell">${SpriteService.iconHTML('fx_impact', 14)}<b>${stats.biggestCombo > 0 ? `×${stats.biggestCombo + 1}` : '—'}</b><br><span>Best Combo</span></div>
           <div class="stat-cell">${SpriteService.iconHTML('item_heart', 14)}<b>${stats.damageTaken}</b><br><span>Dmg Taken</span></div>
         </div>`;
-      const shareStr = `Fl.${floor} · ${stats.monstersKilled} kills · ${stats.linesCleared} lines · Best combo ×${stats.biggestCombo + 1} · ${totalXpEarned.toLocaleString()} XP`;
+      const shareStr = daily
+        ? [
+            `Causeway to Ériu — Daily Rift ${daily.date}`,
+            `${daily.won ? '👑 Bres vanquished' : '☠ Fell on floor ' + floor} · ${totalXpEarned.toLocaleString()} XP`,
+            `${stats.monstersKilled} kills · ${stats.linesCleared} lines · best combo ×${stats.biggestCombo + 1}`,
+            daily.streak > 1 ? `🔥 ${daily.streak}-day streak (best ${daily.bestStreak})` : '🔥 streak started',
+          ].join('\n')
+        : `Fl.${floor} · ${stats.monstersKilled} kills · ${stats.linesCleared} lines · Best combo ×${stats.biggestCombo + 1} · ${totalXpEarned.toLocaleString()} XP`;
       shareText.value = shareStr;
       shareContainer.style.display = '';
       const copyBtn = this.querySelector<HTMLButtonElement>('#copy-share-btn');

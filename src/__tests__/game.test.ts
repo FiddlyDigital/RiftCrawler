@@ -2949,6 +2949,52 @@ describe('storage', () => {
     expect(StorageService.getHighXp()).toBe(0);
   });
 
+  describe('Daily Rift records and streaks', () => {
+    const result = (date: string, floor = 5): import('../types').DailyResult =>
+      ({ date, floor, totalXpEarned: 100, playerLevel: 3, won: false });
+
+    it('starts with no record, no streak, and today unplayed', () => {
+      const state = StorageService.loadDaily();
+      expect(state).toEqual({ last: null, streak: 0, bestStreak: 0 });
+      expect(StorageService.dailyPlayed('2026-07-31')).toBe(false);
+    });
+
+    it('the first attempt starts a streak of 1 and marks the day played', () => {
+      const state = StorageService.recordDaily(result('2026-07-31'));
+      expect(state.streak).toBe(1);
+      expect(state.bestStreak).toBe(1);
+      expect(StorageService.dailyPlayed('2026-07-31')).toBe(true);
+      expect(StorageService.dailyPlayed('2026-08-01')).toBe(false);
+    });
+
+    it('consecutive days extend the streak', () => {
+      StorageService.recordDaily(result('2026-07-30'));
+      StorageService.recordDaily(result('2026-07-31'));
+      const state = StorageService.recordDaily(result('2026-08-01'));  // month boundary
+      expect(state.streak).toBe(3);
+      expect(state.bestStreak).toBe(3);
+    });
+
+    it('a skipped day resets the streak but keeps the best', () => {
+      StorageService.recordDaily(result('2026-07-29'));
+      StorageService.recordDaily(result('2026-07-30'));
+      const state = StorageService.recordDaily(result('2026-08-02'));  // gap
+      expect(state.streak).toBe(1);
+      expect(state.bestStreak).toBe(2);
+    });
+
+    it('replaying the same day neither double-counts nor overwrites the result', () => {
+      StorageService.recordDaily(result('2026-07-31', 9));
+      const again = StorageService.recordDaily(result('2026-07-31', 2));
+      expect(again.streak).toBe(1);
+      expect(again.last?.floor).toBe(9);  // the first attempt is the one that counts
+    });
+
+    it('rejects a result with no date', () => {
+      expect(() => StorageService.recordDaily({} as import('../types').DailyResult)).toThrow(TypeError);
+    });
+  });
+
   it('StorageService.recordRunEnd persists high XP (max of previous and this run) and is readable back', () => {
     const game = new Game(makeCallbacks());
     game.player.totalXpEarned = 500;

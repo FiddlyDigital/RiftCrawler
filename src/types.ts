@@ -598,6 +598,25 @@ export interface CodexState {
   patrons: string[];
 }
 
+/** The outcome of one Daily Rift attempt. */
+export interface DailyResult {
+  /** UTC calendar day, `YYYY-MM-DD` — also what the run's seed is hashed from. */
+  date: string;
+  floor: number;
+  totalXpEarned: number;
+  playerLevel: number;
+  /** True if the run ended by defeating Bres rather than dying. */
+  won: boolean;
+}
+
+/** Persisted Daily Rift state: the last attempt and the streak it belongs to. */
+export interface DailyState {
+  last: DailyResult | null;
+  /** Consecutive calendar days played, counting the last attempt. */
+  streak: number;
+  bestStreak: number;
+}
+
 /**
  * The cross-run gold stash — the simulation's entire persistence surface.
  * Supplied by the host so `Game` never reaches for `localStorage` (or any
