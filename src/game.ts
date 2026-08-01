@@ -26,6 +26,7 @@ import { Balance, type DifficultyPreset } from './balance';
 import { Colors } from './colors';
 import { MemoryStash } from './stash';
 import { makeRng } from './rng';
+import type { CodexUnlock } from './codex';
 
 const TRAP_CELL: Record<'spike' | 'smoke' | 'teleport', CellValue> = {
   spike: Cell.TRAP_SPIKE, smoke: Cell.TRAP_SMOKE, teleport: Cell.TRAP_TELEPORT,
@@ -1734,6 +1735,17 @@ export class Game {
   /** Applies the chosen New Game+ heat at run start. Delegates to {@link RunSetup}. */
   public applyHeat(level: number): void {
     this.runSetup.applyHeat(level);
+  }
+
+  /**
+   * Applies the codex-completion ladder for a run start (see {@link Codex}).
+   * The host reads the persisted discovery record and passes the percentage,
+   * so the simulation stays free of storage.
+   * @param pct - Codex discovery percentage, 0-100.
+   * @returns The rungs that were applied, for the host to announce.
+   */
+  public applyCodexUnlocks(pct: number): CodexUnlock[] {
+    return this.runSetup.applyCodexUnlocks(pct);
   }
 
   // ── Modifier selection ───────────────────────────────────────────────────

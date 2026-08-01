@@ -8,6 +8,7 @@ export class GameOverModal extends BaseModal {
     return `<div class="modal-card">
       <div class="modal-title" id="death-title">DUNGEON COLLAPSE</div>
       <p style="color:#888;margin:5px 0 10px 0;" id="death-reason">Dungeon ceiling collapsed.</p>
+      <p id="next-goal" style="display:none;color:#d9a441;font-size:11px;margin:0 0 8px 0;padding:6px 10px;background:#141018;border-left:2px solid var(--accent-color);border-radius:0 3px 3px 0;line-height:1.45;"></p>
       <p id="run-story" style="display:none;color:#9d8f6f;font-style:italic;font-size:11px;margin:0 0 10px 0;line-height:1.5;"></p>
       <div style="text-align:left;padding:10px;background-color:#0c0c12;border-radius:4px;font-size:12px;">
         <p style="margin:3px 0;"><span class="spr" data-sprite="tile_stairs_up" data-size="14"></span> Floor: <b id="final-floor" style="color:var(--accent-color);">1</b></p>
@@ -44,11 +45,12 @@ export class GameOverModal extends BaseModal {
     title: string, reason: string, floor: number, totalXpEarned: number, highXp: number,
     history: RunRecord[], fullLog: { text: string; cls: LogClass; icon?: string }[],
     onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean },
+    nextGoal?: string | null,
   ): void {
     this.querySelector('#death-title')!.textContent = title;
     this.querySelector('#death-reason')!.textContent = reason;
     this.querySelector('.modal-card')?.classList.remove('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story, daily);
+    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story, daily, nextGoal);
   }
 
   /** Shows the victory screen (Bres defeated) with the run's final stats and history. */
@@ -56,11 +58,12 @@ export class GameOverModal extends BaseModal {
     floor: number, totalXpEarned: number, highXp: number,
     history: RunRecord[], fullLog: { text: string; cls: LogClass; icon?: string }[],
     onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean },
+    nextGoal?: string | null,
   ): void {
     this.querySelector('#death-title')!.innerHTML = `${SpriteService.iconHTML('item_trophy', 16)}BRES VANQUISHED`;
     this.querySelector('#death-reason')!.textContent = 'You felled Bres the Beautiful and shattered his bridge — the run is won.';
     this.querySelector('.modal-card')?.classList.add('victory');
-    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story, daily);
+    this.populateEndModal(floor, totalXpEarned, highXp, history, fullLog, onRestart, stats, story, daily, nextGoal);
   }
 
   /** Shared body for {@link showDeath}/{@link showVictory}: fills in the stats grid, share text, run log, and history table. */
@@ -68,12 +71,20 @@ export class GameOverModal extends BaseModal {
     floor: number, totalXpEarned: number, highXp: number, history: RunRecord[],
     fullLog: { text: string; cls: LogClass; icon?: string }[], onRestart: () => void,
     stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean },
+    nextGoal?: string | null,
   ): void {
     this.querySelector('#final-floor')!.textContent = String(floor);
     this.querySelector('#final-score')!.textContent = String(totalXpEarned);
     this.querySelector('#high-score')!.textContent  = String(highXp);
 
     // Short narrative recap of the run's notable moments
+    // The one thing to aim at next — the highest-leverage line on this screen.
+    const goalEl = this.querySelector<HTMLElement>('#next-goal');
+    if (goalEl) {
+      goalEl.textContent = nextGoal ? `▸ ${nextGoal}` : '';
+      goalEl.style.display = nextGoal ? '' : 'none';
+    }
+
     const storyEl = this.querySelector<HTMLElement>('#run-story');
     if (storyEl) {
       storyEl.textContent = story ?? '';

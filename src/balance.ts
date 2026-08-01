@@ -38,6 +38,17 @@ export interface MonsterAiConfig {
   gorgoth:   { stepTurns: number };
 }
 
+/** One rung of the codex unlock ladder (see `src/codex.ts`). */
+export interface CodexUnlockCfg {
+  atPct: number;
+  name: string;
+  desc: string;
+  reward:
+    | { kind: 'gold'; amount: number }
+    | { kind: 'deathward'; amount: number }
+    | { kind: 'boon'; tier: 1 | 2 | 3 };
+}
+
 /** Top-level gameplay tuning knobs, loaded from `data/balance.json`. */
 export interface BalanceConfig {
   player: {
@@ -79,6 +90,8 @@ export interface BalanceConfig {
   ghosts: { encounterChance: number; levelTolerance: number; maxStored: number };
   narrative: { closeCallHpFraction: number };
   smiths: { floorInterval: number; pieceThreshold: number; warningThreshold: number };
+  /** Codex-completion meta-progression: rungs earned by filling the lore codex, applied at the start of every run. */
+  codex: { unlocks: CodexUnlockCfg[] };
   /** Soft per-floor "how much Tetris?" guidance. `baseTarget + (level-1)*perLevel` pieces ripens a floor; `target*lingerMult` marks over-staying. The seanchai judges the run's average pieces/target ratio against the two ratio bounds. */
   floorReadiness: { baseTarget: number; perLevel: number; lingerMult: number; seanchaiEarlyRatio: number; seanchaiLateRatio: number };
   omens: { rollChance: number };
