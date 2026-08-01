@@ -368,13 +368,13 @@ export class UIManager {
   }
 
   /** Shows the death screen with the run's final stats and history. */
-  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean }): void {
-    this.modal.showDeath(title, reason, floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story, daily);
+  public showDeath(title: string, reason: string, floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean }, nextGoal?: string | null): void {
+    this.modal.showDeath(title, reason, floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story, daily, nextGoal);
   }
 
   /** Shows the victory screen (Bres defeated) with the run's final stats and history. */
-  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean }): void {
-    this.modal.showVictory(floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story, daily);
+  public showVictory(floor: number, totalXpEarned: number, highXp: number, history: RunRecord[], onRestart: () => void, stats?: RunStats, story?: string, daily?: { date: string; streak: number; bestStreak: number; won: boolean }, nextGoal?: string | null): void {
+    this.modal.showVictory(floor, totalXpEarned, highXp, history, this.fullLog, onRestart, stats, story, daily, nextGoal);
   }
 
   /** Hides the death/victory modal. */

@@ -148,6 +148,34 @@
     "pieceThreshold": 20,
     "warningThreshold": 10
   },
+  "codex": {
+    "unlocks": [
+      {
+        "atPct": 25,
+        "name": "The Keeper's Favour",
+        "desc": "The Cairn-Keeper remembers your face. Start each run with 50 gold.",
+        "reward": { "kind": "gold", "amount": 50 }
+      },
+      {
+        "atPct": 50,
+        "name": "Half the Tale Told",
+        "desc": "The seanchaí names you in his verses. Start each run with a Geis of the first tier.",
+        "reward": { "kind": "boon", "tier": 1 }
+      },
+      {
+        "atPct": 75,
+        "name": "Known to the Sídhe",
+        "desc": "The mounds owe you a death. Start each run with a Deathward charge.",
+        "reward": { "kind": "deathward", "amount": 1 }
+      },
+      {
+        "atPct": 100,
+        "name": "The Whole Reckoning",
+        "desc": "Nothing in the deep is a stranger to you. Start each run with a Geis of the second tier.",
+        "reward": { "kind": "boon", "tier": 2 }
+      }
+    ]
+  },
   "floorReadiness": {
     "baseTarget": 12,
     "perLevel": 3,

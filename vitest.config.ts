@@ -17,6 +17,7 @@ export default defineConfig({
         'src/bossEncounters.ts', 'src/vendorOffers.ts', 'src/spawning.ts',
         'src/runSetup.ts', 'src/saveGame.ts', 'src/pact.ts',
         'src/npcEncounters.ts', 'src/smithQuest.ts', 'src/gameMath.ts',
+        'src/rng.ts', 'src/stash.ts', 'src/codex.ts',
         'src/views/**',
       ],
       // Ratchet: raise these as coverage grows; CI fails if a change drops below.

@@ -1052,3 +1052,31 @@ canvas {
   html { height: var(--app-height, 100%); }
   body { height: calc(var(--app-height, 100%) / var(--ui-zoom, 1)); }
 }
+
+/* ── Codex completion + unlock ladder ───────────────────────────────────── */
+.codex-progress-track {
+  height: 6px; background: #14141c; border: 1px solid #2a2a36; border-radius: 3px; overflow: hidden;
+}
+.codex-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #6d5a86, var(--accent-color));
+  transition: width 240ms ease;
+}
+.codex-unlocks { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.codex-unlock {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 5px 7px; border-radius: 3px; background: #0e0e14; border: 1px solid #22222c;
+  opacity: 0.55;
+}
+.codex-unlock-earned {
+  opacity: 1; border-color: var(--carve-hi, #4a4a5e);
+  background: linear-gradient(180deg, #171320, #0e0e14);
+}
+.codex-unlock-pct {
+  flex: 0 0 auto; font-family: var(--font-pixel); font-size: 10px; color: #8a7aa0;
+  min-width: 30px; text-align: right; padding-top: 1px;
+}
+.codex-unlock-earned .codex-unlock-pct { color: var(--accent-color); }
+.codex-unlock strong { display: block; font-size: 11px; color: #cfc6b0; }
+.codex-unlock-earned strong { color: var(--accent-color); }
+.codex-unlock span:not(.codex-unlock-pct) { display: block; font-size: 9.5px; color: #6a6a78; line-height: 1.4; }
+@media (prefers-reduced-motion: reduce) { .codex-progress-fill { transition: none; } }

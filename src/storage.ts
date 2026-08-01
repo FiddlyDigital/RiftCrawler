@@ -53,6 +53,11 @@ export class StorageService {
     return StorageService.load().highXp ?? 0;
   }
 
+  /** The deepest floor reached across all past runs (1 if none recorded). */
+  static getDeepestFloor(): number {
+    return StorageService.load().deepestFloor ?? 1;
+  }
+
   /**
    * Records the end of a run: updates the best-score/deepest-floor record
    * and prepends a run-history entry.

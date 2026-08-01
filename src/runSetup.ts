@@ -1,4 +1,5 @@
-import { CLASSES, MODIFIERS, type ClassDef } from './content';
+import { Boon, CLASSES, MODIFIERS, type ClassDef } from './content';
+import { Codex, type CodexUnlock } from './codex';
 import { Balance } from './balance';
 import type { ModifierDef } from './types';
 import type { Game } from './game';
@@ -92,6 +93,42 @@ export class RunSetup {
     g.cb.log(`Heat ${g.heatLevel}: +${Math.round(Balance.CONFIG.ngplus.xpBonusPerHeat * g.heatLevel * 100)}% XP for the burden.`, 'log-perk', 'special_sacred');
     g.storyBeats.push(`took up ${g.heatLevel} ${g.heatLevel === 1 ? 'geis' : 'geasa'} of the victorious`);
     g.pushUI();
+  }
+
+  /**
+   * Applies the codex-completion ladder at run start: every rung whose
+   * threshold the player's discovery percentage has passed. Rewards are small
+   * and permanent — the point is that filling the codex is worth doing, not
+   * that it trivialises a run.
+   *
+   * @param pct - Codex discovery percentage, 0-100.
+   * @returns The rungs applied, so the host can announce them.
+   * @throws {TypeError} If `pct` is not a finite number.
+   */
+  applyCodexUnlocks(pct: number): CodexUnlock[] {
+    if (typeof pct !== 'number' || !Number.isFinite(pct)) {
+      throw new TypeError('RunSetup.applyCodexUnlocks: "pct" must be a finite number');
+    }
+    const g = this.game;
+    const earned = Codex.earned(pct);
+    for (const unlock of earned) {
+      const r = unlock.reward;
+      if (r.kind === 'gold') {
+        g.gold += r.amount;
+      } else if (r.kind === 'deathward') {
+        g.player.deathwardCharges += r.amount;
+      } else {
+        const pool = Boon.BY_TIER[r.tier];
+        const boon = pool[Math.floor(g.rng() * pool.length)];
+        if (boon) g.player.addBoon(boon);
+      }
+      g.cb.log(`${unlock.name} — ${unlock.desc}`, 'log-perk', 'item_book');
+    }
+    if (earned.length > 0) {
+      g.storyBeats.push(`carried the codex's favour (${pct}% known)`);
+      g.pushUI();
+    }
+    return earned;
   }
 
   // ── Modifier selection ───────────────────────────────────────────────────

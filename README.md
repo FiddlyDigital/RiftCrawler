@@ -72,7 +72,8 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
 | **Biomes & terrain** | `src/dataLoader.ts`, `src/game.ts` | Depth-scaled monster HP and gravity, biome-specific bosses, and a **terrain type** (swamp/sacred/ice) that certain piece shapes lay down on lock. Both the kind *and the density* of terrain are biome traits: each biome's `terrainShapes` set decides which shapes freeze into ground, so the Sídhe Caverns ice up more of the board (S/L/J/O/I) than the shallow Cairn Halls (S/L/J) — the play-feel shifts as you descend, not just the palette. |
 | **Boss floors** | `src/game.ts` | Every 5th floor is boss-eligible — entering one toasts "You sense dark forces lie in ambush!" — but the boss doesn't spawn until the built floor covers **at least half the field** overall (not just one tall column), so reaching the stairs early just carries the fight into the next floor instead of skipping it. |
 | **Floor events** | `src/data/floor-events.json` | A narrative choice every few descents (skip boss floors) — standing stones, Fomorian plunder, etc., each with data-driven option handlers. Rolled on the descent but embodied as a **sheltering stranger in the waystation**, held (across floors if need be) until you visit and meet them. |
-| **Lore codex** | `src/storage.ts`, `<codex-modal>` | Cross-run discovery log for bosses/NPCs/biomes/patrons, persisted in `localStorage`. |
+| **Lore codex** | `src/codex.ts`, `src/storage.ts`, `<codex-modal>` | Cross-run discovery log for bosses/NPCs/biomes/patrons, persisted in `localStorage`, with a completion bar (`9 / 23 discovered`) and an **unlock ladder**: passing 25 / 50 / 75 / 100% grants a small permanent perk at the start of every future run — starting gold, a tier-I Geis, a Deathward charge, a tier-II Geis. Tuned in `balance.json`'s `codex.unlocks`; ids that no longer match live content are ignored rather than inflating the count. |
+| **Next goal** | `src/views/nextGoal.ts` | The death/victory screen names the single nearest unfinished thing — "One floor short of your deepest (9)", "2 codex entries from complete", "the Spear of Lugh needs 1 more" — so a loss ends with something to aim at instead of a dead end. Ordered by how *close* a goal is, not how big. |
 | **Lugh's Spear questline** | `src/data/smiths.json`, `src/smithQuest.ts` | Every 3rd floor (skipping boss floors) toasts "You hear the clang of an anvil..." on entry, "The sound of anvils is getting stronger!" at 10 shapes placed, and embeds one of three legendary smiths (Luchta, Credne, Goibniu) as a guaranteed encounter on the 20th shape dropped that floor (`balance.json`'s `smiths` block). Each grants one spear part; Goibniu's third meeting reforges it, replacing the player's ranged ability with a bolt that pierces every monster straight up their own shape column. |
 | **Shape reward** | `src/game.ts` | Clearing all 4 lines at once (once per run) draws the eye of **An Dagda** himself: no dialog interrupts the clear — the Good God takes a seat in the sídhe mound's corner with his cauldron, and greeting him gifts one random tier-3 Geis. |
 | **Floor progress dial** | `src/ui.ts`, `#hud-strip` | The HUD shows one compact segment per pending milestone — smith piece count, boss fill %, stairs pity countdown (hidden while a stairs tile is on the board) — so "keep stacking or descend?" is an informed choice. |
@@ -154,8 +155,10 @@ src/
   gameMath.ts      Pure helpers: rotateMatrix, tick-rate, scoring
   views/           Read-only projections of Game state (no logic):
                    inspect.ts (tap-to-inspect), charSheet.ts, uiState.ts
-                   (the HUD UIState snapshot)
+                   (the HUD UIState snapshot), nextGoal.ts (the run-end
+                   "what to chase next" line)
   entities.ts      Player, Monster, StatMath (simulation only — no rendering)
+  codex.ts         Codex completion maths + the unlock ladder it feeds
   rng.ts           Seedable RNG: mulberry32 (`makeRng`), `hashSeed`, and the
                    UTC `dailySeedString` behind the Daily Rift
   stash.ts         MemoryStash — the default StashPort for hosts with no

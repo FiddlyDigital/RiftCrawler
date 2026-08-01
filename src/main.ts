@@ -10,9 +10,11 @@ import { CrashReporter } from './errorReporting';
 import { audio } from './audio';
 import { HapticsController } from './haptics';
 import { TutorialController, FIGHT_STEP_INDEX, type TutorialEvent } from './tutorial';
-import { CLASSES } from './content';
+import { CLASSES, SMITHS, RESCUES } from './content';
 import { Balance } from './balance';
 import { hashSeed, dailySeedString } from './rng';
+import { Codex } from './codex';
+import { buildNextGoal } from './views/nextGoal';
 import type { AudioEvent, BoonDef, BrandDef, ClassDef, FloorEventDef, SavedRun } from './types';
 
 /** The one cross-run gold coffer for the page, handed to every Game as its StashPort. */
@@ -772,6 +774,7 @@ class GameApp {
         StorageService.clearRun();  // a fallen run can't be resumed
         audio.stopAmbient();
         audio.playDeath();
+        const nextGoal = this.nextGoalLine(floor, totalXpEarned, false);
         const { highXp, history } = StorageService.recordRunEnd(this.game, reason, stats);
 
         // This fallen character may return as a ghost in a future run.
@@ -786,7 +789,7 @@ class GameApp {
 
         // The Try Again button itself is wired inside <game-over-modal>.
         const daily = this.finishDaily(false, floor, totalXpEarned);
-        this.ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story, daily);
+        this.ui.showDeath(title, reason, floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story, daily, nextGoal);
         this.ui.updateBestScore(highXp);
       },
 
@@ -797,10 +800,11 @@ class GameApp {
         StorageService.unlockHeat(this.game.heatLevel + 1);
         audio.stopAmbient();
         audio.playLevelUp();
+        const nextGoal = this.nextGoalLine(floor, totalXpEarned, true);
         const { highXp, history } = StorageService.recordRunEnd(this.game, 'Defeated Bres the Beautiful', stats);
 
         const daily = this.finishDaily(true, floor, totalXpEarned);
-        this.ui.showVictory(floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story, daily);
+        this.ui.showVictory(floor, totalXpEarned, highXp, history, () => this.restartRun(), stats, story, daily, nextGoal);
         this.ui.updateBestScore(highXp);
       },
 
@@ -878,6 +882,29 @@ class GameApp {
    * @param opts.fixedDifficulty - Skips the difficulty picker and forces this preset (the Daily Rift, so every player's score is comparable).
    * @param opts.skipHeat - Skips the NG+ heat ladder for the same reason.
    */
+  /**
+   * The "next goal" line for the run-end screen. Must be called BEFORE
+   * `recordRunEnd`, which folds this run into the records we measure against.
+   */
+  private nextGoalLine(floor: number, totalXpEarned: number, won: boolean): string | null {
+    const codex = Codex.progress(StorageService.loadCodex());
+    return buildNextGoal({
+      floor,
+      deepestFloor: StorageService.getDeepestFloor(),
+      totalXpEarned,
+      highXp: StorageService.getHighXp(),
+      codexDiscovered: codex.discovered,
+      codexTotal: codex.total,
+      smithsMet: this.game.smithsMetCount,
+      smithsTotal: SMITHS.length,
+      spearForged: this.game.spearForged,
+      rescuedCount: this.game.rescuedIds.size,
+      rescuesTotal: RESCUES.length,
+      dailyStreak: StorageService.loadDaily().streak,
+      won,
+    });
+  }
+
   /** Start-screen payload for the Daily Rift card: today's date, whether it's spent, and the streak. */
   private static dailyStartInfo(onBegin: () => void): { date: string; played: boolean; streak: number; bestStreak: number; onBegin: () => void } {
     const date = dailySeedString();
@@ -915,6 +942,8 @@ class GameApp {
           // Applied after the class so the difficulty's HP multiplier covers class bonuses.
           this.game.applyDifficulty(diffId);
           if (heatLevel > 0) this.game.applyHeat(heatLevel);
+          // Cross-run codex progress grants its earned rungs at every run start.
+          this.game.applyCodexUnlocks(Codex.progress(StorageService.loadCodex()).pct);
           const mods = this.game.getRandomModifiers(3);
           this.ui.showModifierPick(mods, (modId) => {
             this.game.applyModifier(modId);
