@@ -28,6 +28,7 @@ Built with TypeScript + Vite as an installable PWA. Rendering is a single `<canv
   - [Tech stack](#tech-stack)
   - [Getting started](#getting-started)
   - [Project structure](#project-structure)
+    - [The simulation / host boundary](#the-simulation--host-boundary)
   - [Data files](#data-files)
     - [`monsters.json`](#monstersjson)
     - [`bosses.json`](#bossesjson)
@@ -154,18 +155,23 @@ src/
   views/           Read-only projections of Game state (no logic):
                    inspect.ts (tap-to-inspect), charSheet.ts, uiState.ts
                    (the HUD UIState snapshot)
-  entities.ts      Player, Monster, ParticlePool
+  entities.ts      Player, Monster, StatMath (simulation only — no rendering)
+  rng.ts           Seedable RNG: mulberry32 (`makeRng`), `hashSeed`, and the
+                   UTC `dailySeedString` behind the Daily Rift
+  stash.ts         MemoryStash — the default StashPort for hosts with no
+                   persistence (headless runs, tests)
+  particles.ts     Render-layer floating text/burst particles (canvas)
   renderer.ts      Canvas drawing (tiles, block, hero, particles, telegraphs)
   ui.ts            HUD (stats/log/sidebar/tooltip) + a thin delegator to
                    every modal component (see components/ below)
   components/      One native custom element per modal (Light DOM, no
                    framework) — base-modal.ts (shared show/hide/render),
                    crash-modal, pause-modal, boss-warning-modal,
-                   modifier-modal, class-modal, floor-event-modal,
-                   offer-modal (shared altar/tattoo picker), shop-modal,
-                   char-sheet-modal, codex-modal, game-over-modal,
-                   start-modal, and an index.ts barrel of side-effect
-                   imports that registers them all
+                   modifier-modal, class-modal, difficulty-modal, heat-modal,
+                   controls-modal, floor-event-modal, offer-modal (shared
+                   altar/tattoo picker), shop-modal, char-sheet-modal,
+                   codex-modal, game-over-modal, start-modal, and an index.ts
+                   barrel of side-effect imports that registers them all
   input.ts         Keyboard, on-screen buttons, gamepad
   config.ts        CONFIG (10×25 grid, 17px tiles) + shape re-exports
   types.ts         Shared types: Cell/Tile enums, EffectSpec, *Def interfaces,
@@ -182,7 +188,8 @@ src/
   sprites.ts       SpriteService (sprite-atlas → <canvas>/HTML icon
                    rendering) + HtmlUtils (shared HTML-escaping)
   storage.ts       localStorage (high XP, run history, mute, reduced-motion,
-                   ghosts, lore codex)
+                   ghosts, lore codex, Daily Rift streak) + BrowserStash,
+                   the browser StashPort implementation
   audio.ts         Web Audio SFX
   errorReporting.ts Fatal-error normalization (DOM-free) wired into the
                    crash-recovery modal
@@ -201,6 +208,11 @@ scripts/
   validate-data.mjs  Validates every src/data/*.json against its schema;
                      runs standalone (`npm run validate-data`) and as the
                      "prebuild" step before every `npm run build`
+  smoke-test.mjs     Playwright smoke test: boots the built app, starts a
+                     run, drives real input, asserts no uncaught errors
+  headless.mjs       Boots the simulation in plain Node with the browser
+                     globals booby-trapped — the runtime half of the
+                     sim/host boundary guard (`npm run headless`)
 public/
   icons/           PWA icon set (48–512px, maskable variants, favicon,
                    apple-touch-icon)
@@ -336,23 +348,34 @@ After any content change: `npm run lint && npm test && npm run build` (the build
 **One command runs every quality gate** — the same set CI enforces:
 
 ```bash
-npm run verify        # typecheck + lint + schema validation + tests w/ coverage thresholds + build
+npm run verify        # typecheck · lint · schema validation · tests w/ coverage
+                      # thresholds · headless sim · build · Playwright smoke
 ```
 
-Individually: `npm run typecheck` (tsc), `npm run lint` (oxlint, warnings are errors), `npm run validate-data` (AJV against `schema/*.json`), `npm run test:coverage` (vitest + v8 coverage with ratchet thresholds in `vitest.config.ts` — raise them as coverage grows, CI fails if a change drops below).
+Individually: `npm run typecheck` (tsc), `npm run lint` (oxlint, warnings are errors), `npm run validate-data` (AJV against `schema/*.json`), `npm run test:coverage` (vitest + v8 coverage with ratchet thresholds in `vitest.config.ts` — raise them as coverage grows, CI fails if a change drops below), `npm run headless` (plays the simulation in Node with no DOM), `npm run smoke` (Playwright against the built app).
 
 **Versioning**: every Pages deploy is stamped `1.0.<run number>` (shown on the start screen and pause menu, `dev` locally), so bug reports can name the exact build.
 
 ### Test suite
 
 
-Unit tests live in `src/__tests__/` and run on **Vitest** (`npm test`). They cover the pure game logic — combat math, spawning, line clears, boons/brands/curses (including the JSON effect resolver), the Gorgoth endgame, and monster AI. There's no jsdom/happy-dom configured, so **the UI/component/renderer layers have no unit harness** — verify those changes live in the browser (`npm run dev`), driving the actual DOM rather than poking internals.
+Three layers of automated checking, each aimed at a different failure mode:
+
+| Gate | What it covers |
+|---|---|
+| **Unit tests** — `src/__tests__/`, Vitest (`npm test`) | The simulation: combat math, spawning, line clears, boons/brands/curses (including the JSON effect resolver), save/restore, seeded runs, the Gorgoth endgame, monster AI. Runs in `environment: 'node'` with **no jsdom** — which is possible precisely because the sim has no DOM dependency. |
+| **Headless sim** — `npm run headless` | Boots a real `Game` in plain Node with `document`/`window`/`localStorage`/`navigator` booby-trapped to throw, plays 1500 turns, then round-trips `serialize()` → `applySave()`. Catches a browser dependency creeping into the simulation. |
+| **Smoke test** — `npm run smoke` | Playwright against the *built* app: starts a run, drives real keyboard/touch input, asserts the canvas renders and nothing throws. |
+
+The **UI/component/renderer layers have no unit harness** by design — they're covered by the smoke test and by driving the real thing (`npm run dev`) rather than poking internals. When changing them, verify in a browser.
+
+Coverage thresholds (`vitest.config.ts`) are scoped to the simulation layer only, and ratchet upward — CI fails if a change drops below.
 
 ---
 
 ## Notes & gotchas
 
-- **`npm run build` does not type-check** (esbuild). Run `npm run lint` (`tsc --noEmit`) before trusting a build.
+- **`npm run build` does not type-check** (the bundler strips types without checking them). Run `npm run typecheck` (`tsc --noEmit`) before trusting a build — `npm run lint` is oxlint, which is a separate gate.
 - **Movement is orthogonal only** for everyone — a diagonally-adjacent enemy must step to a cardinal tile before it can attack.
 - **The Gorgoth fight has no line clears** (blocks stop), so line-clear-oriented builds don't contribute during it — combat/dodge/crit/sustain/ranged builds carry the finale.
 - **Modals are Light DOM custom elements, not Shadow DOM.** Every existing `id`/`class` on a modal's markup is preserved verbatim when it moved from a static `<div>` in `index.html` into a component's `template()` string — `style.css` needs no per-component changes. Keep it that way: don't introduce element-type-qualified CSS selectors (`div.modal-overlay`), or a future component could stop matching them.
