@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Game } from '../game';
 import { RESCUES } from '../content';
+import { Balance } from '../balance';
 import type { GameCallbacks, LogClass, FloorEventDef, ShopItem, BoonDef } from '../types';
 
 type Reroll = { run: () => { choices: BoonDef[]; gold: number; cost: number } | null };
@@ -167,6 +168,60 @@ describe('VendorOffers', () => {
       expect(ev.event.flavor).toMatch(/answers once|only ale/i);
       ev.onChoice(0);
       expect(game.player.atk).toBe(atkAfterFirst);   // no second cup
+    });
+
+    it('Eithne (fate) trades the active Rift Curse for another, lifting the old one first', () => {
+      game.applyModifier('glass_cannon');           // +8 ATK, −15 Max HP
+      const atkUnderCurse = game.player.atk;
+      game.vendorOffers.rescueService(rescue('eithne'));
+      const ev = cb.ev()!;
+      expect(ev.event.options.length).toBeGreaterThan(1);   // 2 swaps + "keep what I carry"
+      ev.onChoice(0);
+      expect(game.activeModifierId).not.toBe('glass_cannon');
+      expect(game.player.atk).not.toBe(atkUnderCurse);      // Glass Cannon's +8 was lifted
+      expect(game.player.hp).toBeLessThanOrEqual(game.player.maxHp);
+    });
+
+    it('Eithne has nothing to turn when no Rift Curse rides the hero', () => {
+      game.activeModifierId = null;
+      game.vendorOffers.rescueService(rescue('eithne'));
+      const ev = cb.ev()!;
+      expect(ev.event.options).toHaveLength(1);
+      ev.onChoice(0);
+      expect(game.activeModifierId).toBeNull();
+    });
+
+    it('Dian Cécht (physician) heals in full and grants a deathward — but only one at a time', () => {
+      game.player.hp = 1;
+      game.player.deathwardCharges = 0;
+      game.vendorOffers.rescueService(rescue('diancecht'));
+      cb.ev()!.onChoice(0);   // kneel for the incantation
+      expect(game.player.hp).toBe(game.player.maxHp);
+      expect(game.player.deathwardCharges).toBe(1);
+      // Warded already: the offer collapses to a single dismissable line.
+      game.vendorOffers.rescueService(rescue('diancecht'));
+      const second = cb.ev()!;
+      expect(second.event.options).toHaveLength(1);
+      second.onChoice(0);
+      expect(game.player.deathwardCharges).toBe(1);
+    });
+
+    it('Midir (gambler) takes the stake up front and opens a fidchell match', () => {
+      const stake = Balance.CONFIG.rescues.wagerStake;
+      game.gold = stake + 25;
+      game.vendorOffers.rescueService(rescue('midir'));
+      cb.ev()!.onChoice(0);   // play him
+      expect(game.gold).toBe(25);
+      expect(game.inFidchell).toBe(true);
+    });
+
+    it('Midir will not play a hero who cannot cover the stake', () => {
+      game.gold = Balance.CONFIG.rescues.wagerStake - 1;
+      game.vendorOffers.rescueService(rescue('midir'));
+      const ev = cb.ev()!;
+      expect(ev.event.options).toHaveLength(1);
+      ev.onChoice(0);
+      expect(game.inFidchell).toBe(false);
     });
   });
 });

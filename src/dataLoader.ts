@@ -12,7 +12,7 @@ import patronsData        from './data/patrons.json';
 import smithsData          from './data/smiths.json';
 import rescuesData         from './data/rescues.json';
 import omensData           from './data/omens.json';
-import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef, type RescueDef, type OmenDef } from './types';
+import { Cell, type CellValue, type StatusType, type ModifierDef, type ClassDef, type BiomeDef, type FloorEventDef, type FloorEventOption, type RangedAbility, type BoonDef, type BrandDef, type OfferRole, type EffectSpec, type NpcDef, type PatronDef, type SmithDef, type RescueDef, type OmenDef, type StatSnapshot } from './types';
 import type { Player } from './entities';
 import type { Game } from './game';
 import type { MonsterDef, BossDef } from './types';
@@ -86,6 +86,41 @@ export class EffectResolver {
     }
     for (const e of effects ?? []) {
       EffectResolver.applyOne((e.target === 'game' ? game : game.player) as unknown as Record<string, number | boolean>, e);
+    }
+  }
+
+  /**
+   * Records the current value of every stat `effects` would touch, so the
+   * mutation can be undone later ({@link restoreSnapshot}). `set` operations
+   * discard the old value, and clamps make `add`/`mul` non-invertible, so
+   * undo has to be a recorded restore rather than inverse arithmetic.
+   * @throws {TypeError} If `game` is null/undefined.
+   */
+  static snapshotForGame(game: Game, effects: EffectSpec[] | undefined): StatSnapshot[] {
+    if (game === null || game === undefined) {
+      throw new TypeError('EffectResolver.snapshotForGame: "game" must not be null/undefined');
+    }
+    return (effects ?? []).map(e => {
+      const target = e.target === 'game' ? 'game' : 'player';
+      const obj = (target === 'game' ? game : game.player) as unknown as Record<string, number | boolean>;
+      return { target, stat: e.stat, value: obj[e.stat] as number | boolean };
+    });
+  }
+
+  /**
+   * Puts every stat in `snapshot` back to its recorded value. Applied in
+   * reverse so that two effects touching the same stat unwind in order.
+   * @throws {TypeError} If `game` is null/undefined.
+   */
+  static restoreSnapshot(game: Game, snapshot: StatSnapshot[] | undefined): void {
+    if (game === null || game === undefined) {
+      throw new TypeError('EffectResolver.restoreSnapshot: "game" must not be null/undefined');
+    }
+    const snap = snapshot ?? [];
+    for (let i = snap.length - 1; i >= 0; i--) {
+      const s = snap[i]!;
+      const obj = (s.target === 'game' ? game : game.player) as unknown as Record<string, number | boolean>;
+      obj[s.stat] = s.value;
     }
   }
 }
@@ -309,6 +344,18 @@ export class Modifier implements ModifierDef {
     if (game === null || game === undefined) throw new TypeError('Modifier.apply: "game" must not be null/undefined');
     EffectResolver.applyToGame(game, this.effects);
     if (this.special) MODIFIER_SPECIALS[this.special]?.(game);
+  }
+
+  /**
+   * Records the pre-apply values of every stat this modifier touches, so
+   * {@link EffectResolver.restoreSnapshot} can lift it again (Eithne's geis
+   * trade — see `Game.recastModifier`). Take it immediately before
+   * {@link apply}. A `special` hook is *not* captured: those are one-off
+   * flourishes (a full heal), not standing effects, and are simply left be.
+   * @throws {TypeError} If `game` is null/undefined.
+   */
+  snapshot(game: Game): StatSnapshot[] {
+    return EffectResolver.snapshotForGame(game, this.effects);
   }
 
   /** Every modifier loaded from `data/modifiers.json`. */
@@ -643,7 +690,7 @@ export class Rescue implements RescueDef {
   readonly id: string;
   readonly char: string;
   readonly name: string;
-  readonly service: 'wright' | 'seer' | 'cook' | 'healer' | 'harper';
+  readonly service: 'wright' | 'seer' | 'cook' | 'healer' | 'harper' | 'fate' | 'physician' | 'gambler';
   readonly captiveLine: string;
   readonly thanksLine: string;
   readonly serviceFlavor: string;

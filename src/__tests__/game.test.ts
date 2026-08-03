@@ -15,6 +15,7 @@ import { CrashReporter } from '../errorReporting';
 import { StorageService } from '../storage';
 import { MemoryStash } from '../stash';
 import { makeRng, hashSeed, dailySeedString } from '../rng';
+import { Waystation } from '../waystation';
 
 // ── Pure function tests ──────────────────────────────────────────────────────
 
@@ -2545,16 +2546,34 @@ describe('New omens (lore expansion) and rescue services', () => {
     expect(game.herbTiles).toHaveLength(0);
   });
 
-  it('all five rescued residents fit inside the mound chamber', () => {
+  it('every rescued resident gets their own seat inside the mound chamber', () => {
     const game = new Game(makeCallbacks());
     for (const r of RESCUES) game.rescuedIds.add(r.id);
     (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const M = Game.MOUND;
     const residents = game.npcTiles.filter(n => n.npcId.startsWith('__rescue_'));
     expect(residents).toHaveLength(RESCUES.length);
     for (const r of residents) {
-      expect(r.x).toBeGreaterThanOrEqual(Game.MOUND.x0);
-      expect(r.x).toBeLessThanOrEqual(Game.MOUND.x1);
+      expect(r.x).toBeGreaterThanOrEqual(M.x0);
+      expect(r.x).toBeLessThanOrEqual(M.x1);
+      expect(r.y).toBeGreaterThanOrEqual(M.y0);
+      expect(r.y).toBeLessThanOrEqual(M.y1);
+      // The exit stairs are never blocked by a resident.
+      expect(`${r.x},${r.y}`).not.toBe(`${M.stairs.x},${M.stairs.y}`);
     }
+    // No two residents (or fixtures) share a tile.
+    const occupied = game.npcTiles.map(n => `${n.x},${n.y}`);
+    expect(new Set(occupied).size).toBe(occupied.length);
+  });
+
+  it('the mound seats wrap onto the bottom row once the north wall is full', () => {
+    const seats = Array.from({ length: 13 }, (_, i) => Waystation.rescueSeat(i));
+    expect(new Set(seats.map(s => `${s.x},${s.y}`)).size).toBe(13);
+    expect(seats.filter(s => s.y === Game.MOUND.y1).length).toBeGreaterThan(0);
+    // Out-of-range indices clamp to the last seat rather than escaping the room.
+    const last = seats[12]!;
+    expect(Waystation.rescueSeat(99)).toEqual(last);
+    expect(Waystation.rescueSeat(-1)).toEqual(seats[0]);
   });
 });
 

@@ -46,6 +46,30 @@ describe('Waystation — mound entry', () => {
     (game as unknown as { enterWaystation(): void }).enterWaystation();
     expect(game.npcTiles.some(n => n.npcId === '__dagda__')).toBe(true);
   });
+
+  it('re-entering rebuilds the same chamber without a second arrival beat', () => {
+    game.rescuedIds.add('midir');
+    (game as unknown as { enterWaystation(): void }).enterWaystation();
+    const before = JSON.stringify([...game.npcTiles].sort((a, b) => a.npcId.localeCompare(b.npcId)));
+    const beatsBefore = game.storyBeats.length;
+    game.clearBoardEntities();      // as a fidchell match does when it takes the room
+    game.reenterWaystation();
+    const after = JSON.stringify([...game.npcTiles].sort((a, b) => a.npcId.localeCompare(b.npcId)));
+    expect(after).toBe(before);
+    expect(game.map[Game.MOUND.stairs.x]![Game.MOUND.stairs.y]).toBe(Tile.STAIRS);
+    expect(game.storyBeats).toHaveLength(beatsBefore);   // you never left, so nothing is re-narrated
+  });
+
+  it("a rebuild does not re-roll the tattooist's visit", () => {
+    for (let i = 0; i < 20; i++) {
+      const g = new Game(makeCallbacks());
+      (g as unknown as { enterWaystation(): void }).enterWaystation();
+      const present = g.tattooTiles.length;
+      g.clearBoardEntities();
+      g.reenterWaystation();
+      expect(g.tattooTiles.length).toBe(present);
+    }
+  });
 });
 
 describe('Waystation — bump interactions', () => {

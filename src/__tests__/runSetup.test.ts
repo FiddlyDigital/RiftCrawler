@@ -75,4 +75,44 @@ describe('RunSetup — start-of-run pickers', () => {
       expect(game.frozenRift).toBe(true);
     });
   });
+
+  describe('recastModifier (Eithne trades the geis)', () => {
+    it('lifts the old curse back to its pre-apply values before speaking the new one', () => {
+      const baseAtk = game.player.atk, baseMaxHp = game.player.maxHp;
+      game.applyModifier('glass_cannon');            // +8 ATK, −15 Max HP
+      expect(game.player.atk).toBe(baseAtk + 8);
+      game.recastModifier('frozen_rift');            // a curse with no stat effects
+      expect(game.activeModifierId).toBe('frozen_rift');
+      expect(game.player.atk).toBe(baseAtk);
+      expect(game.player.maxHp).toBe(baseMaxHp);
+      expect(game.frozenRift).toBe(true);
+    });
+
+    it('restores a `set` effect to the value it overwrote, not to a hard-coded default', () => {
+      game.xpMultiplier = 1.25;                      // e.g. a difficulty preset already set this
+      game.applyModifier('cursed');                  // sets xpMultiplier to 2 and noLineHeal true
+      expect(game.xpMultiplier).toBe(2);
+      game.recastModifier('frozen_rift');
+      expect(game.xpMultiplier).toBe(1.25);
+      expect(game.noLineHeal).toBe(false);
+    });
+
+    it('never leaves the hero above their restored Max HP', () => {
+      game.applyModifier('glass_cannon');            // full-heals at the lower Max HP
+      game.recastModifier('berserker');              // halves Max HP from the restored base
+      expect(game.player.hp).toBeLessThanOrEqual(game.player.maxHp);
+    });
+
+    it('an unknown replacement id leaves the active curse untouched', () => {
+      game.applyModifier('glass_cannon');
+      const atk = game.player.atk;
+      game.recastModifier('__nope__');
+      expect(game.activeModifierId).toBe('glass_cannon');
+      expect(game.player.atk).toBe(atk);
+    });
+
+    it('rejects an empty id', () => {
+      expect(() => game.recastModifier('')).toThrow(TypeError);
+    });
+  });
 });

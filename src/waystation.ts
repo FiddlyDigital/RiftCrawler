@@ -39,6 +39,21 @@ export class Waystation {
     stairs:     { x: 8, y: 16 },
   } as const;
 
+  /**
+   * Where the i-th freed captive stands. They line the north wall first, then
+   * wrap along the south wall — the mound is 8 tiles wide, so a single row
+   * would push the 8th resident out through the chamber wall. The south wall's
+   * far corner is left clear for the exit stairs.
+   */
+  static rescueSeat(index: number): { x: number; y: number } {
+    const M = Waystation.MOUND;
+    const north = Array.from({ length: M.x1 - 2 + 1 }, (_, i) => ({ x: 2 + i, y: M.y0 }));
+    // The south wall stops one short of x1 — that corner is the exit stairs.
+    const south = Array.from({ length: M.x1 - 1 - 2 + 1 }, (_, i) => ({ x: 2 + i, y: M.y1 }));
+    const seats = [...north, ...south];
+    return seats[Math.min(Math.max(0, index), seats.length - 1)]!;
+  }
+
   constructor(private readonly game: Game) {}
 
   /**
@@ -50,6 +65,28 @@ export class Waystation {
    * Dearg's stall (shop), and the stairs on.
    */
   enter(): void {
+    const g = this.game;
+    this.build(true);
+    g.cb.onAudio?.('waystationEnter');
+    g.cb.log('You surface into a sídhe mound — a hush, a hearth, and friendly faces. The stairs will keep.', 'log-success', 'special_sacred');
+    g.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');
+    g.storyBeats.push('rested in a sídhe mound');
+    g.pushUI();
+  }
+
+  /**
+   * Rebuilds the mound around the hero after something took the chamber over
+   * mid-visit (Midir's fidchell wager clears the board to lay out its own).
+   * Same layout, no arrival fanfare — you never left, so there is no second
+   * "you surface into a mound" beat, and the tattooist's visit is not re-rolled.
+   */
+  reenter(): void {
+    this.build(false);
+    this.game.pushUI();
+  }
+
+  /** Lays out the chamber, its fixtures and its residents. Shared by {@link enter} and {@link reenter}. */
+  private build(rollTattooist: boolean): void {
     const g = this.game;
     g.inWaystation = true;
     g.blockMatrix = [];  // no falling stone inside the mound
@@ -88,7 +125,8 @@ export class Waystation {
     g.npcTiles.push({ x: M.well.x, y: M.well.y, npcId: '__well__' });
     g.npcTiles.push({ x: M.stash.x, y: M.stash.y, npcId: '__stash__' });
     if (!g.activeBountyQuest) g.npcTiles.push({ x: M.aoife.x, y: M.aoife.y, npcId: 'aoife' });
-    if (!g.player.brandsCapped && this.game.rng() < Balance.CONFIG.waystation.tattooistChance) {
+    if (rollTattooist) g.moundTattooist = this.game.rng() < Balance.CONFIG.waystation.tattooistChance;
+    if (g.moundTattooist && !g.player.brandsCapped) {
       g.tattooTiles.push({ x: M.tattooist.x, y: M.tattooist.y });
     }
     // An Dagda takes the north-west corner while his gift goes unclaimed.
@@ -97,18 +135,14 @@ export class Waystation {
     }
     // Everyone freed from Fomorian captivity settles along the north wall.
     RESCUES.filter(r => g.rescuedIds.has(r.id)).forEach((r, i) => {
-      g.npcTiles.push({ x: 2 + i, y: M.y0, npcId: `__rescue_${r.id}__` });
+      const seat = Waystation.rescueSeat(i);
+      g.npcTiles.push({ x: seat.x, y: seat.y, npcId: `__rescue_${r.id}__` });
     });
     g.map[M.stairs.x]![M.stairs.y] = Tile.STAIRS;
     g.colors[M.stairs.x]![M.stairs.y] = '#6d3f7a';
     // The mound is home ground — no fog here (updateVisibility early-returns
     // while the Blockbuilding layer is suspended, so set the full reveal directly).
     g.revealAll();
-    g.cb.onAudio?.('waystationEnter');
-    g.cb.log('You surface into a sídhe mound — a hush, a hearth, and friendly faces. The stairs will keep.', 'log-success', 'special_sacred');
-    g.cb.onToast?.('You surface into a sídhe mound — rest; the dark will keep.', 'special_sacred');
-    g.storyBeats.push('rested in a sídhe mound');
-    g.pushUI();
   }
 
   /**

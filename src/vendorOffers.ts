@@ -1,6 +1,6 @@
 import type { ShapeKey } from './config';
 import { BODY_PARTS, type FloorEventDef, type ShopItem } from './types';
-import { Boon, Brand, SMITHS, type RescueDef } from './content';
+import { Boon, Brand, MODIFIERS, SMITHS, type RescueDef } from './content';
 import { Balance } from './balance';
 import type { Game } from './game';
 
@@ -185,6 +185,77 @@ export class VendorOffers {
           : [
               { label: 'You will look for them', desc: '', apply: (): string => '"Good," she says. "Three hundred and sixty-five of them. You only need find a few."' },
             ],
+      };
+    } else if (rescue.service === 'fate') {
+      // Eithne saw a prophecy outrun her father. She can't lift your curse —
+      // but she can tell you which way it bends, and trade it for another.
+      const current = MODIFIERS.find(m => m.id === g.activeModifierId);
+      const swaps = g.getRandomModifiers(2).filter(m => m.id !== g.activeModifierId).slice(0, 2);
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: current
+          ? `${rescue.serviceFlavor} "${current.name} rides you — ${current.desc} A geis can be traded, not broken. Choose, and I will speak the other into place."`
+          : `${rescue.serviceFlavor} "No geis rides you at all. There is nothing for me to turn."`,
+        options: current && swaps.length > 0
+          ? [
+              ...swaps.map(m => ({
+                label: `Take ${m.name} instead`,
+                desc: m.desc,
+                apply: (game: Game): string => {
+                  game.recastModifier(m.id);
+                  return `Eithne speaks the old geis out and the new one in. You now carry ${m.name}.`;
+                },
+              })),
+              { label: 'Keep what I carry', desc: '', apply: (): string => '"Then carry it well," she says. "It was always going to be one or the other."' },
+            ]
+          : [{ label: 'Leave her to her watching', desc: '', apply: (): string => 'She goes back to watching the door, as she has since the tower.' }],
+      };
+    } else if (rescue.service === 'physician') {
+      // The Well of Sláine, sung small: one death undone, once per visit.
+      const alreadyWarded = g.player.deathwardCharges > 0;
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: alreadyWarded
+          ? 'Dian Cécht glances at the ward already on you and does not trouble to hide his opinion of it. "One incantation at a time. Spend that one first."'
+          : rescue.serviceFlavor,
+        options: alreadyWarded
+          ? [{ label: 'Leave him to his bowl', desc: '', apply: (): string => 'He returns to the water without another word.' }]
+          : [
+              {
+                label: 'Kneel for the incantation',
+                desc: 'Full heal, and survive one killing blow.',
+                apply: (game: Game): string => {
+                  game.player.heal(game.player.maxHp);
+                  game.player.deathwardCharges += 1;
+                  game.storyBeats.push('was sung over from the Well of Sláine');
+                  game.pushUI();
+                  return 'The old physician sings the four-part charm over still water, and something in you closes over. Whole again — and one death owed back to you.';
+                },
+              },
+              { label: 'Not yet', desc: '', apply: (): string => '"Come back bleeding, then," he says. "They always do."' },
+            ],
+      };
+    } else if (rescue.service === 'gambler') {
+      const stake = Balance.CONFIG.rescues.wagerStake;
+      const canPlay = g.gold >= stake;
+      event = {
+        id: `__service_${rescue.id}__`, emoji: rescue.char, title: rescue.name,
+        flavor: canPlay
+          ? `${rescue.serviceFlavor} "${stake} gold on the board. Beat me and you leave richer and better armed. Lose, and I keep the stake and the satisfaction."`
+          : `${rescue.serviceFlavor} "You cannot cover the stake. Come back with ${stake} gold and we will see who the wooden wisdom favours."`,
+        options: canPlay
+          ? [
+              {
+                label: `Play him — ${stake} gold`,
+                desc: 'A game of fidchell. Win for gold and a Geis; lose the stake.',
+                apply: (game: Game): string => {
+                  game.startFidchellWager(stake);
+                  return 'Midir sets the last piece down and gestures you to the raiders. "Your move."';
+                },
+              },
+              { label: 'Not today', desc: '', apply: (): string => '"The board keeps," Midir says, and does not pack it away.' },
+            ]
+          : [{ label: 'Leave him to his board', desc: '', apply: (): string => 'He nods, unbothered, and replays an old game against himself.' }],
       };
     } else if (rescue.service === 'harper') {
       const played = g.harperLullFloor === g.dungeonLevel + 1;

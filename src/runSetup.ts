@@ -1,4 +1,4 @@
-import { Boon, CLASSES, MODIFIERS, type ClassDef } from './content';
+import { Boon, CLASSES, EffectResolver, MODIFIERS, type ClassDef } from './content';
 import { Codex, type CodexUnlock } from './codex';
 import { Balance } from './balance';
 import type { ModifierDef } from './types';
@@ -154,9 +154,30 @@ export class RunSetup {
     const g = this.game;
     const mod = MODIFIERS.find(m => m.id === id);
     if (!mod) return;
+    g.modifierUndo = mod.snapshot(g);  // so Eithne can trade the geis away later
     mod.apply(g);
     g.activeModifierId = id;
     g.cb.log(`Rift Curse active: ${mod.name} — ${mod.desc}`, 'log-perk', mod.emoji);
     g.pushUI();
+  }
+
+  /**
+   * Trades the active run modifier for another one mid-run (Eithne's service):
+   * the current curse's stat effects are lifted back to their recorded
+   * pre-apply values, then the new curse is spoken into place. A geis whose
+   * lift would leave the hero over their new Max HP is clamped down to it.
+   * @param id - The replacement modifier's id.
+   * @throws {TypeError} If `id` is not a non-empty string.
+   */
+  recastModifier(id: string): void {
+    if (typeof id !== 'string' || id.length === 0) throw new TypeError('RunSetup.recastModifier: "id" must be a non-empty string');
+    const g = this.game;
+    if (!MODIFIERS.some(m => m.id === id)) return;
+    EffectResolver.restoreSnapshot(g, g.modifierUndo);
+    g.modifierUndo = [];
+    g.activeModifierId = null;
+    this.applyModifier(id);
+    // Either half of the trade can move Max HP; the hero never ends up over it.
+    g.player.hp = Math.min(g.player.hp, g.player.maxHp);
   }
 }

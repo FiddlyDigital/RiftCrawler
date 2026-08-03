@@ -38,6 +38,12 @@ export class Fidchell {
   resolved = false;
   /** Total plies played (for the stalemate/repeat safety cap). */
   private plies = 0;
+  /**
+   * Gold staked on this match, or 0 for the ordinary crossing challenge. A
+   * wagered match (Midir, in the mound) resolves to a purse rather than to a
+   * free descent or a fight — see {@link startWager}.
+   */
+  private stake = 0;
   /** Set at match start; the rules modal opens on the next safe tick (see {@link maybeShowRules}). */
   private rulesPending = false;
 
@@ -74,9 +80,43 @@ export class Fidchell {
    */
   start(): void {
     const g = this.game;
+    this.setup(0);
+    const asKing = this.playerSide === 'king';
+    g.cb.log(`Fidchell! A Fomorian gambler bars the crossing and sets the wooden wisdom. ${asKing ? 'You hold the High King — slip him to a corner dún to win free.' : 'You command the Fomorian raiders — surround the High King before he escapes.'}`, 'log-boss', 'ui_warning');
+    g.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'ui_warning');
+    g.cb.onAudio?.('bossWarn');
+    this.begin();
+  }
+
+  /**
+   * Midir's wagered match, played inside the mound. The stake is taken up
+   * front — win it back twofold with a boon on top, or lose it and the board
+   * simply folds away. Either way the mound is rebuilt around you afterwards:
+   * a wager is a diversion, never a descent and never a fight.
+   * @param stake - Gold already agreed; deducted here.
+   * @throws {TypeError} If `stake` is not a positive finite number.
+   */
+  startWager(stake: number): void {
+    if (typeof stake !== 'number' || !Number.isFinite(stake) || stake <= 0) {
+      throw new TypeError('Fidchell.startWager: "stake" must be a positive finite number');
+    }
+    const g = this.game;
+    g.gold = Math.max(0, g.gold - stake);
+    this.setup(stake);
+    const asKing = this.playerSide === 'king';
+    g.cb.log(`Midir counts ${stake} gold off the board's edge and sets the pieces. ${asKing ? 'He gives you the High King — get him to a corner dún.' : 'He keeps the High King and hands you the raiders — surround him.'}`, 'log-perk', 'npc_midir');
+    g.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'npc_midir');
+    g.cb.onAudio?.('npcEncounter');
+    this.begin();
+  }
+
+  /** Lays out a fresh brandub opening and deals the player a side. Shared by both entry points. */
+  private setup(stake: number): void {
+    const g = this.game;
     this.active = true;
     this.resolved = false;
     this.plies = 0;
+    this.stake = stake;
     this.selected = null;
     this.legal = [];
     this.playerSide = this.game.rng() < 0.5 ? 'king' : 'raider';
@@ -96,13 +136,13 @@ export class Fidchell {
     // No fog — the whole board is in view. The hero isn't a piece; you command
     // from outside, so it's hidden by the renderer during a match.
     g.revealAll();
-    const asKing = this.playerSide === 'king';
-    g.cb.log(`Fidchell! A Fomorian gambler bars the crossing and sets the wooden wisdom. ${asKing ? 'You hold the High King — slip him to a corner dún to win free.' : 'You command the Fomorian raiders — surround the High King before he escapes.'}`, 'log-boss', 'ui_warning');
-    g.cb.onToast?.(asKing ? 'FIDCHELL — get your King to a corner!' : 'FIDCHELL — trap the King!', 'ui_warning');
-    g.cb.onAudio?.('bossWarn');
+  }
+
+  /** Queues the rules modal, lets the AI open if the first move is its own, and publishes. */
+  private begin(): void {
     this.rulesPending = true;  // rules modal opens on the next safe tick
     if (this.turn !== this.playerSide) this.aiMove();
-    g.pushUI();
+    this.game.pushUI();
   }
 
   /**
@@ -117,11 +157,18 @@ export class Fidchell {
     this.rulesPending = false;
     const asKing = this.playerSide === 'king';
     g.paused = true;
+    const wagered = this.stake > 0;
+    const opening = wagered
+      ? `Midir of Brí Léith sets the wooden wisdom out on the mound floor, ${this.stake} gold at his elbow.`
+      : 'A Fomorian gambler bars the crossing and sets the wooden wisdom.';
+    const outcome = wagered
+      ? `Win and he pays you double the stake and something out of the Otherworld besides; lose and he keeps the ${this.stake}.`
+      : 'Win and the gambler yields the crossing with gold and a boon; lose and you take it the hard way.';
     g.cb.onFloorEvent({
       id: '__fidchell_rules__',
-      emoji: 'special_sacred',
+      emoji: wagered ? 'npc_midir' : 'special_sacred',
       title: 'Fidchell — the Wooden Wisdom',
-      flavor: `A Fomorian gambler bars the crossing and sets the wooden wisdom. You play the ${asKing ? 'HIGH KING — slip him to any corner dún to win free' : 'FOMORIAN RAIDERS — surround the High King before he escapes'}. Tap a piece, then a glowing square; every piece slides in a straight line like a rook. Trap an enemy between two of your own to take it. Win and the gambler yields the crossing with gold and a boon; lose and you take it the hard way.`,
+      flavor: `${opening} You play the ${asKing ? 'HIGH KING — slip him to any corner dún to win free' : 'FOMORIAN RAIDERS — surround the High King before he escapes'}. Tap a piece, then a glowing square; every piece slides in a straight line like a rook. Trap an enemy between two of your own to take it. ${outcome}`,
       options: [{ label: asKing ? 'Play the King' : 'Play the raiders', desc: 'Begin the match.', apply: () => '' }],
     }, () => { g.paused = false; g.cb.onAction?.(); });
   }
@@ -318,6 +365,7 @@ export class Fidchell {
 
   /** Player won the board: a prize and a shortcut straight past this floor. */
   private win(): void {
+    if (this.stake > 0) { this.winWager(); return; }
     const g = this.game;
     const gold = 150 + g.dungeonLevel * 30;
     g.gold += gold;
@@ -335,8 +383,41 @@ export class Fidchell {
     g.descendFloor();  // skip this floor's grind — the reward for winning
   }
 
+  /** Player took Midir's wager: double the stake back, and a Geis out of the Otherworld. */
+  private winWager(): void {
+    const g = this.game;
+    const purse = this.stake * 2;
+    g.gold += purse;
+    const pool = Boon.BY_TIER[2];
+    const boon = pool[Math.floor(this.game.rng() * pool.length)]!;
+    g.player.addBoon(boon);
+    const mid = this.toGrid(3, 3);
+    this.active = false;
+    this.stake = 0;
+    g.cb.log(`Midir studies the board a long moment, then laughs and pays out. ${purse} gold — and a gift from Brí Léith: ${boon.name}.`, 'log-perk', boon.char);
+    g.cb.onToast?.('You beat Midir at fidchell!', 'special_sacred');
+    g.cb.onParticleBurst?.(mid.x, mid.y, 18, '#d9a441', 'item_trophy');
+    g.cb.onImpactGlow?.(mid.x, mid.y, '217,164,65', 24);
+    g.cb.onAudio?.('bountyFulfilled');
+    g.storyBeats.push('beat Midir of Brí Léith at fidchell');
+    g.reenterWaystation();  // the mound comes back exactly as it was
+  }
+
+  /** Player lost Midir's wager: he keeps the stake, and the board folds away. */
+  private loseWager(): void {
+    const g = this.game;
+    this.active = false;
+    const lost = this.stake;
+    this.stake = 0;
+    g.cb.log(`Midir gathers the pieces without gloating, which is somehow worse. Your ${lost} gold goes into his sleeve. "Again, whenever you like."`, 'log-neutral', 'npc_midir');
+    g.cb.onToast?.('Midir takes the stake.', 'npc_midir');
+    g.cb.onAudio?.('npcEncounter');
+    g.reenterWaystation();  // no forfeit beyond the purse — the mound is still safe ground
+  }
+
   /** Player lost the board: no shortcut. The floor is rebuilt and the gambler drops onto it as an elite. */
   private lose(): void {
+    if (this.stake > 0) { this.loseWager(); return; }
     const g = this.game;
     g.cb.log('The gambler sweeps the pieces aside with a laugh — no free passage. Take the crossing the hard way.', 'log-boss', 'ui_warning');
     g.cb.onToast?.('You lost at fidchell — fight through!', 'ui_warning');
@@ -350,13 +431,13 @@ export class Fidchell {
   // ── Save / resume ──────────────────────────────────────────────────────
   /** Snapshot of the match's pure-data state (no live references). */
   serialize(): Record<string, unknown> {
-    return { active: this.active, board: this.board, playerSide: this.playerSide, turn: this.turn, origin: this.origin, resolved: this.resolved, plies: this.plies };
+    return { active: this.active, board: this.board, playerSide: this.playerSide, turn: this.turn, origin: this.origin, resolved: this.resolved, plies: this.plies, stake: this.stake };
   }
 
   /** Restore from a snapshot (tolerates a missing/legacy value — a mid-match fidchell save is rare and transient). */
   restore(s: Record<string, unknown> | undefined): void {
     this.selected = null; this.legal = [];
-    if (!s) { this.active = false; return; }
+    if (!s) { this.active = false; this.stake = 0; return; }
     this.active = s['active'] as boolean;
     this.board = s['board'] as number[][];
     this.playerSide = s['playerSide'] as Side;
@@ -364,5 +445,6 @@ export class Fidchell {
     this.origin = s['origin'] as { x: number; y: number };
     this.resolved = s['resolved'] as boolean;
     this.plies = s['plies'] as number;
+    this.stake = (s['stake'] as number | undefined) ?? 0;
   }
 }
