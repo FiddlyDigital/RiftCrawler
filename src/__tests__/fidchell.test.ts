@@ -111,6 +111,77 @@ describe('Fidchell', () => {
     expect(g.inFidchell).toBe(true);
   });
 
+  describe("Midir's wager (played inside the mound)", () => {
+    const STAKE = 200;
+    /** Puts the hero in the mound with a wagered match already under way, as the King. */
+    function openWager(g: Game): void {
+      (g as unknown as { enterWaystation(): void }).enterWaystation();
+      g.gold = STAKE + 40;
+      g.startFidchellWager(STAKE);
+      priv(g).playerSide = 'king'; priv(g).turn = 'king'; priv(g).resolved = false;
+    }
+
+    it('takes the stake up front and never leaves the mound', () => {
+      openWager(game);
+      expect(game.gold).toBe(40);
+      expect(game.inFidchell).toBe(true);
+      expect(game.inWaystation).toBe(true);
+    });
+
+    it('rejects a stake that is not a positive number', () => {
+      expect(() => game.startFidchellWager(0)).toThrow(TypeError);
+      expect(() => game.startFidchellWager(-5)).toThrow(TypeError);
+    });
+
+    it('winning pays double the stake and a boon, then rebuilds the mound', () => {
+      openWager(game);
+      const floorBefore = game.dungeonLevel;
+      const boonsBefore = game.player.boons.length;
+      const b = priv(game).board;
+      for (let x = 0; x < 7; x++) for (let y = 0; y < 7; y++) b[x]![y] = 0;
+      b[0]![3] = KING;
+      priv(game).applyMove(0, 3, 0, 0);   // King into the dún
+      expect(game.inFidchell).toBe(false);
+      expect(game.gold).toBe(40 + STAKE * 2);
+      expect(game.player.boons.length).toBe(boonsBefore + 1);
+      // Back in the mound, not down a floor and with no monster on the board.
+      expect(game.dungeonLevel).toBe(floorBefore);
+      expect(game.inWaystation).toBe(true);
+      expect(game.monsters).toHaveLength(0);
+      expect(game.npcTiles.some(n => n.npcId === '__campfire__')).toBe(true);
+    });
+
+    it('losing costs only the stake — no elite gambler is dropped into the safe room', () => {
+      openWager(game);
+      const floorBefore = game.dungeonLevel;
+      const b = priv(game).board;
+      for (let x = 0; x < 7; x++) for (let y = 0; y < 7; y++) b[x]![y] = 0;
+      b[2]![2] = KING; b[1]![2] = RAID; b[2]![1] = RAID; b[2]![3] = RAID;
+      b[4]![2] = RAID;
+      priv(game).turn = 'raider';
+      priv(game).applyMove(4, 2, 3, 2);   // raiders take the King — the player was the King
+      expect(game.inFidchell).toBe(false);
+      expect(game.gold).toBe(40);         // stake already paid, nothing more taken
+      expect(game.dungeonLevel).toBe(floorBefore);
+      expect(game.inWaystation).toBe(true);
+      expect(game.monsters).toHaveLength(0);
+      expect(game.npcTiles.some(n => n.npcId === '__peddler__')).toBe(true);
+    });
+
+    it('the stake survives a save/resume round trip', () => {
+      openWager(game);
+      const save = JSON.parse(JSON.stringify(game.serialize()));
+      const restored = new Game(makeCallbacks(), { forRestore: true });
+      restored.applySave(save);
+      expect((priv(restored) as unknown as { stake: number }).stake).toBe(STAKE);
+    });
+
+    it('an ordinary crossing match carries no stake', () => {
+      game.startFidchell();
+      expect((priv(game) as unknown as { stake: number }).stake).toBe(0);
+    });
+  });
+
   it('a mid-match state survives a save/resume round trip', () => {
     game.startFidchell();
     priv(game).aiMove();  // advance a ply or two

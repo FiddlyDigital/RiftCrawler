@@ -201,7 +201,8 @@
     "pieceThreshold": 6,
     "portionAtk": 2,
     "herbSpawnChance": 0.00274,
-    "herbHpPct": 0.2
+    "herbHpPct": 0.2,
+    "wagerStake": 200
   },
   "spearOfLugh": {
     "dmgMult": 3,

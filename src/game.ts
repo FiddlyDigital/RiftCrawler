@@ -1,5 +1,5 @@
 import { GameConfig, SHAPES, type ShapeKey } from './config';
-import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState, type StashPort } from './types';
+import { Tile, Cell, type TileValue, type CellValue, type GameCallbacks, type HazardTile, type SpecialTile, type RunStats, type ModifierDef, type InspectInfo, type AltarTile, type NpcTile, type FloorEventDef, type BossDef, type GhostRecord, type SavedRun, type UIState, type StashPort, type StatSnapshot } from './types';
 import { Player, Monster, StatMath } from './entities';
 import { MONSTERS, BOSSES, Boon, CLASSES, Biome, FloorEvent, Npc, NPCS, Smith, SMITHS, RESCUES, Omen, type ClassDef } from './content';
 import { Fidchell } from './fidchell';
@@ -90,6 +90,8 @@ export class Game {
 
   // Modifier state (active for the whole run)
   public activeModifierId: string | null = null;
+  /** Pre-apply values of every stat the active modifier changed, so Eithne can trade the geis away (see {@link recastModifier}). */
+  public modifierUndo: StatSnapshot[] = [];
   public xpMultiplier = 1.0;
   public noLineHeal = false;
   public haunted = false;
@@ -125,6 +127,8 @@ export class Game {
   // Waystation state — the safe sídhe mound offered at every staircase
   /** Whether the hero is currently inside the waystation — no falling stone, no monsters, just the mound's residents. */
   public inWaystation = false;
+  /** Whether the Ogham-mark tattooist is visiting this mound — rolled once on arrival, so a rebuild mid-visit can't re-roll it. */
+  public moundTattooist = false;
 
   /** The mound chamber layout (owned by {@link Waystation}); aliased here so tests target positions by name. */
   public static readonly MOUND = Waystation.MOUND;
@@ -196,6 +200,12 @@ export class Game {
   public get fidchellPlayerSide(): 'king' | 'raider' { return this.fidchell.playerSide; }
   /** Starts a Fidchell match (delegates to the module). */
   public startFidchell(): void { this.fidchell.start(); }
+  /**
+   * Starts a wagered Fidchell match against Midir in the mound: the stake is
+   * paid up front and the match resolves back into the mound rather than into
+   * a descent or a fight (delegates to the module).
+   */
+  public startFidchellWager(stake: number): void { this.fidchell.startWager(stake); }
   /** Routes a board tap to the match (delegates to the module). */
   public handleFidchellTap(gx: number, gy: number): void { this.fidchell.handleTap(gx, gy); }
 
@@ -1093,6 +1103,9 @@ export class Game {
   /** Steps aside into the safe sídhe-mound rest stop. Delegates to {@link Waystation}. */
   private enterWaystation(): void { this.waystation.enter(); }
 
+  /** Rebuilds the mound in place after a fidchell wager cleared it. Delegates to {@link Waystation}. */
+  public reenterWaystation(): void { this.waystation.reenter(); }
+
   /** Rolls this floor's omen (per-floor modifier) on entry — boss floors and floor 1 stay omen-free, and most floors still roll nothing. */
   private maybeRollOmen(isBossFloor: boolean): void {
     if (isBossFloor || this.dungeonLevel <= 1) return;
@@ -1758,6 +1771,11 @@ export class Game {
   /** Applies the chosen run modifier's effect for the whole run. Delegates to {@link RunSetup}. */
   public applyModifier(id: string): void {
     this.runSetup.applyModifier(id);
+  }
+
+  /** Trades the active Rift Curse for another one mid-run (Eithne's service). Delegates to {@link RunSetup}. */
+  public recastModifier(id: string): void {
+    this.runSetup.recastModifier(id);
   }
 
   // ── Tattoo Artist ─────────────────────────────────────────────────────────

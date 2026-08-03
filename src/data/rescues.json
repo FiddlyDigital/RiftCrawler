@@ -36,6 +36,33 @@
     "serviceFlavor": "Airmed's corner of the mound smells of yarrow, comfrey, and things that have no name above ground."
   },
   {
+    "id": "eithne",
+    "char": "npc_eithne",
+    "name": "Eithne, Balor's Daughter",
+    "service": "fate",
+    "captiveLine": "A young woman sits bound and entirely unafraid, watching the door rather than her captors. \"My own father shut me in a tower of glass to keep a prophecy from happening,\" she says. \"These are an improvement. Kill them anyway.\"",
+    "thanksLine": "Eithne rubs the rope-marks from her wrists. \"Balor locked me away because a seer told him his grandson would kill him. He was right to be afraid, and it changed nothing — what is coming, comes. Find me in the mounds and I will tell you the shape of your own road.\"",
+    "serviceFlavor": "Eithne turns your fate over the way her father turned his eye — slowly, and with intent."
+  },
+  {
+    "id": "diancecht",
+    "char": "npc_diancecht",
+    "name": "Dian Cécht, the Physician",
+    "service": "physician",
+    "captiveLine": "An old man in a leech's robe regards his captors with cold professional contempt. \"I have put arms back on kings. These think they can frighten me with a knife. Disabuse them.\"",
+    "thanksLine": "Dian Cécht straightens, unhurried. \"At Mag Tuired I sang over the Well of Sláine with my children, and the mortally wounded walked out of it whole. I can sing a lesser version of it over you. Find me in the mounds — and if my daughter is there, we need not speak of her brother.\"",
+    "serviceFlavor": "Dian Cécht draws a bowl of still water and begins the incantation his children once shared with him."
+  },
+  {
+    "id": "midir",
+    "char": "npc_midir",
+    "name": "Midir of Brí Léith",
+    "service": "gambler",
+    "captiveLine": "A lord of the sídhe sits cross-legged among his captors, calmly setting out a fidchell board on the stone. \"They have not worked out that I am waiting for someone,\" he says without looking up. \"You are late. Clear them off.\"",
+    "thanksLine": "Midir gathers his pieces into their bag with great care. \"I won a queen off a High King at this board once, and he never did forgive me. Come and play me in the mounds whenever the mood takes you — I will wager honestly, which is more than Eochaid could say.\"",
+    "serviceFlavor": "Midir sets out the wooden wisdom and waits, entirely at his ease."
+  },
+  {
     "id": "abcan",
     "char": "npc_abcan",
     "name": "Abcán the Harper",

@@ -21,6 +21,26 @@ the crossing and sets the board. You're dealt one side **at random**:
 floor. **Lose** → no shortcut; the floor is rebuilt and the gambler drops onto
 it as an elite to fight through. It can never dead-end a run.
 
+### Midir's wager (the mound board)
+
+Once **Midir of Brí Léith** is freed from Fomorian captivity he joins the sídhe
+mound and sets the same board out there, as a game you can ask for as often as
+you can pay for it. Mechanically it is the identical match — same brandub, same
+random side, same AI — with a different *resolution*:
+
+| | Crossing challenge | Midir's wager |
+|---|---|---|
+| Trigger | Entering a 7th floor | Bumping Midir in the mound |
+| Cost | — | `balance.json` → `rescues.wagerStake`, taken up front |
+| Win | Gold + a boon + `descendFloor()` | Twice the stake back + a tier-2 Geis |
+| Loss | Floor rebuilt, elite gambler spawned | The stake is gone; nothing else |
+| Afterwards | The next floor | The mound, rebuilt exactly as it was |
+
+Neither wager outcome may descend a floor or leave a monster behind — the mound
+is the one safe room in the game and stays that way. `Fidchell.stake` (0 for the
+crossing challenge) selects the resolution path and rides the save file, so a
+wager interrupted by backgrounding the app resumes as a wager.
+
 ## Rules (brandub-based)
 
 - **Board:** a centred 7×7. The King starts on the central throne with four

@@ -584,7 +584,8 @@
         "pieceThreshold",
         "portionAtk",
         "herbSpawnChance",
-        "herbHpPct"
+        "herbHpPct",
+        "wagerStake"
       ],
       "properties": {
         "rollChance": {
@@ -604,6 +605,10 @@
           "maximum": 1
         },
         "herbHpPct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "wagerStake": {
           "type": "number",
           "minimum": 0
         }

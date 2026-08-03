@@ -149,6 +149,21 @@ export interface EffectSpec {
   floor?: boolean;
 }
 
+/**
+ * The value one stat held *before* an {@link EffectSpec} touched it. A run
+ * modifier's effects are one-way mutations (`add`/`mul`/`set`), so undoing one
+ * means restoring the recorded values rather than inverting the arithmetic —
+ * see `EffectResolver.snapshotForGame` and `Game.recastModifier`.
+ */
+export interface StatSnapshot {
+  /** Which object the stat lives on. */
+  target: 'player' | 'game';
+  /** Name of the property. */
+  stat: string;
+  /** The value it held before the effect was applied. */
+  value: number | boolean;
+}
+
 /** One purchasable line in the wandering peddler's stock. */
 export interface ShopItem {
   /** Stable identifier. */
@@ -298,7 +313,7 @@ export interface RescueDef {
   /** Display name. */
   name: string;
   /** Which mound service this figure provides once rescued. */
-  service: 'wright' | 'seer' | 'cook' | 'healer' | 'harper';
+  service: 'wright' | 'seer' | 'cook' | 'healer' | 'harper' | 'fate' | 'physician' | 'gambler';
   /** Line shown when bumped while their elite captors still live. */
   captiveLine: string;
   /** Dialog shown on the rescue itself, before they beam away to the mounds. */
@@ -354,6 +369,8 @@ export interface ModifierDef {
   desc: string;
   /** Applies the modifier's effect to the game/player. */
   apply: (game: import('./game').Game) => void;
+  /** Records the pre-apply value of every stat {@link apply} would touch, so the modifier can be lifted again. */
+  snapshot: (game: import('./game').Game) => StatSnapshot[];
 }
 
 /** Rendered content for the board-inspect tooltip. */
