@@ -18,13 +18,13 @@
     "headless": "node scripts/headless.mjs"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.4.1",
     "@vitest/coverage-v8": "^4.1.10",
     "ajv": "^8.20.0",
-    "oxlint": "^1.76.0",
+    "oxlint": "^1.81.0",
     "playwright": "^1.62.1",
     "typescript": "^7.0.2",
-    "vite": "^8.2.0",
+    "vite": "^8.2.2",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"
   }
